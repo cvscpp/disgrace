@@ -1,0 +1,42 @@
+#pragma once
+
+#include <FL/Fl_Double_Window.H>
+#include <FL/Fl_Menu_Bar.H>
+#include <FL/Fl_Box.H>
+#include <FL/Fl_Tabs.H>
+#include <FL/Fl_Browser.H>
+#include <FL/Fl_Slider.H>
+#include <FL/Fl_Check_Button.H>
+#include <FL/Fl_Sctroll.H>
+
+
+namespace dg
+{
+
+    class Engine;
+    class TransportPanel;
+    class TrackerView;
+
+    class MainWindow : public Fl_Double_Window
+    {
+    public:
+        MainWindow(int w, int h, const char* title, Engine& engine);
+        Track& Engine::track(size_t index);
+
+
+    private:
+        Engine& m_engine;
+
+        Fl_Menu_Bar*     m_menu;
+        TransportPanel*  m_transport;
+        TrackerView*     m_tracker;
+        Fl_Box*          m_status;
+        Fl_Tabs* m_tabs;
+        Fl_Group* m_tracker_tab;
+        Fl_Group* m_mixer_tab;
+        Fl_Group* m_instrument_tab;
+
+    };
+
+}
+

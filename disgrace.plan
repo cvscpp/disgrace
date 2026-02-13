@@ -1,0 +1,543 @@
+Project Specification
+Minimal Tracker-Based DAW (JACK + FLTK)
+1. Design Philosophy
+
+This application is:
+
+A lightweight tracker-style DAW
+
+Focused on live-played music and clean structure
+
+Deterministic and real-time safe
+
+Minimal in effects and DSP
+
+Not a plugin host platform
+
+Not a Renoise clone
+
+Not a “modern glossy DAW”
+
+The system favors:
+
+Stability over extensibility
+
+Built-in DSP over plugin ecosystems
+
+Clear module boundaries
+
+Fixed-size structures in real-time paths
+
+Simplicity over feature density
+
+2. System Architecture Overview
+
+The application is divided into strictly separated subsystems:
+
+Core Engine
+
+Audio Engine (JACK Backend)
+
+Sequencer / Tracker Engine
+
+Instrument Subsystem
+
+Built-in DSP / Mixer Subsystem
+
+Sample & Audio Editor
+
+File Format & Import
+
+GUI Subsystem (FLTK)
+
+Infrastructure Utilities
+
+Real-time and non-real-time code are strictly separated.
+
+3. Core Engine
+Responsibilities
+
+Application startup/shutdown
+
+Subsystem initialization
+
+Thread creation
+
+Transport control
+
+Global configuration
+
+Thread Model
+
+JACK Audio Thread (real-time)
+
+GUI Thread (FLTK main loop)
+
+Worker Thread(s)
+
+File loading/saving
+
+Time stretch
+
+Resampling
+
+Sample processing
+
+Real-Time Rules
+
+Inside audio callback:
+
+No memory allocation
+
+No locks
+
+No file I/O
+
+No dynamic container resizing
+
+No GUI interaction
+
+Communication between threads via:
+
+Lock-free queues
+
+Double-buffered state blocks
+
+4. Audio Engine (JACK)
+Backend
+
+JACK audio
+
+JACK MIDI
+
+Responsibilities
+
+Audio buffer processing
+
+MIDI input/output
+
+Transport synchronization
+
+Input capture for recording
+
+External instrument audio capture
+
+Ports
+
+Stereo master output
+
+Optional subgroup outputs
+
+Optional track input ports
+
+MIDI in/out ports
+
+All routing inside engine is internal except explicit JACK connections.
+
+5. Sequencer / Tracker Engine
+Pattern Model
+
+Maximum 512 rows per pattern
+
+Fixed row resolution
+
+Configurable lines per beat
+
+Fixed-size memory layout (RT safe)
+
+Track Model
+
+Each track:
+
+Exactly one instrument
+
+Multiple subtracks (note columns)
+
+Maximum 16 subtracks per track
+
+Each subtrack:
+
+One note per row
+
+One effect command per row
+
+Pattern List
+
+Ordered sequence
+
+Add/remove/duplicate pattern
+
+Pattern reuse allowed
+
+6. Minimal Tracker Effect Set
+
+Only musically meaningful and manageable effects are supported.
+
+Transport Effects (Global)
+
+Set Tempo
+
+Set Lines per Beat
+
+Pattern Break
+
+Pattern Jump
+
+Pattern Delay
+
+Amplitude Effects (Per Track)
+
+Set Volume
+
+Volume Slide Up
+
+Volume Slide Down
+
+Fade over rows
+
+Pitch Effects
+
+Portamento to Note
+
+Arpeggio (simple)
+
+Pitch Offset
+
+Panning
+
+Set Pan
+
+Pan Slide
+
+Timing
+
+Retrigger
+
+Note Delay
+
+Instrument Macro
+
+Macro Control (4–8 parameters per instrument)
+
+Tracker only controls macros, not raw plugin parameters
+
+No:
+
+Multi-effect columns
+
+Tick-level complexity (initially row-based timing)
+
+Exotic IT/XM compatibility quirks
+
+Effects are row-based for simplicity.
+
+7. Instrument Subsystem
+
+All instruments implement a unified interface:
+
+note_on()
+
+note_off()
+
+process_audio()
+
+set_macro()
+
+reset()
+
+serialize_state()
+
+restore_state()
+
+Supported Instrument Types
+1. Sample Instrument
+
+Stereo samples
+
+RAM-based
+
+Basic ADSR
+
+Pitch control
+
+Loop support (optional)
+
+2. SF2 Instrument (Optional Later)
+
+Embedded SF2 engine
+
+3. Simple Internal Synth (Optional Future)
+
+Basic subtractive synth
+
+Very limited parameters
+
+4. MIDI Output Instrument
+
+Sends MIDI to JACK
+
+Optional audio return via mixer input
+
+No full plugin hosting in initial design.
+
+8. Built-in DSP / Mixer Subsystem
+
+Instead of relying on LV2/LADSPA, the system provides a minimal internal DSP set.
+
+Channel Structure
+
+Each track has:
+
+Volume
+
+Pan
+
+Mute
+
+Solo
+
+Insert DSP chain (fixed small size)
+
+Built-in DSP Modules
+
+Minimal, stable, deterministic.
+
+Core DSP List
+
+Gain
+
+Simple 3-Band EQ
+
+Low-pass Filter
+
+High-pass Filter
+
+Simple Delay
+
+Basic Reverb (Schroeder type)
+
+Compressor (simple RMS)
+
+Saturation (optional)
+
+Each DSP module:
+
+Fixed parameter set
+
+No GUI windows
+
+Controlled via mixer panel
+
+RT safe
+
+No dynamic memory
+
+Insert Chain
+
+Small fixed maximum (e.g. 4 effects per track)
+
+Reorderable
+
+Enable/disable
+
+No dynamic plugin loading
+
+Routing
+
+Track → optional subgroup → master
+
+External audio input per track optional
+
+9. Sample & Audio Editor
+Responsibilities
+
+Record stereo input
+
+Create sample instrument
+
+Edit samples offline
+
+Editing Operations
+
+Cut
+
+Copy
+
+Paste
+
+Crop
+
+Normalize
+
+Volume change
+
+Time stretch (libsndtouch or equivalent)
+
+Resample (libsamplerate)
+
+All heavy processing in worker thread.
+
+Samples loaded entirely into RAM (initial design).
+
+10. File Format
+Container
+
+tar.gz archive
+
+Structure:
+
+song.json
+samples/
+patterns/
+instruments/
+
+song.json Contains
+
+Global settings
+
+Track definitions
+
+Pattern data
+
+Instrument assignments
+
+Mixer settings
+
+DSP parameters
+
+Macro mappings
+
+JSON chosen for:
+
+Simplicity
+
+Human readability
+
+Debugging ease
+
+11. GUI Subsystem (FLTK)
+Layout
+
+Main window tabs:
+
+Tracker
+
+Mixer
+
+Audio Editor
+
+Settings / File
+
+Tracker, Mixer, and Editor detachable as independent windows.
+
+Tracker UI
+
+Custom FLTK widget:
+
+Manual grid drawing
+
+Monospace font
+
+Row highlighting
+
+Keyboard-focused editing
+
+Pattern list view
+
+Keybinding presets:
+
+FastTracker 2
+
+Impulse Tracker
+
+Renoise
+
+Fully customizable
+
+Mixer UI
+
+Channel strips
+
+Insert DSP controls inline
+
+Subgroup view
+
+Level meters
+
+Spectral analyzer (optional per channel or master)
+
+No floating plugin windows.
+
+12. Development Phases
+Phase 1
+
+JACK engine
+
+Sample instrument
+
+Tracker playback
+
+Basic mixer (volume/pan)
+
+Phase 2
+
+Built-in DSP modules
+
+Project save/load
+
+Audio recording
+
+Phase 3
+
+Sample editor
+
+Macro system
+
+Transport effects
+
+Phase 4
+
+Optional SF2 or simple synth
+
+Import XM / MIDI
+
+13. Scope Discipline
+
+The project intentionally excludes:
+
+Large plugin ecosystems
+
+Unlimited effect chains
+
+Complex automation lanes
+
+Per-tick legacy tracker quirks
+
+GUI-heavy workflow
+
+Massive feature accumulation
+
+The system is meant to remain:
+
+Focused
+
+Predictable
+
+Hackable
+
+Stable
+
+Musically useful
+
+Final Character of the Application
+
+This is:
+
+A clean, keyboard-driven tracker workstation
+with built-in DSP and controlled complexity.
+
+Not a plugin host.
+Not a feature monster.
+Not a visual showcase.
+
+A structured musical tool.

@@ -1,0 +1,84 @@
+tracker-daw/
+│
+├── configure.ac
+├── Makefile.am
+├── README.md
+├── COPYING
+├── AUTHORS
+├── NEWS
+│
+├── m4/                     # custom autoconf macros (optional)
+│
+├── src/
+│   ├── Makefile.am
+│   │
+│   ├── main.cpp
+│   │
+│   ├── core/
+│   │   ├── engine.cpp
+│   │   ├── engine.h
+│   │   ├── transport.cpp
+│   │   ├── transport.h
+│   │
+│   ├── audio/
+│   │   ├── jack_backend.cpp
+│   │   ├── jack_backend.h
+│   │   ├── mixer.cpp
+│   │   ├── mixer.h
+│   │   ├── dsp/
+│   │   │   ├── gain.cpp
+│   │   │   ├── eq.cpp
+│   │   │   ├── delay.cpp
+│   │   │   ├── reverb.cpp
+│   │   │   └── compressor.cpp
+│   │
+│   ├── sequencer/
+│   │   ├── pattern.cpp
+│   │   ├── pattern.h
+│   │   ├── track.cpp
+│   │   ├── track.h
+│   │   ├── effects.cpp
+│   │   └── effects.h
+│   │
+│   ├── instruments/
+│   │   ├── instrument.h
+│   │   ├── sample_instrument.cpp
+│   │   ├── sample_instrument.h
+│   │   ├── midi_instrument.cpp
+│   │   └── midi_instrument.h
+│   │
+│   ├── editor/
+│   │   ├── sample_editor.cpp
+│   │   ├── sample_editor.h
+│   │
+│   ├── gui/
+│   │   ├── main_window.cpp
+│   │   ├── main_window.h
+│   │   ├── tracker_widget.cpp
+│   │   ├── tracker_widget.h
+│   │   ├── mixer_widget.cpp
+│   │   ├── mixer_widget.h
+│   │   └── theme.cpp
+│   │
+│   ├── fileio/
+│   │   ├── project.cpp
+│   │   ├── project.h
+│   │   ├── json.cpp
+│   │   └── json.h
+│   │
+│   └── util/
+│       ├── ringbuffer.h
+│       ├── lockfree_queue.h
+│       ├── logger.cpp
+│       └── logger.h
+│
+├── examples/
+│   ├── Makefile.am
+│   ├── demo_song/
+│   │   ├── song.json
+│   │   └── samples/
+│   │       └── kick.wav
+│
+└── doc/
+    └── design.md
+

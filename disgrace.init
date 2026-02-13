@@ -1,0 +1,41 @@
+disgrace - simple digital audio workstation with tracker interface, description of the individual subsystems follows
+
+* audio subsystem
+  * uses jack and supports midi for input and output
+
+* tracker interface
+  * tracks support subtracks (like renoise) with maximal 1 effect per row track 
+  * the subtracks could be limitted to maximal 16 notes
+  * single instrument per track
+  * instruments could be audio samples, sf2 soundfont, zynaddsubfx instance, dssi resp. lv2 plugin or midi
+  * for sf2, zynaddsubfx or plugin track, add option to humainze the track
+  * maximal length 512 
+
+* audio editor
+  * ability to capture from input in stereo and create sample in the audio instrument
+  * simple operations on the sample like cut, copy, paste, crop, normalize, volume change
+  * time strach wit libsndtouch or similar
+  * resampling with libsamplerate or similar
+
+* mixer
+  * per channel abbility to add effects, ladspa, dssi or lv2
+  * the effects should be floatable in the chain
+  * send to subgroup
+  * receive from jack input (i.e., get the audio output of midi controled external instrument)
+
+* file support
+  * import renoise xrns songs
+  * import xm songs
+  * import waves
+  * import standard midi files
+  * save own format similar to renoise, tar.gz archive of samples, instruments, plugin definitions. etc., the song structure and required infos in xml or json format, decide based on what is easier but also more robust to implement  
+* gui
+  * fltk based
+  * tracker, audio editor, mixer, file io and settings in tabs
+  * tracker, audio edirot and mixer should be detachable
+  * key bindings schemas fast tracker 2, impuls tracker, renoise with the ability to change individual keys
+  * simple themes based on fltk themes
+  * for the tracks highlighting based on bpm and tempo
+  * spectral view per channel / track or main output
+  * pattern list with add, remove, copy pattern
+ 

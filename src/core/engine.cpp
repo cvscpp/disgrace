@@ -5,8 +5,130 @@
 #include <cstring>
 #include <algorithm>
 
+#include <vector>
+#include <fstream>
+#include <cstdint>
+
 namespace dg
 {
+
+    bool Engine::render_to_wav(
+        const std::string& path)
+    {
+        size_t total_samples =
+        total_song_samples();
+
+        std::vector<float> left(total_samples);
+        std::vector<float> right(total_samples);
+
+        // reset playback state
+        reset_transport_to_start();
+
+        size_t rendered = 0;
+        const size_t block_size = 512;
+
+        while (rendered < total_samples)
+        {
+            size_t block =
+            std::min(block_size,
+                     total_samples - rendered);
+
+            process_block(
+                &left[rendered],
+                &right[rendered],
+                block);
+
+            rendered += block;
+        }
+
+        return write_wav(path,
+                         left,
+                         right,
+                         total_samples);
+    }
+
+    bool Engine::write_wav(
+        const std::string& path,
+        const std::vector<float>& l,
+        const std::vector<float>& r,
+        size_t frames)
+    {
+        std::ofstream file(path,
+                           std::ios::binary);
+
+        if (!file.is_open())
+            return false;
+
+        uint32_t sample_rate = m_sample_rate;
+        uint16_t bits = 16;
+        uint16_t channels = 2;
+
+        uint32_t byte_rate =
+        sample_rate * channels * bits/8;
+
+        uint16_t block_align =
+        channels * bits/8;
+
+        uint32_t data_size =
+        frames * block_align;
+
+        // RIFF header
+        file.write("RIFF", 4);
+        uint32_t chunk_size =
+        36 + data_size;
+        file.write(
+            reinterpret_cast<char*>(&chunk_size), 4);
+
+        file.write("WAVE", 4);
+
+        // fmt chunk
+        file.write("fmt ", 4);
+
+        uint32_t subchunk1_size = 16;
+        uint16_t audio_format = 1; // PCM
+
+        file.write(
+            reinterpret_cast<char*>(&subchunk1_size), 4);
+        file.write(
+            reinterpret_cast<char*>(&audio_format), 2);
+        file.write(
+            reinterpret_cast<char*>(&channels), 2);
+        file.write(
+            reinterpret_cast<char*>(&sample_rate), 4);
+        file.write(
+            reinterpret_cast<char*>(&byte_rate), 4);
+        file.write(
+            reinterpret_cast<char*>(&block_align), 2);
+        file.write(
+            reinterpret_cast<char*>(&bits), 2);
+
+        // data chunk
+        file.write("data", 4);
+        file.write(
+            reinterpret_cast<char*>(&data_size), 4);
+
+        for (size_t i = 0; i < frames; ++i)
+        {
+            float sl = l[i];
+            float sr = r[i];
+
+            sl = std::max(-1.f, std::min(1.f, sl));
+            sr = std::max(-1.f, std::min(1.f, sr));
+
+            int16_t il =
+            static_cast<int16_t>(sl * 32767.f);
+            int16_t ir =
+            static_cast<int16_t>(sr * 32767.f);
+
+            file.write(
+                reinterpret_cast<char*>(&il), 2);
+            file.write(
+                reinterpret_cast<char*>(&ir), 2);
+        }
+
+        return true;
+    }
+
 
 Engine::Engine()
     : m_initialized(false)
@@ -14,7 +136,16 @@ Engine::Engine()
     m_patterns.emplace_back(64, 8);
     m_patterns.emplace_back(64, 8);
     m_patterns.emplace_back(64, 8);
+    m_midi.set_callback(
+        [this](const MidiMessage& msg)
+        {
+            m_midi_queue.push(msg);
+        });
 
+    m_midi.start();
+    m_metronome.set_sample_rate(m_sample_rate);
+    m_samples_until_next_beat =
+    m_timing.samples_per_beat();
 }
 
 Engine::~Engine()
@@ -61,6 +192,17 @@ void Engine::stop()
 
     m_transport->stop();
 }
+
+void Engine::enable_record(bool e)
+{
+    m_record_enabled.store(e);
+}
+
+void Engine::set_record_track(size_t t)
+{
+    m_record_track = t;
+}
+
 
 void Engine::preview_note(size_t track, uint8_t note)
 {
@@ -171,12 +313,107 @@ ing ---
     }
 }
 
+void Engine::record_note(uint8_t note)
+{
+    size_t row =
+    m_sequencer.current_row();
+
+    auto& pattern =
+    m_patterns[m_active_pattern];
+
+    pattern.set_note(
+        m_record_track,
+        row,
+        note,
+        100); // velocity
+}
+
+void Engine::record()
+{
+    m_transport.store(
+        TransportState::Recording);
+}
+
+double Engine::tempo() const
+{
+    return m_timing.tempo();
+}
+
+void Engine::set_tempo(double bpm)
+{
+    EngineCommand cmd;
+    cmd.type = EngineCommandType::SetTempo;
+    cmd.value = bpm;
+
+    m_cmd_queue.push(cmd);
+}
+
+void Engine::set_master_gain(float g)
+{
+    m_master.set_gain(g);
+}
+
+float Engine::master_gain() const
+{
+    return m_master.gain();
+}
+
+float Engine::master_meter() const
+{
+    return m_master.meter();
+}
 
 void Engine::process_audio(float* out_l,
                            float* out_r,
                            size_t nframes)
 {
     EngineCommand cmd;
+
+    if (m_metronome_enabled &&
+        m_transport != TransportState::Stopped)
+    {
+        m_metronome.process(
+            m_mix_l,
+            m_mix_r,
+            block,
+            m_samples_until_next_beat,
+            m_timing.samples_per_beat());
+    }
+
+    case EngineCommandType::SetTempo:
+        m_timing.set_tempo(cmd.value);
+        m_samples_until_next_beat =
+        m_timing.samples_per_beat();
+        break;
+
+
+    case EngineCommandType::Stop:
+        m_metronome.reset();
+        m_samples_until_next_beat =
+        m_timing.samples_per_beat();
+        break;
+
+    while (m_midi_queue.pop(msg))
+    {
+        uint8_t status = msg.status & 0xF0;
+
+        if (status == 0x90 && msg.data2 > 0)
+        {
+            uint8_t note = msg.data1;
+            uint8_t vel  = msg.data2;
+
+            // play immediately
+            m_tracks[m_record_track]
+            .note_on(note, vel);
+
+            if (m_record_enabled &&
+                m_transport ==
+                TransportState::Recording)
+            {
+                record_note(note);
+            }
+        }
+    }
 
     while (m_cmd_queue.pop(cmd))
     {
@@ -206,6 +443,26 @@ void Engine::process_audio(float* out_l,
         return;
     }
 
+
+    process_block(out_l, out_r, nframes);
+
+}
+
+size_t Engine::total_song_samples() const
+{
+    size_t total_rows = 0;
+
+    for (auto p : m_sequence)
+        total_rows += m_patterns[p].rows();
+
+    return total_rows *
+    m_timing.samples_per_row();
+}
+
+
+void Engine::process_block(float* l,
+                   float* r,
+                   size_t nframes){
     size_t processed = 0;
 
     while (processed < nframes)
@@ -229,6 +486,17 @@ void Engine::process_audio(float* out_l,
         m_samples_until_next_tick -= block;
     }
 
+    // Master processing
+    m_master.process(
+        m_mix_l,
+        m_mix_r,
+        block);
+
+    for (size_t i = 0; i < block; ++i)
+    {
+        out_l[processed + i] = m_mix_l[i];
+        out_r[processed + i] = m_mix_r[i];
+    }
 }
 
 void Engine::set_active_pattern(size_t index)

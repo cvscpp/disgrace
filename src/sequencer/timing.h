@@ -19,6 +19,10 @@ public:
     size_t samples_per_tick() const;
     size_t samples_per_row() const;
 
+    size_t samples_per_beat() const;
+    size_t samples_per_bar() const;
+
+
 private:
     double m_sample_rate = 48000.0;
     int m_bpm = 125;     // default tracker tempo

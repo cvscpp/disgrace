@@ -17,6 +17,7 @@ namespace dg
 
         void draw() override;
         int handle(int event) override;
+        void draw_track_header(int track_index, int x, int y, int w, int h);
 
     private:
         Pattern& m_pattern;

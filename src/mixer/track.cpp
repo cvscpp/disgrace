@@ -34,6 +34,25 @@ void Track::process(float* out_l,
         out_l[i] = l * left_gain;
         out_r[i] = r * right_gain;
     }
+
+    float peak = 0.f;
+
+    for (size_t i = 0; i < nframes; ++i)
+    {
+        float v = std::fabs(out_l[i]);
+        if (v > peak) peak = v;
+
+        v = std::fabs(out_r[i]);
+        if (v > peak) peak = v;
+    }
+
+    // simple smoothing
+    float prev = m_meter.load();
+    float smoothed =
+    0.8f * prev + 0.2f * peak;
+
+    m_meter.store(smoothed);
+
 }
 
 float Track::note_to_frequency(uint8_t note)
@@ -170,6 +189,11 @@ void Track::process_tick()
         out_r[i] *= m_volume;
     }
 
+}
+
+float Track::meter_level() const
+{
+    return m_meter.load();
 }
 
 

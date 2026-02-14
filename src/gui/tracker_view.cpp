@@ -144,6 +144,35 @@ namespace dg
     {
         bool shift = Fl::event_state(FL_SHIFT);
 
+        if (event == FL_PUSH)
+        {
+            int tx = ... determine track index ...
+            int local_x = Fl::event_x() - track_x;
+
+            // Mute region
+            if (local_x > 40 && local_x < 60)
+            {
+                bool m =
+                !m_engine.track(tx).muted();
+
+                m_engine.track(tx).set_mute(m);
+                redraw();
+                return 1;
+            }
+
+            // Solo region
+            if (local_x > 65 && local_x < 85)
+            {
+                bool s =
+                !m_engine.track(tx).solo();
+
+                m_engine.track(tx).set_solo(s);
+                redraw();
+                return 1;
+            }
+        }
+
+
         switch (event)
         {
             case FL_KEYDOWN:
@@ -322,7 +351,11 @@ namespace dg
                         redraw();
                         return 1;
                     }
-
+                    if (key == 'r')
+                    {
+                        m_engine.record();
+                        return 1;
+                    }
                     if (key == 'c')
                     {
                         if (!m_selecting) return 1;
@@ -439,5 +472,72 @@ namespace dg
         redraw();
     }
 
+    int TrackerWidget::handle(int event)
+    {
+        if (event == FL_PUSH)
+        {
+            int track =
+            (Fl::event_x() - header_offset) /
+            track_width;
+
+            m_engine.set_record_track(track);
+            redraw();
+            return 1;
+        }
+        return Fl_Widget::handle(event);
+    }
+
+    void TrackerWidget::draw_track_header(
+        int track_index,
+        int x, int y,
+        int w, int h)
+    {
+        auto& track =
+        m_engine.track(track_index);
+
+        fl_color(FL_DARK3);
+        fl_rectf(x, y, w, h);
+
+        // Track number
+        fl_color(FL_WHITE);
+        fl_draw(
+            ("T" + std::to_string(track_index)).c_str(),
+                x + 5, y + 15);
+
+        // Mute button
+        int btn_w = 20;
+        int btn_h = 15;
+
+        int mx = x + 40;
+        int my = y + 5;
+
+        fl_color(track.muted() ? FL_RED : FL_GRAY);
+        fl_rectf(mx, my, btn_w, btn_h);
+        fl_color(FL_WHITE);
+        fl_draw("M", mx+6, my+12);
+
+        // Solo button
+        int sx = mx + 25;
+
+        fl_color(track.solo() ? FL_GREEN : FL_GRAY);
+        fl_rectf(sx, my, btn_w, btn_h);
+        fl_color(FL_WHITE);
+        fl_draw("S", sx+6, my+12);
+
+        // Meter
+        float level =
+        track.meter_level();
+
+        int meter_h =
+        static_cast<int>(
+            level * (h - 25));
+
+        fl_color(FL_GREEN);
+        fl_rectf(
+            x + w - 10,
+            y + h - meter_h,
+            6,
+            meter_h);
+    }
 
 }

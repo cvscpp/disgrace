@@ -30,5 +30,14 @@ namespace dg
     {
         return samples_per_tick() * m_speed;
     }
+    size_t Timing::samples_per_beat() const
+    {
+        return samples_per_row() * 4;
+    }
+
+    size_t Timing::samples_per_bar() const
+    {
+        return samples_per_beat() * 4;
+    }
 
 }

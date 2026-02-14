@@ -10,6 +10,13 @@
 
 #include "../edit/undo_stack.h"
 
+#include "midi/MidiQueue.h"
+#include "midi/MidiInput.h"
+
+#include "metronome.h"
+
+#include "MasterBus.h"
+
 namespace dg
 {
 
@@ -88,6 +95,34 @@ public:
     UndoStack& undo_stack();
     BlockClipboard& clipboard();
 
+    MidiQueue<MidiMessage, 1024> m_midi_queue;
+    MidiInput m_midi;
+
+    std::atomic<bool> m_record_enabled{false};
+    size_t m_record_track{0};
+
+    void enable_record(bool e);
+    void set_record_track(size_t t);
+    void record_note(uint8_t note);
+
+    Metronome m_metronome;
+
+    size_t m_samples_until_next_beat{0};
+    bool m_metronome_enabled{true};
+
+    double tempo() const;
+
+    void set_tempo(double bpm);
+    MasterBus m_master;
+
+    void set_master_gain(float g);
+    float master_gain() const;
+    float master_meter() const;
+    bool render_to_wav(const std::string& path);
+    void process_block(float* l,
+                       float* r,
+                       size_t nframes);
+
 private:
     UndoStack m_undo;
     bool m_initialized;
@@ -111,6 +146,13 @@ private:
 
     std::vector<Pattern> m_patterns;
     std::atomic<size_t>  m_active_pattern{0};
+
+
+    bool write_wav(
+        const std::string& path,
+        const std::vector<float>& l,
+        const std::vector<float>& r,
+        size_t frames)
 
     //TODO where to put this?
     //m_current_row.store(m_sequencer.current_row(), std::memory_order_relaxed);

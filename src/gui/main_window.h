@@ -35,6 +35,8 @@ namespace dg
         Fl_Group* m_tracker_tab;
         Fl_Group* m_mixer_tab;
         Fl_Group* m_instrument_tab;
+        Fl_Value_Slider* m_master_gain;
+        Fl_Box* m_master_meter;
 
     };
 

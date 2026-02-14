@@ -22,6 +22,11 @@ namespace dg
                 {
                   std::exit(0);
                 });
+    m_menu->add("&File/&Export WAV",
+                0,
+                cb_export_wav,
+                this);
+
 
     m_transport = new TransportPanel(0, 25, w, 40, m_engine);
 
@@ -184,6 +189,26 @@ namespace dg
     end();
 
     resizable(m_tracker);
+
+    m_master_gain = new Fl_Value_Slider(
+      x, y, 150, 25, "Master");
+
+    m_master_gain->type(FL_HOR_NICE_SLIDER);
+    m_master_gain->range(0.0, 2.0);
+    m_master_gain->value(1.0);
+
+    m_master_gain->callback(
+      [](Fl_Widget* w, void* data)
+      {
+        auto* eng = static_cast<Engine*>(data);
+
+        float g =
+        static_cast<Fl_Value_Slider*>(w)->value();
+
+        eng->set_master_gain(g);
+      },
+      &m_engine);
+
   }
   Fl::add_timeout(0.03,
                   [](void* userdata)
@@ -197,6 +222,68 @@ namespace dg
                                        userdata);
                   },
                   this);
+  void MainWindow::timer_cb(void* data)
+  {
+    auto* self = static_cast<MainWindow*>(data);
 
+    self->m_tracker->set_current_row(
+      self->m_engine.current_row());
+
+    self->m_transport->update();
+
+    float level =
+    m_engine.master_meter();
+
+    int meter_height =
+    static_cast<int>(level * 100);
+
+    fl_color(FL_GREEN);
+    fl_rectf(
+      meter_x,
+      meter_y + 100 - meter_height,
+      10,
+      meter_height);
+
+
+    Fl::repeat_timeout(0.03, timer_cb, data);
+  }
+
+  int MainWindow::handle(int event){
+    if (event == FL_KEYDOWN)
+    {
+      switch (Fl::event_key())
+      {
+        case ' ':
+          m_engine.play();
+          return 1;
+
+        case 'r':
+          m_engine.record();
+          return 1;
+
+        case 'm':
+          m_engine.toggle_metronome();
+          return 1;
+      }
+    }
+
+  }
+
+  void MainWindow::cb_export_wav(
+    Fl_Widget*, void* data)
+  {
+    auto* self =
+    static_cast<MainWindow*>(data);
+
+    const char* path =
+    fl_file_chooser(
+      "Export WAV",
+      "*.wav",
+      "output.wav");
+
+    if (!path) return;
+
+    self->m_engine.render_to_wav(path);
+  }
 
 }

@@ -55,6 +55,8 @@ public:
     void set_mute(bool m);
     bool muted() const;
 
+    float meter_level() const;
+
 private:
     float m_volume = 1.f;
     bool  m_mute   = false;

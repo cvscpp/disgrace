@@ -1,5 +1,5 @@
-#include "TransportBar.h"
-#include "../engine/Engine.h"
+#include "transportbar.h"
+#include "../core/engine.h"
 
 TransportBar::TransportBar(
     int X, int Y, int W, int H,

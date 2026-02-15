@@ -1,4 +1,4 @@
-#include "MidiInput.h"
+#include "midi_input.h"
 #include <chrono>
 
 MidiInput::MidiInput() {}

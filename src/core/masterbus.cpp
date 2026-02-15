@@ -1,4 +1,4 @@
-#include "MasterBus.h"
+#include "masterbus.h"
 #include <cmath>
 
 void MasterBus::set_gain(float g)

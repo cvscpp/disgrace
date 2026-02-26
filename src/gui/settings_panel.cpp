@@ -3,6 +3,7 @@
 #include <FL/Fl_Button.H>
 #include <FL/Fl.H>
 #include <FL/Fl_Window.H>
+#include <FL/Fl_Double_Window.H>
 
 namespace disgrace_ns {
 
@@ -160,8 +161,52 @@ void SettingsPanel::init_gui_grp(int x, int y, int w, int h) {
 void SettingsPanel::init_kbd_grp(int x, int y, int w, int h) {
     m_kbd_grp = new Fl_Group(x, y + 25, w, h - 25, "Keyboard");
     m_kbd_grp->begin();
-    new Fl_Box(x + 20, y + 50, 200, 25, "Keybinding Preset: Default");
+    
+    Fl_Box* title = new Fl_Box(x + 20, y + 40, 200, 25, "Keyboard Configuration");
+    title->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+
+    m_action_choice = new Fl_Choice(x + 120, y + 70, 200, 25, "Select Action:");
+    m_action_choice->align(FL_ALIGN_LEFT);
+    
+    // Add all actions to choice
+    std::vector<Action> actions = {
+        Action::Play, Action::Record, Action::ToggleMetronome,
+        Action::Undo, Action::Redo, Action::Copy, Action::Cut, Action::Paste,
+        Action::Clear, Action::MoveUp, Action::MoveDown, Action::MoveLeft, Action::MoveRight,
+        Action::NoteC, Action::NoteCs, Action::NoteD, Action::NoteDs, Action::NoteE,
+        Action::NoteF, Action::NoteFs, Action::NoteG, Action::NoteGs, Action::NoteA,
+        Action::NoteAs, Action::NoteB
+    };
+
+    for (auto action : actions) {
+        m_action_choice->add(m_engine.m_key_bindings.get_action_name(action).c_str(), 0, nullptr, (void*)(uintptr_t)action);
+    }
+    m_action_choice->value(0);
+    m_action_choice->callback([](Fl_Widget* w, void* data) {
+        static_cast<SettingsPanel*>(data)->update_kbd_list();
+    }, this);
+
+    m_current_binding_box = new Fl_Box(x + 20, y + 100, 300, 25, "Current Binding: ...");
+    m_current_binding_box->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+
+    m_assign_btn = new Fl_Button(x + 20, y + 130, 150, 25, "Assign New Key...");
+    m_assign_btn->callback(cb_assign_key, this);
+
     m_kbd_grp->end();
+
+    update_kbd_list();
+}
+
+void SettingsPanel::update_kbd_list() {
+    int idx = m_action_choice->value();
+    if (idx < 0) return;
+
+    Action action = (Action)(uintptr_t)m_action_choice->menu()[idx].user_data();
+    std::string binding = m_engine.m_key_bindings.get_key_name(action);
+    
+    char buf[128];
+    snprintf(buf, sizeof(buf), "Current Binding: %s", binding.c_str());
+    m_current_binding_box->label(strdup(buf));
 }
 
 void SettingsPanel::init_misc_grp(int x, int y, int w, int h) {
@@ -219,5 +264,65 @@ void SettingsPanel::cb_gui_font_size(Fl_Widget* w, void* data) {
         apply_gui_settings(self->m_engine);
     }
 }
+
+// Modal window to capture a key press
+class KeyGrabber : public Fl_Double_Window {
+public:
+    KeyGrabber(Action action, KeyBindings& bindings) 
+        : Fl_Double_Window(300, 100, "Press a key..."), m_action(action), m_bindings(bindings) {
+        set_modal();
+        m_box = new Fl_Box(0, 0, 300, 100, "Press new key for\n...");
+        m_box->label(strdup(("Press new key for\n" + bindings.get_action_name(action)).c_str()));
+    }
+
+    int handle(int event) override {
+        if (event == FL_KEYDOWN) {
+            int key = Fl::event_key();
+            int mods = Fl::event_state() & (FL_CTRL | FL_SHIFT | FL_ALT | FL_META);
+            
+            // Ignore if it's just a modifier key
+            if (key == FL_Control_L || key == FL_Control_R || 
+                key == FL_Shift_L || key == FL_Shift_R ||
+                key == FL_Alt_L || key == FL_Alt_R ||
+                key == FL_Meta_L || key == FL_Meta_R) {
+                return 1;
+            }
+
+            m_bindings.assign(m_action, key, mods);
+            m_pressed = true;
+            hide();
+            return 1;
+        }
+        return Fl_Double_Window::handle(event);
+    }
+
+    bool pressed() const { return m_pressed; }
+
+private:
+    Action m_action;
+    KeyBindings& m_bindings;
+    Fl_Box* m_box;
+    bool m_pressed = false;
+};
+
+void SettingsPanel::cb_assign_key(Fl_Widget* w, void* data) {
+    SettingsPanel* self = static_cast<SettingsPanel*>(data);
+    
+    int idx = self->m_action_choice->value();
+    if (idx < 0) return;
+
+    Action action = (Action)(uintptr_t)self->m_action_choice->menu()[idx].user_data();
+
+    KeyGrabber grabber(action, self->m_engine.m_key_bindings);
+    grabber.show();
+    while (grabber.shown()) {
+        Fl::wait();
+    }
+
+    if (grabber.pressed()) {
+        self->update_kbd_list();
+    }
+}
+
 
 } // namespace disgrace_ns

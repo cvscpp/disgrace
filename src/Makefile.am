@@ -4,6 +4,7 @@ disgrace_SOURCES = \
     main.cpp \
     core/engine.cpp \
     core/engine_save.cpp \
+    core/key_bindings.cpp \
     core/masterbus.cpp \
     core/metronome.cpp \
     core/transport.cpp \

@@ -13,6 +13,7 @@
 #include "../audio/sample_data.h"
 #include "core/undo_stack.h"
 #include "transport.h"
+#include "key_bindings.h"
 #include "../midi/midi_queue.h"
 #include "../midi/midi_input.h"
 #include "core/metronome.h"
@@ -137,6 +138,8 @@ public:
 
     int m_gui_button_height = 25;
     int m_gui_font_size = 12;
+
+    KeyBindings m_key_bindings;
 
 private:
     disgrace_ns::UndoStack m_undo;

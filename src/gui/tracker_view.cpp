@@ -1,33 +1,33 @@
 #include "tracker_view.h"
 #include <FL/fl_draw.H>
-#include "../core/engine.h" // CORRECTED
-#include <FL/Fl.H> // ADDED
-#include "../edit/cmd_clear_block.h" // CORRECTED
-#include "../edit/cmd_set_note.h" // CORRECTED
-#include "../edit/cmd_paste_block.h" // CORRECTED
-// #include "../core/engine_command.h" // REMOVED
+#include "../core/engine.h" 
+#include <FL/Fl.H>
+#include "../edit/cmd_clear_block.h"
+#include "../edit/cmd_set_note.h"
+#include "../edit/cmd_paste_block.h"
+#include "../core/key_bindings.h"
 
 namespace disgrace_ns
 {
 
-    static int key_to_note(int key_val) // Renamed parameter to avoid conflict with local 'key'
+    static int action_to_note(Action action)
     {
-        switch (key_val)
+        switch (action)
         {
-            case 'z': return 48;
-            case 's': return 49;
-            case 'x': return 50;
-            case 'd': return 51;
-            case 'c': return 52;
-            case 'v': return 53;
-            case 'g': return 54;
-            case 'b': return 55;
-            case 'h': return 56;
-            case 'n': return 57;
-            case 'j': return 58;
-            case 'm': return 59;
+            case Action::NoteC:  return 48;
+            case Action::NoteCs: return 49;
+            case Action::NoteD:  return 50;
+            case Action::NoteDs: return 51;
+            case Action::NoteE:  return 52;
+            case Action::NoteF:  return 53;
+            case Action::NoteFs: return 54;
+            case Action::NoteG:  return 55;
+            case Action::NoteGs: return 56;
+            case Action::NoteA:  return 57;
+            case Action::NoteAs: return 58;
+            case Action::NoteB:  return 59;
+            default: return -1;
         }
-        return -1;
     }
     static const char* note_name(uint8_t note)
     {
@@ -191,9 +191,16 @@ namespace disgrace_ns
         {
             case FL_KEYDOWN:
             {
-                int key = Fl::event_key(); // Declare key here
+                int key = Fl::event_key();
+                int mods = Fl::event_state() & (FL_CTRL | FL_SHIFT | FL_ALT | FL_META);
+                Action action = m_engine.m_key_bindings.get_action(key, mods);
+                
+                // If not found with mods, try without (for navigation with shift)
+                if (action == static_cast<Action>(-1) && (mods & FL_SHIFT)) {
+                    action = m_engine.m_key_bindings.get_action(key, mods & ~FL_SHIFT);
+                }
 
-                if (key == FL_Delete || key == FL_BackSpace)
+                if (action == Action::Clear)
                 {
                     auto cmd =
                     ::std::make_unique<disgrace_ns::CmdClearBlock>(
@@ -209,7 +216,7 @@ namespace disgrace_ns
                     return 1;
                 }
 
-                if (key == FL_Up)
+                if (action == Action::MoveUp)
                 {
                     if (shift && !m_selecting)
                     {
@@ -235,7 +242,7 @@ namespace disgrace_ns
                     return 1;
                 }
 
-                if (key == FL_Down)
+                if (action == Action::MoveDown)
                 {
                     if (shift && !m_selecting)
                     {
@@ -262,7 +269,7 @@ namespace disgrace_ns
                     return 1;
                 }
 
-                if (key == FL_Left)
+                if (action == Action::MoveLeft)
                 {
                     if (shift && !m_selecting)
                     {
@@ -287,7 +294,7 @@ namespace disgrace_ns
                     return 1;
                 }
 
-                if (key == FL_Right)
+                if (action == Action::MoveRight)
                 {
                     if (shift && !m_selecting)
                     {
@@ -314,115 +321,114 @@ namespace disgrace_ns
                     return 1;
                 }
 
-                if (key == ' ')
+                if (action == Action::Play)
                 {
                     m_engine.toggle_play();
                     redraw();
                     return 1;
                 }
 
-                if (Fl::event_state(FL_CTRL))
+                if (action == Action::Undo)
                 {
-                    if (key == 'z')
-                    {
-                        m_engine.undo_stack().undo();
-                        redraw();
-                        return 1;
-                    }
-
-                    if (key == 'y')
-                    {
-                        m_engine.undo_stack().redo();
-                        redraw();
-                        return 1;
-                    }
-                    if (key == 'r')
-                    {
-                        m_engine.record();
-                        return 1;
-                    }
-                    if (key == 'c')
-                    {
-                        if (!m_selecting) return 1;
-
-                        auto& pat = m_engine.pattern();
-                        auto& cb  = m_engine.clipboard();
-
-                        int r0 = ::std::min(m_sel_row_start,
-                                          m_sel_row_end);
-                        int r1 = ::std::max(m_sel_row_start,
-                                          m_sel_row_end);
-
-                        int t0 = ::std::min(m_sel_track_start,
-                                          m_sel_track_end);
-                        int t1 = ::std::max(m_sel_track_start,
-                                          m_sel_track_end);
-
-                        cb.width  = t1 - t0 + 1;
-                        cb.height = r1 - r0 + 1;
-                        cb.notes.clear();
-
-                        for (int t_idx = t0; t_idx <= t1; ++t_idx)
-                            for (int r_idx = r0; r_idx <= r1; ++r_idx)
-                                cb.notes.push_back(
-                                    pat.event(t_idx, r_idx, 0).note);
-
-                                return 1;
-                    }
-                    if (key == 'x')
-                    {
-                        if (!m_selecting) return 1;
-
-                        auto& pat = m_engine.pattern();
-                        auto& cb  = m_engine.clipboard();
-
-                        int r0 = ::std::min(m_sel_row_start, m_sel_row_end);
-                        int r1 = ::std::max(m_sel_row_start, m_sel_row_end);
-                        int t0 = ::std::min(m_sel_track_start, m_sel_track_end);
-                        int t1 = ::std::max(m_sel_track_start, m_sel_track_end);
-
-                        // copy first (reuse Ctrl+C logic)
-                        // then create CmdClearBlock
-
-                        auto clear =
-                        ::std::make_unique<disgrace_ns::CmdClearBlock>(
-                            pat,
-                            t0,t1,r0,r1);
-
-                        ::std::vector<disgrace_ns::EditCommandPtr> group;
-                        group.push_back(static_cast<disgrace_ns::EditCommandPtr>(::std::move(clear)));
-
-                        m_engine.undo_stack()
-                        .execute_group(::std::move(group));
-
-                        m_selecting = false;
-                        redraw();
-                        return 1;
-                    }
-
-                    if (key == 'v')
-                    {
-                        auto& cb = m_engine.clipboard();
-                        if (cb.width == 0) return 1;
-
-                        auto& pat = m_engine.pattern();
-
-                        auto cmd =
-                        ::std::make_unique<disgrace_ns::CmdPasteBlock>(
-                            pat,
-                            cb,
-                            m_cursor_track,
-                            m_cursor_row);
-
-                        m_engine.undo_stack()
-                        .execute(static_cast<std::unique_ptr<disgrace_ns::Command>>(::std::move(cmd)));
-
-                        redraw();
-                        return 1;
-                    }
+                    m_engine.undo_stack().undo();
+                    redraw();
+                    return 1;
                 }
 
-                int note = key_to_note(key);
+                if (action == Action::Redo)
+                {
+                    m_engine.undo_stack().redo();
+                    redraw();
+                    return 1;
+                }
+
+                if (action == Action::Record)
+                {
+                    m_engine.record();
+                    return 1;
+                }
+
+                if (action == Action::Copy)
+                {
+                    if (!m_selecting) return 1;
+
+                    auto& pat = m_engine.pattern();
+                    auto& cb  = m_engine.clipboard();
+
+                    int r0 = ::std::min(m_sel_row_start,
+                                      m_sel_row_end);
+                    int r1 = ::std::max(m_sel_row_start,
+                                      m_sel_row_end);
+
+                    int t0 = ::std::min(m_sel_track_start,
+                                      m_sel_track_end);
+                    int t1 = ::std::max(m_sel_track_start,
+                                      m_sel_track_end);
+
+                    cb.width  = t1 - t0 + 1;
+                    cb.height = r1 - r0 + 1;
+                    cb.notes.clear();
+
+                    for (int t_idx = t0; t_idx <= t1; ++t_idx)
+                        for (int r_idx = r0; r_idx <= r1; ++r_idx)
+                            cb.notes.push_back(
+                                pat.event(t_idx, r_idx, 0).note);
+
+                    return 1;
+                }
+
+                if (action == Action::Cut)
+                {
+                    if (!m_selecting) return 1;
+
+                    auto& pat = m_engine.pattern();
+                    auto& cb  = m_engine.clipboard();
+
+                    int r0 = ::std::min(m_sel_row_start, m_sel_row_end);
+                    int r1 = ::std::max(m_sel_row_start, m_sel_row_end);
+                    int t0 = ::std::min(m_sel_track_start, m_sel_track_end);
+                    int t1 = ::std::max(m_sel_track_start, m_sel_track_end);
+
+                    // TODO: Implement copy logic here or reuse
+
+                    auto clear =
+                    ::std::make_unique<disgrace_ns::CmdClearBlock>(
+                        pat,
+                        t0,t1,r0,r1);
+
+                    ::std::vector<disgrace_ns::EditCommandPtr> group;
+                    group.push_back(static_cast<disgrace_ns::EditCommandPtr>(::std::move(clear)));
+
+                    m_engine.undo_stack()
+                    .execute_group(::std::move(group));
+
+                    m_selecting = false;
+                    redraw();
+                    return 1;
+                }
+
+                if (action == Action::Paste)
+                {
+                    auto& cb = m_engine.clipboard();
+                    if (cb.width == 0) return 1;
+
+                    auto& pat = m_engine.pattern();
+
+                    auto cmd =
+                    ::std::make_unique<disgrace_ns::CmdPasteBlock>(
+                        pat,
+                        cb,
+                        m_cursor_track,
+                        m_cursor_row);
+
+                    m_engine.undo_stack()
+                    .execute(static_cast<std::unique_ptr<disgrace_ns::Command>>(::std::move(cmd)));
+
+                    redraw();
+                    return 1;
+                }
+
+                int note = action_to_note(action);
                 if (note >= 0)
                 {
                     insert_note(note);

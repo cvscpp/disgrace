@@ -83,19 +83,24 @@ void disgrace_ns::MainWindow::timer_cb(void* data)
   int disgrace_ns::MainWindow::handle(int event){
     if (event == FL_KEYDOWN)
     {
-      switch (Fl::event_key())
+      Action action = m_engine.m_key_bindings.get_action(Fl::event_key(), Fl::event_state() & (FL_CTRL | FL_SHIFT | FL_ALT | FL_META));
+      
+      switch (action)
       {
-        case ' ':
+        case Action::Play:
           m_engine.play();
           return 1;
 
-        case 'r':
+        case Action::Record:
           m_engine.record();
           return 1;
 
-        case 'm':
+        case Action::ToggleMetronome:
           m_engine.toggle_metronome();
           return 1;
+        
+        default:
+          break;
       }
     }
     return Fl_Double_Window::handle(event); // Call base class handle for unhandled events

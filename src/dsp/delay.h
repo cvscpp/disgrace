@@ -2,10 +2,10 @@
 #include "dsp.h"
 #include <array>
 
-namespace dg
+namespace disgrace_ns
 {
 
-class DelayDSP : public DSP
+class DelayDSP : public disgrace_ns::DSP
 {
 public:
     static constexpr size_t MAX_DELAY = 48000;
@@ -33,9 +33,9 @@ public:
     }
 
 private:
-    std::array<float, MAX_DELAY> m_buffer_l{};
-    std::array<float, MAX_DELAY> m_buffer_r{};
+    ::std::array<float, MAX_DELAY> m_buffer_l{};
+    ::std::array<float, MAX_DELAY> m_buffer_r{};
     size_t m_pos = 0;
 };
 
-}
+} // namespace disgrace_ns

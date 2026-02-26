@@ -1,26 +1,26 @@
 #include "automation.h"
 #include <algorithm>
 
-namespace dg
+namespace disgrace_ns
 {
 
-    void AutomationLane::add_point(size_t row, float value)
+    void disgrace_ns::AutomationLane::add_point(size_t row, float value)
     {
         if (m_count >= MAX_AUTOMATION_POINTS)
             return;
 
         m_points[m_count++] = { row, value };
 
-        std::sort(m_points.begin(),
+        ::std::sort(m_points.begin(),
                   m_points.begin() + m_count,
-                  [](const AutomationPoint& a,
-                     const AutomationPoint& b)
+                  [](const disgrace_ns::AutomationPoint& a,
+                     const disgrace_ns::AutomationPoint& b)
                   {
                       return a.row < b.row;
                   });
     }
 
-    float AutomationLane::value_at(size_t row) const
+    float disgrace_ns::AutomationLane::value_at(size_t row) const
     {
         if (m_count == 0)
             return 0.0f;
@@ -53,4 +53,4 @@ namespace dg
         return 0.0f;
     }
 
-}
+} // namespace disgrace_ns

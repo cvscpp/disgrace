@@ -1,18 +1,18 @@
 #include "sample_voice.h"
 #include <cmath>
 
-namespace dg
+namespace disgrace_ns
 {
 
-    SampleVoice::SampleVoice(SampleData* data,
+    disgrace_ns::SampleVoice::SampleVoice(disgrace_ns::SampleData* data,
                              double engine_rate)
     : m_sample(data),
-    m_engine_rate(engine_rate),
-    m_env.set(0.005f, 0.05f, 0.9f, 0.2f)
+    m_engine_rate(engine_rate)
     {
+        m_env.set(0.005f, 0.05f, 0.9f, 0.2f); // Moved to constructor body
     }
 
-    void SampleVoice::start(uint8_t,
+    void disgrace_ns::SampleVoice::start(uint8_t,
                             uint8_t velocity,
                             float freq)
     {
@@ -31,12 +31,12 @@ namespace dg
         m_active = true;
     }
 
-    void SampleVoice::stop()
+    void disgrace_ns::SampleVoice::stop()
     {
          m_env.note_off();
     }
 
-    void SampleVoice::set_pitch(float freq)
+    void disgrace_ns::SampleVoice::set_pitch(float freq)
     {
         double base_freq = 440.0;
 
@@ -46,18 +46,18 @@ namespace dg
         m_engine_rate);
     }
 
-    void SampleVoice::set_volume(float vol)
+    void disgrace_ns::SampleVoice::set_volume(float vol)
     {
         m_volume = vol;
     }
 
-    bool SampleVoice::active() const
+    bool disgrace_ns::SampleVoice::active() const
     {
         return m_active;
     }
 
 
-    void SampleVoice::process(float* out_l,
+    void disgrace_ns::SampleVoice::process(float* out_l,
                               float* out_r,
                               size_t frames)
     {
@@ -108,4 +108,4 @@ namespace dg
 
 
 
-}
+} // namespace disgrace_ns

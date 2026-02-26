@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 
-namespace dg
+namespace disgrace_ns
 {
 
 enum class EffectType : uint8_t
@@ -23,5 +23,4 @@ struct NoteEvent
     uint8_t param = 0;       // effect parameter
 };
 
-}
-
+} // namespace disgrace_ns

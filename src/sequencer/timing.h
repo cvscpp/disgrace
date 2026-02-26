@@ -1,16 +1,19 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef> // Added for size_t
 
-namespace dg
+namespace disgrace_ns
 {
 
 class Timing
 {
 public:
     void set_sample_rate(uint32_t sr);
-    void set_tempo(double bpm);
+    void set_bpm(int bpm); // Renamed from set_tempo
+    double tempo() const { return m_bpm; } // Added tempo()
     void set_lpb(uint32_t lpb);
+    uint32_t lpb() const { return m_speed; } // Added this line
     void set_speed(int speed);
 
     int bpm() const { return m_bpm; }
@@ -29,4 +32,4 @@ private:
     int m_speed = 6;     // ticks per row
 };
 
-}
+} // namespace disgrace_ns

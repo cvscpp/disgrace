@@ -3,7 +3,7 @@
 #include "dsp.h"
 #include <array>
 
-namespace dg
+namespace disgrace_ns
 {
 
 constexpr size_t MAX_INSERTS = 4;
@@ -18,9 +18,11 @@ public:
     void set(size_t index, DSP* dsp);
     void enable(size_t index, bool en);
 
+    const ::std::array<disgrace_ns::DSP*, MAX_INSERTS>& effects() const { return m_effects; } // Add this line
+
 private:
-    std::array<DSP*, MAX_INSERTS> m_effects{};
-    std::array<bool, MAX_INSERTS> m_enabled{};
+    ::std::array<disgrace_ns::DSP*, MAX_INSERTS> m_effects{};
+    ::std::array<bool, MAX_INSERTS> m_enabled{};
 };
 
-}
+} // namespace disgrace_ns

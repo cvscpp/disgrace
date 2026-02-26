@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace dg
+namespace disgrace_ns
 {
 
 class AudioBackend
@@ -17,4 +17,4 @@ public:
     virtual uint32_t buffer_size() const = 0;
 };
 
-} // namespace dg
+} // namespace disgrace_ns

@@ -1,23 +1,23 @@
 #include "waveform_view.h"
 #include <FL/fl_draw.H>
 
-namespace dg
+namespace disgrace_ns
 {
 
-    WaveformView::WaveformView(int x, int y,
+    disgrace_ns::WaveformView::WaveformView(int x, int y,
                                int w, int h)
     : Fl_Widget(x,y,w,h)
     {
     }
 
-    void WaveformView::set_sample(
-        std::shared_ptr<Sample> s)
+    void disgrace_ns::WaveformView::set_sample(
+        ::std::shared_ptr<disgrace_ns::SampleData> s)
     {
         m_sample = s;
         redraw();
     }
 
-    void WaveformView::draw()
+    void disgrace_ns::WaveformView::draw()
     {
         fl_color(20,20,20);
         fl_rectf(x(), y(), w(), h());
@@ -46,27 +46,27 @@ namespace dg
                     yy + amp);
         }
     }
-    load_btn->callback(
-        [](Fl_Widget*, void* data)
-        {
-            auto* engine =
-            static_cast<Engine*>(data);
+    // load_btn->callback(
+    //     [](Fl_Widget*, void* data)
+    //     {
+    //         auto* engine =
+    //         static_cast<disgrace_ns::Engine*>(data);
 
-            Fl_File_Chooser chooser(
-                ".", "*.wav",
-                Fl_File_Chooser::SINGLE,
-                "Load Sample");
+    //         Fl_File_Chooser chooser(
+    //             ".", "*.wav",
+    //             Fl_File_Chooser::SINGLE,
+    //             "Load Sample");
 
-            chooser.show();
-            while (chooser.shown())
-                Fl::wait();
+    //         chooser.show();
+    //         while (chooser.shown())
+    //             Fl::wait();
 
-            if (chooser.value())
-            {
-                engine->load_sample_into_current(
-                    chooser.value());
-            }
-        },
-        &engine);
+    //         if (chooser.value())
+    //         {
+    //             engine->load_sample_into_current(
+    //                 chooser.value());
+    //         }
+    //     },
+    //     // &engine);
 
-}
+} // namespace disgrace_ns

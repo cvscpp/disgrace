@@ -1,9 +1,9 @@
 #pragma once
 #include <FL/Fl_Widget.H>
 #include <vector>
-#include "../pattern/pattern.h"
+#include "../sequencer/pattern.h"
 
-namespace dg
+namespace disgrace_ns
 {
 
     class Engine;
@@ -18,6 +18,7 @@ namespace dg
         void draw() override;
         int handle(int event) override;
         void draw_track_header(int track_index, int x, int y, int w, int h);
+        void set_current_row(int row);
 
     private:
         Pattern& m_pattern;
@@ -41,4 +42,4 @@ namespace dg
         void insert_note(uint8_t note);
     };
 
-}
+} // namespace disgrace_ns

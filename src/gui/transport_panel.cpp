@@ -1,12 +1,14 @@
-#include "transport_panel.h"
-#include "../engine/engine.h"
+#pragma once
 
-namespace dg
+#include "transport_panel.h"
+#include "../core/engine.h"
+
+namespace disgrace_ns
 {
 
-    TransportPanel::TransportPanel(int x, int y,
+    disgrace_ns::TransportPanel::TransportPanel(int x, int y,
                                    int w, int h,
-                                   Engine& engine)
+                                   disgrace_ns::Engine& engine)
     : Fl_Group(x, y, w, h),
     m_engine(engine)
     {
@@ -25,22 +27,22 @@ namespace dg
         end();
     }
 
-    void TransportPanel::cb_play(Fl_Widget*, void* userdata)
+    void disgrace_ns::TransportPanel::cb_play(Fl_Widget*, void* userdata)
     {
-        auto* self = static_cast<TransportPanel*>(userdata);
+        auto* self = static_cast<disgrace_ns::TransportPanel*>(userdata);
         self->m_engine.play();
     }
 
-    void TransportPanel::cb_stop(Fl_Widget*, void* userdata)
+    void disgrace_ns::TransportPanel::cb_stop(Fl_Widget*, void* userdata)
     {
-        auto* self = static_cast<TransportPanel*>(userdata);
+        auto* self = static_cast<disgrace_ns::TransportPanel*>(userdata);
         self->m_engine.stop();
     }
 
-    void TransportPanel::cb_tempo(Fl_Widget*, void* userdata)
+    void disgrace_ns::TransportPanel::cb_tempo(Fl_Widget*, void* userdata)
     {
-        auto* self = static_cast<TransportPanel*>(userdata);
+        auto* self = static_cast<disgrace_ns::TransportPanel*>(userdata);
         self->m_engine.set_tempo(self->m_tempo->value());
     }
 
-}
+} // namespace disgrace_ns

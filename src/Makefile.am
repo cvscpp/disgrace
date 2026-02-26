@@ -2,92 +2,62 @@ bin_PROGRAMS = disgrace
 
 disgrace_SOURCES = \
     main.cpp \
-    core/command.h \
     core/engine.cpp \
-    core/engine.h \
-    core/engine_command.h \
     core/engine_save.cpp \
-    core/MasterBus.cpp \
-    core/MasterBus.h \
+    core/masterbus.cpp \
     core/metronome.cpp \
-    core/metronome.h \
     core/transport.cpp \
-    core/transport.h \
     core/undo_stack.cpp \
-    core/undo_stack.h \
-    audio/adsr.h \
-    audio/audio_backend.h \
     audio/jack_backend.cpp \
-    audio/jack_backend.h \
     audio/resampler.cpp \
-    audio/resampler.h \
     audio/sample_buffer.cpp \
-    audio/sample_buffer.h \
-    audio/sample_data.h \
     audio/sample_voice.cpp \
-    audio/sample_voice.h \
     audio/timestretch.cpp \
-    audio/timestretch.h \
-    audio/voice.h \
-    dsp/delay.h \
     dsp/dsp_chain.cpp \
-    dsp/dsp_chain.h \
-    dsp/dsp.h \
-    dsp/gain.h \
-    edit/cmd_clear_block.h \
-    edit/cmd_paste_block.h \
-    edit/cmd_set_note.h \
-    edit/edit_command.h \
-    edit/undo_stack.h \
     gui/main_window.cpp \
-    gui/main_window.h \
+    gui/tab_project.cpp \
+    gui/tab_tracker.cpp \
+    gui/tab_instrument.cpp \
+    gui/tab_mixer.cpp \
+    gui/tab_settings.cpp \
+    gui/tracker_panel.cpp \
+    gui/instrument_panel.cpp \
+    gui/mixer_panel.cpp \
+    gui/settings_panel.cpp \
+    gui/detached_window.cpp \
     gui/model/mixer_model.cpp \
-    gui/model/mixer_model.h \
     gui/tracker_view.cpp \
-    gui/tracker_view.h \
     gui/transport_panel.cpp \
-    gui/transport_panel.h \
     gui/transportbar.cpp \
-    gui/transportbar.h \
     instrument/instrument.cpp \
-    instrument/instrument.h \
     instrument/instrument_rack.cpp \
-    instrument/instrument_rack.h \
     instrument/sample_instrument.cpp \
-    instrument/sample_instrument.h \
     io/audio_file.cpp \
-    io/audio_file.h \
     io/project_archive.cpp \
-    io/project_archive.h \
     io/song_serializer.cpp \
-    io/song_serializer.h \
-    midi/MidiInput.cpp \
-    midi/MidiInput.h \
-    midi/MidiQueue.h \
+    midi/midi_input.cpp \
     mixer/track.cpp \
-    mixer/track.h \
     sequencer/automation.cpp \
-    sequencer/automation.h \
-    sequencer/note.h \
-    sequencer/pattern.h \
+    sequencer/pattern.cpp \
     sequencer/sequencer.cpp \
-    sequencer/sequencer.h \
     sequencer/timing.cpp \
-    sequencer/timing.h \
-    util/ringbuffer.h \
-    analysis/fft_analyzer.cpp \
-    analysis/fft_analyzer.h
+    analysis/fft_analyzer.cpp
 
 disgrace_CXXFLAGS = \
     $(JACK_CFLAGS) \
     $(FLTK_CFLAGS) \
     $(SNDFILE_CFLAGS) \
     $(SAMPLERATE_CFLAGS) \
-    $(SNDTOUCH_CFLAGS)
+    $(SNDTOUCH_CFLAGS) \
+    $(NLOHMANN_JSON_CFLAGS) \
+    $(FFTW3_CFLAGS) \
+    $(LIBARCHIVE_CFLAGS)
 
 disgrace_LDADD = \
     $(JACK_LIBS) \
     $(FLTK_LIBS) \
     $(SNDFILE_LIBS) \
     $(SAMPLERATE_LIBS) \
-    $(SNDTOUCH_LIBS)
+    $(SNDTOUCH_LIBS) \
+    $(FFTW3_LIBS) \
+    $(LIBARCHIVE_LIBS)

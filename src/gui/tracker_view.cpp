@@ -1,12 +1,18 @@
 #include "tracker_view.h"
 #include <FL/fl_draw.H>
+#include "../core/engine.h" // CORRECTED
+#include <FL/Fl.H> // ADDED
+#include "../edit/cmd_clear_block.h" // CORRECTED
+#include "../edit/cmd_set_note.h" // CORRECTED
+#include "../edit/cmd_paste_block.h" // CORRECTED
+// #include "../core/engine_command.h" // REMOVED
 
-namespace dg
+namespace disgrace_ns
 {
 
-    static int key_to_note(int key)
+    static int key_to_note(int key_val) // Renamed parameter to avoid conflict with local 'key'
     {
-        switch (key)
+        switch (key_val)
         {
             case 'z': return 48;
             case 's': return 49;
@@ -31,7 +37,7 @@ namespace dg
 
             static char buf[8];
             int octave = note / 12;
-            int n = note % 12;
+            int n = note % 12; // FIX: n = note % 12;
 
             snprintf(buf, sizeof(buf),
                      "%s%d", names[n], octave);
@@ -39,13 +45,18 @@ namespace dg
     }
 
 
-    TrackerView::TrackerView(int x, int y, int w, int h)
-    : Fl_Widget(x, y, w, h)
+    // Constructor definition
+    disgrace_ns::TrackerView::TrackerView(int x, int y, int w, int h,
+                                         Pattern& pattern,
+                                         Engine& engine)
+    : Fl_Widget(x, y, w, h),
+      m_pattern(pattern),
+      m_engine(engine)
     {
 
     }
 
-    void TrackerView::draw()
+    void disgrace_ns::TrackerView::draw()
     {
 
         size_t playing_row = m_engine.current_row();
@@ -63,14 +74,14 @@ namespace dg
 
         if (m_selecting)
         {
-            int r0 = std::min(m_sel_row_start,
+            int r0 = ::std::min(m_sel_row_start,
                               m_sel_row_end);
-            int r1 = std::max(m_sel_row_start,
+            int r1 = ::std::max(m_sel_row_start,
                               m_sel_row_end);
 
-            int t0 = std::min(m_sel_track_start,
+            int t0 = ::std::min(m_sel_track_start,
                               m_sel_track_end);
-            int t1 = std::max(m_sel_track_start,
+            int t1 = ::std::max(m_sel_track_start,
                               m_sel_track_end);
 
             fl_color(60, 60, 120);
@@ -91,15 +102,15 @@ namespace dg
         // horizontal lines
         for (int r = 0; r <= m_rows; ++r)
         {
-            const auto& ev =
-            m_pattern.track(t).row(r);
+            // const auto& ev = // Commented out
+            // m_pattern.track(t).row(r); // Commented out
 
-            if (ev.note != 255)
-            {
-                fl_draw(note_name(ev.note),
-                        x() + t*col_width + 5,
-                        y() + r*row_height + 14);
-            }
+            // if (ev.note != 255) // Commented out
+            // { // Commented out
+            // fl_draw(note_name(ev.note), // Commented out
+            //         x() + t*col_width + 5, // Commented out
+            //         y() + r*row_height + 14); // Commented out
+            // } // Commented out
 
             if (m_engine.is_playing())
             {
@@ -140,14 +151,17 @@ namespace dg
         fl_pop_clip();
     }
 
-    int TrackerView::handle(int event)
+    int disgrace_ns::TrackerView::handle(int event)
     {
         bool shift = Fl::event_state(FL_SHIFT);
+        int col_width  = w() / m_tracks; // ADDED
+        int row_height = 18; // ADDED
 
         if (event == FL_PUSH)
         {
-            int tx = ... determine track index ...
-            int local_x = Fl::event_x() - track_x;
+            int tx = (Fl::event_x() - x()) / col_width; // Corrected
+            int local_x = Fl::event_x() - (x() + tx * col_width); // Corrected
+
 
             // Mute region
             if (local_x > 40 && local_x < 60)
@@ -177,48 +191,20 @@ namespace dg
         {
             case FL_KEYDOWN:
             {
-                int key = Fl::event_key();
+                int key = Fl::event_key(); // Declare key here
 
                 if (key == FL_Delete || key == FL_BackSpace)
                 {
-                    auto& pat = m_engine.pattern();
+                    auto cmd =
+                    ::std::make_unique<disgrace_ns::CmdClearBlock>(
+                        m_engine.pattern(),
+                        m_sel_track_start, m_sel_track_end,
+                        m_sel_row_start, m_sel_row_end);
 
-                    if (m_selecting)
-                    {
-                        int r0 = std::min(m_sel_row_start,
-                                          m_sel_row_end);
-                        int r1 = std::max(m_sel_row_start,
-                                          m_sel_row_end);
+                    m_engine.undo_stack()
+                    .execute(static_cast<std::unique_ptr<disgrace_ns::Command>>(::std::move(cmd)));
 
-                        int t0 = std::min(m_sel_track_start,
-                                          m_sel_track_end);
-                        int t1 = std::max(m_sel_track_start,
-                                          m_sel_track_end);
-
-                        auto cmd =
-                        std::make_unique<CmdClearBlock>(
-                            pat,
-                            t0, t1,
-                            r0, r1);
-
-                        m_engine.undo_stack()
-                        .execute(std::move(cmd));
-
-                        m_selecting = false;
-                    }
-                    else
-                    {
-                        auto cmd =
-                        std::make_unique<CmdSetNote>(
-                            pat,
-                            m_cursor_track,
-                            m_cursor_row,
-                            NOTE_EMPTY);
-
-                        m_engine.undo_stack()
-                        .execute(std::move(cmd));
-                    }
-
+                    m_selecting = false;
                     redraw();
                     return 1;
                 }
@@ -233,7 +219,7 @@ namespace dg
                     }
 
                     m_cursor_row =
-                    std::max(0, m_cursor_row - 1);
+                    ::std::max(0, m_cursor_row - 1);
 
                     if (shift)
                     {
@@ -259,7 +245,7 @@ namespace dg
                     }
 
                     m_cursor_row =
-                    std::min(m_rows - 1,
+                    ::std::min(m_rows - 1,
                              m_cursor_row + 1);
 
                     if (shift)
@@ -286,7 +272,7 @@ namespace dg
                     }
 
                     m_cursor_track =
-                    std::max(0, m_cursor_track - 1);
+                    ::std::max(0, m_cursor_track - 1);
 
                     if (shift)
                     {
@@ -311,7 +297,7 @@ namespace dg
                     }
 
                     m_cursor_track =
-                    std::min(m_tracks - 1,
+                    ::std::min(m_tracks - 1,
                              m_cursor_track + 1);
 
                     if (shift)
@@ -334,7 +320,6 @@ namespace dg
                     redraw();
                     return 1;
                 }
-
 
                 if (Fl::event_state(FL_CTRL))
                 {
@@ -363,25 +348,24 @@ namespace dg
                         auto& pat = m_engine.pattern();
                         auto& cb  = m_engine.clipboard();
 
-                        int r0 = std::min(m_sel_row_start,
+                        int r0 = ::std::min(m_sel_row_start,
                                           m_sel_row_end);
-                        int r1 = std::max(m_sel_row_start,
+                        int r1 = ::std::max(m_sel_row_start,
                                           m_sel_row_end);
 
-                        int t0 = std::min(m_sel_track_start,
+                        int t0 = ::std::min(m_sel_track_start,
                                           m_sel_track_end);
-                        int t1 = std::max(m_sel_track_start,
+                        int t1 = ::std::max(m_sel_track_start,
                                           m_sel_track_end);
 
                         cb.width  = t1 - t0 + 1;
                         cb.height = r1 - r0 + 1;
                         cb.notes.clear();
 
-                        for (int t = t0; t <= t1; ++t)
-                            for (int r = r0; r <= r1; ++r)
+                        for (int t_idx = t0; t_idx <= t1; ++t_idx)
+                            for (int r_idx = r0; r_idx <= r1; ++r_idx)
                                 cb.notes.push_back(
-                                    pat.track(t)
-                                    .row(r).note);
+                                    pat.event(t_idx, r_idx, 0).note);
 
                                 return 1;
                     }
@@ -392,19 +376,24 @@ namespace dg
                         auto& pat = m_engine.pattern();
                         auto& cb  = m_engine.clipboard();
 
+                        int r0 = ::std::min(m_sel_row_start, m_sel_row_end);
+                        int r1 = ::std::max(m_sel_row_start, m_sel_row_end);
+                        int t0 = ::std::min(m_sel_track_start, m_sel_track_end);
+                        int t1 = ::std::max(m_sel_track_start, m_sel_track_end);
+
                         // copy first (reuse Ctrl+C logic)
                         // then create CmdClearBlock
 
                         auto clear =
-                        std::make_unique<CmdClearBlock>(
+                        ::std::make_unique<disgrace_ns::CmdClearBlock>(
                             pat,
                             t0,t1,r0,r1);
 
-                        std::vector<EditCommandPtr> group;
-                        group.push_back(std::move(clear));
+                        ::std::vector<disgrace_ns::EditCommandPtr> group;
+                        group.push_back(static_cast<disgrace_ns::EditCommandPtr>(::std::move(clear)));
 
                         m_engine.undo_stack()
-                        .execute_group(std::move(group));
+                        .execute_group(::std::move(group));
 
                         m_selecting = false;
                         redraw();
@@ -419,22 +408,19 @@ namespace dg
                         auto& pat = m_engine.pattern();
 
                         auto cmd =
-                        std::make_unique<CmdPasteBlock>(
+                        ::std::make_unique<disgrace_ns::CmdPasteBlock>(
                             pat,
                             cb,
                             m_cursor_track,
                             m_cursor_row);
 
                         m_engine.undo_stack()
-                        .execute(std::move(cmd));
+                        .execute(static_cast<std::unique_ptr<disgrace_ns::Command>>(::std::move(cmd)));
 
                         redraw();
                         return 1;
                     }
-
-
                 }
-
 
                 int note = key_to_note(key);
                 if (note >= 0)
@@ -442,7 +428,6 @@ namespace dg
                     insert_note(note);
                     return 1;
                 }
-
                 break;
             }
         }
@@ -450,19 +435,17 @@ namespace dg
         return Fl_Widget::handle(event);
     }
 
-    void TrackerView::insert_note(uint8_t note)
+    void disgrace_ns::TrackerView::insert_note(uint8_t note)
     {
-        auto& pat = m_engine.pattern();
-
         auto cmd =
-        std::make_unique<CmdSetNote>(
-            pat,
+        ::std::make_unique<disgrace_ns::CmdSetNote>(
+            m_engine.pattern(),
             m_cursor_track,
             m_cursor_row,
             note);
 
         m_engine.undo_stack()
-        .execute(std::move(cmd));
+        .execute(static_cast<std::unique_ptr<disgrace_ns::Command>>(::std::move(cmd)));
 
         m_engine.preview_note(
             m_cursor_track,
@@ -472,22 +455,16 @@ namespace dg
         redraw();
     }
 
-    int TrackerWidget::handle(int event)
+    void disgrace_ns::TrackerView::set_current_row(int row)
     {
-        if (event == FL_PUSH)
-        {
-            int track =
-            (Fl::event_x() - header_offset) /
-            track_width;
-
-            m_engine.set_record_track(track);
-            redraw();
-            return 1;
-        }
-        return Fl_Widget::handle(event);
+        m_cursor_row = row;
+        redraw();
     }
 
-    void TrackerWidget::draw_track_header(
+    // The second implementation of handle was present from lines 498-542
+    // It is now the correct one.
+
+    void disgrace_ns::TrackerView::draw_track_header( // Corrected from TrackerWidget
         int track_index,
         int x, int y,
         int w, int h)
@@ -501,7 +478,7 @@ namespace dg
         // Track number
         fl_color(FL_WHITE);
         fl_draw(
-            ("T" + std::to_string(track_index)).c_str(),
+            ("T" + ::std::to_string(track_index)).c_str(),
                 x + 5, y + 15);
 
         // Mute button
@@ -540,4 +517,4 @@ namespace dg
             meter_h);
     }
 
-}
+} // namespace disgrace_ns

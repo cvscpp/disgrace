@@ -1,17 +1,17 @@
 #pragma once
 #include "edit_command.h"
-#include "../pattern/pattern.h"
-#include "../engine/engine.h"
+#include "../sequencer/pattern.h"
+#include "../core/engine.h"
 #include <vector>
 
-namespace dg
+namespace disgrace_ns
 {
 
-    class CmdPasteBlock : public EditCommand
+    class CmdPasteBlock : public disgrace_ns::EditCommand
     {
     public:
-        CmdPasteBlock(Pattern& pat,
-                      const BlockClipboard& cb,
+        CmdPasteBlock(disgrace_ns::Pattern& pat,
+                      const disgrace_ns::BlockClipboard& cb,
                       size_t dst_track,
                       size_t dst_row)
         : m_pattern(pat),
@@ -30,12 +30,11 @@ namespace dg
                         row   < pat.row_count())
                     {
                         m_old_values.push_back(
-                            pat.track(track)
-                            .row(row).note);
+                            pat.event(track, row, 0).note); // Changed from pat.track(t).row(r).note
                     }
                     else
                     {
-                        m_old_values.push_back(NOTE_EMPTY);
+                        m_old_values.push_back(disgrace_ns::NOTE_EMPTY);
                     }
                 }
             }
@@ -55,8 +54,7 @@ namespace dg
                     if (track < m_pattern.track_count() &&
                         row   < m_pattern.row_count())
                     {
-                        m_pattern.track(track)
-                        .row(row).note =
+                        m_pattern.event(track, row, 0).note = // Changed from m_pattern.track(track).row(row).note
                         m_clip.notes[idx];
                     }
 
@@ -79,8 +77,7 @@ namespace dg
                     if (track < m_pattern.track_count() &&
                         row   < m_pattern.row_count())
                     {
-                        m_pattern.track(track)
-                        .row(row).note =
+                        m_pattern.event(track, row, 0).note = // Changed from m_pattern.track(track).row(row).note
                         m_old_values[idx];
                     }
 
@@ -90,13 +87,13 @@ namespace dg
         }
 
     private:
-        Pattern& m_pattern;
-        BlockClipboard m_clip;
+        disgrace_ns::Pattern& m_pattern;
+        disgrace_ns::BlockClipboard m_clip;
 
         size_t m_dst_track;
         size_t m_dst_row;
 
-        std::vector<uint8_t> m_old_values;
+        ::std::vector<uint8_t> m_old_values;
     };
 
-}
+} // namespace disgrace_ns

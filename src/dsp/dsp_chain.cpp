@@ -1,9 +1,9 @@
 #include "dsp_chain.h"
 
-namespace dg
+namespace disgrace_ns
 {
 
-void DSPChain::process(float* l,
+void disgrace_ns::DSPChain::process(float* l,
                        float* r,
                        size_t nframes)
 {
@@ -14,16 +14,16 @@ void DSPChain::process(float* l,
     }
 }
 
-void DSPChain::set(size_t index, DSP* dsp)
+void disgrace_ns::DSPChain::set(size_t index, disgrace_ns::DSP* dsp)
 {
     if (index < MAX_INSERTS)
         m_effects[index] = dsp;
 }
 
-void DSPChain::enable(size_t index, bool en)
+void disgrace_ns::DSPChain::enable(size_t index, bool en)
 {
     if (index < MAX_INSERTS)
         m_enabled[index] = en;
 }
 
-}
+} // namespace disgrace_ns

@@ -1,11 +1,12 @@
 #include "resampler.h"
 #include <samplerate.h>
+#include <vector>
 
-namespace dg
+namespace disgrace_ns
 {
 
-    bool Resampler::process(const std::vector<float>& input,
-                            std::vector<float>& output,
+    bool disgrace_ns::Resampler::process(const ::std::vector<float>& input,
+                            ::std::vector<float>& output,
                             double ratio)
     {
         if (input.empty() || ratio <= 0.0)
@@ -33,4 +34,4 @@ namespace dg
         return true;
     }
 
-}
+} // namespace disgrace_ns

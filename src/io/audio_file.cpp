@@ -1,12 +1,12 @@
 #include "audio_file.h"
 #include <sndfile.h>
 
-namespace dg
+namespace disgrace_ns
 {
 
-    bool AudioFile::load_wav(const std::string& path,
-                             std::vector<float>& left,
-                             std::vector<float>& right,
+    bool disgrace_ns::AudioFile::load_wav(const ::std::string& path,
+                             ::std::vector<float>& left,
+                             ::std::vector<float>& right,
                              uint32_t& sample_rate)
     {
         SF_INFO info{};
@@ -16,7 +16,7 @@ namespace dg
 
         sample_rate = info.samplerate;
 
-        std::vector<float> buffer(info.frames * info.channels);
+        ::std::vector<float> buffer(info.frames * info.channels);
         sf_readf_float(file, buffer.data(), info.frames);
         sf_close(file);
 
@@ -34,9 +34,9 @@ namespace dg
         return true;
     }
 
-    bool AudioFile::save_wav(const std::string& path,
-                             const std::vector<float>& left,
-                             const std::vector<float>& right,
+    bool disgrace_ns::AudioFile::save_wav(const ::std::string& path,
+                             const ::std::vector<float>& left,
+                             const ::std::vector<float>& right,
                              uint32_t sample_rate)
     {
         SF_INFO info{};
@@ -48,8 +48,8 @@ namespace dg
         if (!file)
             return false;
 
-        size_t frames = std::min(left.size(), right.size());
-        std::vector<float> buffer(frames * 2);
+        size_t frames = ::std::min(left.size(), right.size());
+        ::std::vector<float> buffer(frames * 2);
 
         for (size_t i = 0; i < frames; ++i)
         {
@@ -63,4 +63,4 @@ namespace dg
         return true;
     }
 
-}
+} // namespace disgrace_ns

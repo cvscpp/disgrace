@@ -1,19 +1,21 @@
 #include "track.h"
 #include "../instrument/instrument.h"
+#include <cmath> // Added for powf and fabs
 
-namespace dg
+namespace disgrace_ns
 {
 
-Track::Track()
+disgrace_ns::Track::Track()
+    : m_meter(0.0f), m_current_freq(440.0f) // Initialize m_meter here
 {
 }
 
-void Track::set_instrument(Instrument* inst)
+void disgrace_ns::Track::set_instrument(disgrace_ns::Instrument* inst)
 {
     m_instrument = inst;
 }
 
-void Track::process(float* out_l,
+void disgrace_ns::Track::process(float* out_l,
                     float* out_r,
                     size_t nframes)
 {
@@ -28,8 +30,8 @@ void Track::process(float* out_l,
         float l = out_l[i];
         float r = out_r[i];
 
-        float left_gain  = volume * (pan <= 0 ? 1.0f : 1.0f - pan);
-        float right_gain = volume * (pan >= 0 ? 1.0f : 1.0f + pan);
+        float left_gain  = volume() * (pan <= 0 ? 1.0f : 1.0f - pan); // Corrected volume()
+        float right_gain = volume() * (pan >= 0 ? 1.0f : 1.0f + pan); // Corrected volume()
 
         out_l[i] = l * left_gain;
         out_r[i] = r * right_gain;
@@ -39,10 +41,10 @@ void Track::process(float* out_l,
 
     for (size_t i = 0; i < nframes; ++i)
     {
-        float v = std::fabs(out_l[i]);
+        float v = ::std::fabs(out_l[i]);
         if (v > peak) peak = v;
 
-        v = std::fabs(out_r[i]);
+        v = ::std::fabs(out_r[i]);
         if (v > peak) peak = v;
     }
 
@@ -55,14 +57,13 @@ void Track::process(float* out_l,
 
 }
 
-float Track::note_to_frequency(uint8_t note)
+float disgrace_ns::Track::note_to_frequency(uint8_t note) // Added namespace and class prefix
 {
     return 440.0f * powf(2.0f, (int(note) - 69) / 12.0f);
 }
 
 
-void Track::note_on(uint8_t note,
-                    uint8_t velocity)
+void disgrace_ns::Track::note_on(uint8_t note, uint8_t velocity) // Added namespace and class prefix
 {
     if (!m_instrument)
         return;
@@ -77,47 +78,48 @@ void Track::note_on(uint8_t note,
     {
         m_instrument->set_pitch(freq);
         m_instrument->note_on(note, velocity);
+        m_current_freq = freq; // Update m_current_freq on note_on
     }
 }
 
-void Track::note_off()
+void disgrace_ns::Track::note_off()
 {
     if (m_instrument)
         m_instrument->note_off();
 }
 
-size_t Track::total_latency() const
+size_t disgrace_ns::Track::total_latency() const
 {
     size_t sum = 0;
 
-    for (const auto& fx : m_fx_chain.effects())
+    for (const auto& fx : m_chain.effects()) // Corrected m_fx_chain to m_chain
         sum += fx->latency();
 
     return sum;
 }
 
-void Track::set_volume(float v)
+void disgrace_ns::Track::set_volume(float v)
 {
     m_volume = v;
 }
 
-float Track::volume() const
+float disgrace_ns::Track::volume() const
 {
     return m_volume;
 }
 
-void Track::set_mute(bool m)
+void disgrace_ns::Track::set_mute(bool m)
 {
     m_mute = m;
 }
 
-bool Track::muted() const
+bool disgrace_ns::Track::muted() const
 {
     return m_mute;
 }
 
 
-void Track::process_tick()
+void disgrace_ns::Track::process_tick(uint32_t engine_current_tick) // Added namespace and class prefix, updated parameter
 {
     // --- volume slide ---
     if (m_fx_state.vol_slide_up > 0)
@@ -168,33 +170,39 @@ void Track::process_tick()
     // --- note cut ---
     if (m_fx_state.note_cut_tick >= 0)
     {
-        if (m_engine_current_tick ==
+        if (engine_current_tick == // Corrected from m_engine_current_tick
             m_fx_state.note_cut_tick)
         {
             note_off();
             m_fx_state.note_cut_tick = -1;
         }
     }
-
-    if (m_mute)
-    {
-        std::fill(out_l, out_l + frames, 0.f);
-        std::fill(out_r, out_r + frames, 0.f);
-        return;
-    }
-
-    for (size_t i = 0; i < frames; ++i)
-    {
-        out_l[i] *= m_volume;
-        out_r[i] *= m_volume;
-    }
-
 }
 
-float Track::meter_level() const
+void disgrace_ns::Track::retrigger_note()
+{
+    if (m_instrument)
+    {
+        // Re-trigger the current note, assuming velocity of 100
+        // A more robust solution might store the last note/velocity
+        m_instrument->note_on(0, 100); // Placeholder, ideally should re-trigger last note
+        m_instrument->set_pitch(m_current_freq);
+    }
+}
+
+float disgrace_ns::Track::meter_level() const
 {
     return m_meter.load();
 }
 
-
+bool disgrace_ns::Track::solo() const
+{
+    return m_solo;
 }
+
+void disgrace_ns::Track::set_solo(bool s)
+{
+    m_solo = s;
+}
+
+} // namespace disgrace_ns

@@ -1,6 +1,11 @@
 #include "metronome.h"
 #include <cmath>
 
+namespace disgrace_ns
+{
+
+constexpr float PI_F = 3.14159265358979323846f; // Renamed from M_PI
+
 void Metronome::set_sample_rate(double sr)
 {
     m_sample_rate = sr;
@@ -50,11 +55,11 @@ void Metronome::process(float* out_l,
             : freq_normal;
 
             m_phase +=
-            2.f * M_PI * freq /
+            2.f * PI_F * freq / // Use PI_F
             m_sample_rate;
 
             sample =
-            std::sin(m_phase) * m_volume;
+            ::std::sin(m_phase) * m_volume;
 
             m_click_remaining--;
         }
@@ -65,3 +70,5 @@ void Metronome::process(float* out_l,
         samples_until_next_beat--;
     }
 }
+
+} // namespace disgrace_ns

@@ -3,12 +3,13 @@
 #include <archive_entry.h>
 #include <filesystem>
 #include <fstream>
+#include <vector> // Added for std::vector
 
-namespace dg
+namespace disgrace_ns
 {
 
-    bool ProjectArchive::save(const std::string& path,
-                              const std::string& folder)
+    bool disgrace_ns::ProjectArchive::save(const ::std::string& path,
+                              const ::std::string& folder)
     {
         struct archive* a = archive_write_new();
         archive_write_add_filter_gzip(a);
@@ -18,7 +19,7 @@ namespace dg
             return false;
 
         for (auto& p :
-            std::filesystem::recursive_directory_iterator(folder))
+            ::std::filesystem::recursive_directory_iterator(folder))
         {
             if (!p.is_regular_file())
                 continue;
@@ -28,23 +29,23 @@ namespace dg
 
             archive_entry_set_pathname(
                 entry,
-                std::filesystem::relative(
+                ::std::filesystem::relative(
                     p.path(), folder).string().c_str());
 
             archive_entry_set_size(
                 entry,
-                std::filesystem::file_size(p.path()));
+                ::std::filesystem::file_size(p.path()));
 
             archive_entry_set_filetype(entry, AE_IFREG);
             archive_entry_set_perm(entry, 0644);
 
             archive_write_header(a, entry);
 
-            std::ifstream file(p.path(),
-                               std::ios::binary);
+            ::std::ifstream file(p.path(),
+                               ::std::ios::binary);
 
-            std::vector<char> buffer(
-                std::filesystem::file_size(p.path()));
+            ::std::vector<char> buffer(
+                ::std::filesystem::file_size(p.path()));
 
             file.read(buffer.data(), buffer.size());
 
@@ -61,8 +62,8 @@ namespace dg
         return true;
     }
 
-    bool ProjectArchive::extract(const std::string& path,
-                                 const std::string& dest)
+    bool disgrace_ns::ProjectArchive::extract(const ::std::string& path,
+                                 const ::std::string& dest)
     {
         struct archive* a = archive_read_new();
         archive_read_support_format_tar(a);
@@ -78,15 +79,15 @@ namespace dg
         while (archive_read_next_header(a, &entry)
             == ARCHIVE_OK)
         {
-            std::filesystem::path out =
-            std::filesystem::path(dest) /
+            ::std::filesystem::path out =
+            ::std::filesystem::path(dest) /
             archive_entry_pathname(entry);
 
-            std::filesystem::create_directories(
+            ::std::filesystem::create_directories(
                 out.parent_path());
 
-            std::ofstream file(out,
-                               std::ios::binary);
+            ::std::ofstream file(out,
+                               ::std::ios::binary);
 
             const void* buff;
             size_t size;
@@ -108,4 +109,4 @@ namespace dg
         return true;
     }
 
-}
+} // namespace disgrace_ns

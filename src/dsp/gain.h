@@ -1,10 +1,10 @@
 #pragma once
 #include "dsp.h"
 
-namespace dg
+namespace disgrace_ns
 {
 
-class GainDSP : public DSP
+class GainDSP : public disgrace_ns::DSP
 {
 public:
     float gain = 1.0f;
@@ -21,4 +21,4 @@ public:
     }
 };
 
-}
+} // namespace disgrace_ns

@@ -1,8 +1,14 @@
 #pragma once
 #include <cstddef>
+#include <cstdint> // Added for uint8_t
+#include <memory>  // Added for std::unique_ptr
+#include <array>   // Added for std::array
+#include "../audio/voice.h" // Added for disgrace_ns::Voice
 
-namespace dg
+namespace disgrace_ns
 {
+
+constexpr size_t MAX_VOICES = 32;
 
 class Instrument
 {
@@ -20,12 +26,12 @@ public:
                          size_t nframes) = 0;
 
 protected:
-    virtual std::unique_ptr<Voice> create_voice() = 0;
+    virtual ::std::unique_ptr<disgrace_ns::Voice> create_voice() = 0;
 
-    Voice* allocate_voice();
+    disgrace_ns::Voice* allocate_voice();
 
 protected:
-    std::array<std::unique_ptr<Voice>, MAX_VOICES> m_voices;
+    ::std::array<::std::unique_ptr<disgrace_ns::Voice>, MAX_VOICES> m_voices;
 };
 
-}
+} // namespace disgrace_ns

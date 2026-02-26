@@ -1,22 +1,22 @@
 #pragma once
 #include "instrument.h"
-#include "sample_voice.h"
+#include "../audio/sample_voice.h"
 
-namespace dg
+namespace disgrace_ns
 {
 
-    class SampleInstrument : public Instrument
+    class SampleInstrument : public disgrace_ns::Instrument
     {
     public:
-        SampleInstrument(SampleData* data,
+        SampleInstrument(disgrace_ns::SampleData* data,
                          double engine_rate);
 
     protected:
-        std::unique_ptr<Voice> create_voice() override;
+        ::std::unique_ptr<disgrace_ns::Voice> create_voice() override;
 
     private:
-        SampleData* m_sample;
+        disgrace_ns::SampleData* m_sample;
         double m_engine_rate;
     };
 
-}
+} // namespace disgrace_ns

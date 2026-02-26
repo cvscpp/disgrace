@@ -2,8 +2,10 @@
 
 #include "../dsp/dsp_chain.h"
 #include <vector>
+#include <cstdint> // Added for uint8_t
+#include <atomic>  // Added for std::atomic
 
-namespace dg
+namespace disgrace_ns
 {
 
     struct TrackEffectState
@@ -36,10 +38,10 @@ public:
                  float* out_r,
                  size_t nframes);
 
-    void set_instrument(Instrument* inst);
+    void set_instrument(disgrace_ns::Instrument* inst);
 
     TrackEffectState m_fx_state;
-    float m_volume = 1.0f;
+
     float m_frequency = 440.0f;
     float pan    = 0.0f;  // -1 left, +1 right
     uint8_t last_volume = 127;
@@ -47,7 +49,7 @@ public:
     void note_on(uint8_t note, uint8_t velocity);
     void note_off();
 
-    size_t Track::total_latency();
+    size_t total_latency() const; // Added const
 
     void set_volume(float v);
     float volume() const;
@@ -56,13 +58,23 @@ public:
     bool muted() const;
 
     float meter_level() const;
+    bool solo() const; // Add this
+    void set_solo(bool s); // Add this
+
+    float note_to_frequency(uint8_t note); // Added declaration
+    void process_tick(uint32_t engine_current_tick); // Updated declaration
+
 
 private:
     float m_volume = 1.f;
     bool  m_mute   = false;
+    bool  m_solo   = false; // Add this
 
-    Instrument* m_instrument = nullptr;
-    DSPChain    m_chain;
+    disgrace_ns::Instrument* m_instrument = nullptr;
+    disgrace_ns::DSPChain    m_chain;
+    ::std::atomic<float> m_meter {0.0f}; // Added m_meter
+    float m_current_freq = 0.0f; // Added
+    void retrigger_note(); // Added
 };
 
-}
+} // namespace disgrace_ns

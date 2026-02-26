@@ -1,6 +1,9 @@
 #include "transportbar.h"
 #include "../core/engine.h"
 
+namespace disgrace_ns
+{
+
 TransportBar::TransportBar(
     int X, int Y, int W, int H,
     Engine& engine)
@@ -42,7 +45,7 @@ m_engine(engine)
 
 void TransportBar::cb_tempo(Fl_Widget* w, void* data)
 {
-    auto* self = static_cast<TransportBar*>(data);
+    auto* self = static_cast<disgrace_ns::TransportBar*>(data);
 
     double bpm =
     static_cast<Fl_Value_Input*>(w)->value();
@@ -53,19 +56,19 @@ void TransportBar::cb_tempo(Fl_Widget* w, void* data)
 
 void TransportBar::cb_play(Fl_Widget*, void* data)
 {
-    auto* self = static_cast<TransportBar*>(data);
+    auto* self = static_cast<disgrace_ns::TransportBar*>(data);
     self->m_engine.play();
 }
 
 void TransportBar::cb_stop(Fl_Widget*, void* data)
 {
-    auto* self = static_cast<TransportBar*>(data);
+    auto* self = static_cast<disgrace_ns::TransportBar*>(data);
     self->m_engine.stop();
 }
 
 void TransportBar::cb_record(Fl_Widget*, void* data)
 {
-    auto* self = static_cast<TransportBar*>(data);
+    auto* self = static_cast<disgrace_ns::TransportBar*>(data);
 
     bool rec = self->m_record->value();
     self->m_engine.enable_record(rec);
@@ -76,26 +79,26 @@ void TransportBar::cb_record(Fl_Widget*, void* data)
 
 void TransportBar::cb_metronome(Fl_Widget*, void* data)
 {
-    auto* self = static_cast<TransportBar*>(data);
+    auto* self = static_cast<disgrace_ns::TransportBar*>(data);
 
     self->m_engine.set_metronome_enabled(
         self->m_metronome->value());
 }
 
-void Timing::set_tempo(double bpm)
-{
-    m_tempo = bpm;
+// void Timing::set_tempo(double bpm)
+// {
+//     m_tempo = bpm;
 
-    double beats_per_second =
-    bpm / 60.0;
+//     double beats_per_second =
+//     bpm / 6.0;
 
-    double rows_per_second =
-    beats_per_second * 4.0;
+//     double rows_per_second =
+//     beats_per_second * 4.0;
 
-    m_samples_per_row =
-    static_cast<size_t>(
-        m_sample_rate / rows_per_second);
-}
+//     m_samples_per_row =
+//     static_cast<size_t>(
+//         m_sample_rate / rows_per_second);
+// }
 
 
 void TransportBar::update()
@@ -110,18 +113,20 @@ void TransportBar::update()
 
     switch (state)
     {
-        case TransportState::Stopped:
+        case disgrace_ns::TransportState::Stopped:
             m_status->label("Stopped");
             break;
 
-        case TransportState::Playing:
+        case disgrace_ns::TransportState::Playing:
             m_status->label("Playing");
             break;
 
-        case TransportState::Recording:
+        case disgrace_ns::TransportState::Recording:
             m_status->label("Recording");
             break;
     }
 
     redraw();
 }
+
+} // namespace disgrace_ns

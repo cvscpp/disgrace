@@ -1,254 +1,86 @@
 #include "main_window.h"
 #include "transport_panel.h"
-#include "tracker_view.h"
-#include "../engine/engine.h"
+#include "tracker_panel.h"
+#include "../core/engine.h"
 
 #include <FL/fl_draw.H>
+#include <FL/Fl_Native_File_Chooser.H> // ADD THIS LINE for fl_file_chooser
 
-namespace dg
+namespace disgrace_ns
 {
 
-  MainWindow::MainWindow(int w, int h,
+  disgrace_ns::MainWindow::MainWindow(int w, int h,
                          const char* title,
-                         Engine& engine)
+                         disgrace_ns::Engine& engine)
   : Fl_Double_Window(w, h, title),
-  m_engine(engine)
+  m_engine(engine),
+  m_transport(nullptr),
+  m_status(nullptr),
+  m_tabs(nullptr),
+  m_project_tab(nullptr),
+  m_tracker_tab(nullptr),
+  m_mixer_tab(nullptr),
+  m_instrument_tab(nullptr),
+  m_settings_tab(nullptr),
+  m_loop_btn(nullptr),
+  m_tracker_panel(nullptr),
+  m_instrument_panel(nullptr),
+  m_mixer_panel(nullptr),
+  m_settings_panel(nullptr)
   {
     begin();
 
-    m_menu = new Fl_Menu_Bar(0, 0, w, 25);
-    m_menu->add("&File/&Quit", FL_CTRL + 'q',
-                [](Fl_Widget*, void*)
-                {
-                  std::exit(0);
-                });
-    m_menu->add("&File/&Export WAV",
-                0,
-                cb_export_wav,
-                this);
-
-
-    m_transport = new TransportPanel(0, 25, w, 40, m_engine);
-
-    Fl_Box* pattern_list =
-    new Fl_Box(10, 100, 120,
-               h - 150,
-               "Pattern 00\nPattern 01\nPattern 02");
-
-    m_tracker =
-    new TrackerView(140, 100,
-                    w - 150,
-                    h - 150,
-                    engine.pattern(),
-                    engine);
-
-
-    m_tracker = new TrackerView(0, 65, w, h - 100);
-
-    m_status = new Fl_Box(0, h - 35, w, 35);
-    m_status->box(FL_FLAT_BOX);
-    m_status->label("disgrace 0.1 – ready");
-    m_status->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-    m_tabs = new Fl_Tabs(0, 65, w, h - 100);
-
-    m_tracker_tab = new Fl_Group(0, 90, w, h - 125, "Tracker");
-    Fl_Scroll* scroll =
-    new Fl_Scroll(140, 100,
-                  w - 150,
-                  h - 150);
-
-    m_tracker =
-    new TrackerView(140, 100,
-                    w - 170,
-                    64 * 18,
-                    engine.pattern(),
-                    engine);
-
-    scroll->end();
-    Fl_Check_Button* loop_btn =
-    new Fl_Check_Button(200, 30,
-                        60, 25,
-                        "Loop");
-
-    loop_btn->value(1);
-
-    loop_btn->callback(
+    m_transport = new disgrace_ns::TransportPanel(0, 0, w, 40, m_engine);
+    m_loop_btn = new Fl_Check_Button(w - 70, 10, 60, 25, "Loop");
+    m_loop_btn->value(1);
+    m_loop_btn->callback(
       [](Fl_Widget* w, void* data)
       {
         auto* engine =
-        static_cast<Engine*>(data);
+        static_cast<disgrace_ns::Engine*>(data);
 
         engine->set_loop(
           static_cast<Fl_Check_Button*>(w)
           ->value());
       },
-      &engine);
-    if (m_engine.transport() ==
-      TransportState::Stopped)
-    {
-      m_engine.set_play_position(
-        m_engine.active_pattern(),
-                                 m_cursor_row);
-    }
-    m_engine.toggle_play();
-
-    m_tracker_tab->end();
-
-    m_mixer_tab = new Fl_Group(0, 90, w, h - 125, "Mixer");
-    for (int i = 0; i < 8; ++i)
-    {
-      new Fl_Box(20 + i*100, 120,
-                 80, 200,
-                 ("Track " + std::to_string(i+1)).c_str());
-      int x = 20 + i * 100;
-
-      Fl_Slider* vol =
-      new Fl_Slider(x, 120, 20, 200);
-      vol->type(FL_VERTICAL);
-      vol->bounds(0, 1);
-      vol->value(1);
-
-      vol->callback(
-        [](Fl_Widget* w, void* data)
-        {
-          auto* pair =
-          static_cast<std::pair<Engine*,int>*>(data);
-
-          float v =
-          static_cast<Fl_Slider*>(w)->value();
-
-          pair->first->track(pair->second)
-          .set_volume(v);
-        },
-        new std::pair<Engine*,int>(&engine, i));
-
-      Fl_Check_Button* mute =
-      new Fl_Check_Button(x, 330, 60, 20, "M");
-      mute->callback(
-        [](Fl_Widget* w, void* data)
-        {
-          auto* pair =
-          static_cast<std::pair<Engine*,int>*>(data);
-
-          bool m =
-          static_cast<Fl_Check_Button*>(w)->value();
-
-          pair->first->track(pair->second)
-          .set_mute(m);
-        },
-        new std::pair<Engine*,int>(&engine, i));
-    }
-    m_mixer_tab->end();
-
-    m_tabs->end();
-    Fl_Browser* pattern_list =
-    new Fl_Browser(10, 100, 120, h - 150);
-
-    for (int i = 0; i < 3; ++i)
-    {
-      pattern_list->add(
-        ("Pattern " + std::to_string(i)).c_str());
-    }
-
-    pattern_list->callback(
-      [](Fl_Widget* w, void* data)
-      {
-        auto* browser =
-        static_cast<Fl_Browser*>(w);
-        auto* engine =
-        static_cast<Engine*>(data);
-
-        int selected = browser->value();
-        if (selected > 0)
-          engine->set_active_pattern(
-            selected - 1);
-      },
-      &engine);
-    m_instrument_tab =
-    new Fl_Group(0, 90, w, h - 125, "Instruments");
-    Fl_Browser* inst_list =
-    new Fl_Browser(10, 100, 200, 300);
-
-    Fl_Button* load_btn =
-    new Fl_Button(10, 410, 200, 30, "Load Sample");
-
-    inst_list->callback(
-      [](Fl_Widget* w, void* data)
-      {
-        auto* browser =
-        static_cast<Fl_Browser*>(w);
-        auto* engine =
-        static_cast<Engine*>(data);
-
-        int idx = browser->value();
-        if (idx > 0)
-          engine->set_current_instrument(idx - 1);
-      },
-      &engine);
-
-    end();
-
-    resizable(m_tracker);
-
-    m_master_gain = new Fl_Value_Slider(
-      x, y, 150, 25, "Master");
-
-    m_master_gain->type(FL_HOR_NICE_SLIDER);
-    m_master_gain->range(0.0, 2.0);
-    m_master_gain->value(1.0);
-
-    m_master_gain->callback(
-      [](Fl_Widget* w, void* data)
-      {
-        auto* eng = static_cast<Engine*>(data);
-
-        float g =
-        static_cast<Fl_Value_Slider*>(w)->value();
-
-        eng->set_master_gain(g);
-      },
       &m_engine);
 
+    m_tabs = new Fl_Tabs(0, 40, w, h - 75);
+    
+    init_project_tab(w, h);
+    init_tracker_tab(w, h);
+    init_instrument_tab(w, h);
+    init_mixer_tab(w, h);
+    init_settings_tab(w, h);
+
+    m_tabs->end();
+
+    resizable(m_tabs);
+    end();
   }
-  Fl::add_timeout(0.03,
-                  [](void* userdata)
-                  {
-                    auto* self =
-                    static_cast<MainWindow*>(userdata);
 
-                    self->redraw();
-                    Fl::repeat_timeout(0.03,
-                                       this,
-                                       userdata);
-                  },
-                  this);
-  void MainWindow::timer_cb(void* data)
+  disgrace_ns::MainWindow::~MainWindow() {}
+
+  disgrace_ns::Track& disgrace_ns::MainWindow::track(size_t index)
   {
-    auto* self = static_cast<MainWindow*>(data);
+      return m_engine.track(index);
+  }
 
-    self->m_tracker->set_current_row(
-      self->m_engine.current_row());
+void disgrace_ns::MainWindow::timer_cb(void* data)
+  {
+    auto* self = static_cast<disgrace_ns::MainWindow*>(data);
 
-    self->m_transport->update();
-
-    float level =
-    m_engine.master_meter();
-
-    int meter_height =
-    static_cast<int>(level * 100);
-
-    fl_color(FL_GREEN);
-    fl_rectf(
-      meter_x,
-      meter_y + 100 - meter_height,
-      10,
-      meter_height);
-
-
+    // This check is no longer valid as m_tracker is now in TrackerPanel
+    // if (self->m_tracker == nullptr) {
+    //     fprintf(stderr, "DEBUG: m_tracker is nullptr in timer_cb! Skipping set_current_row.\n");
+    //     Fl::repeat_timeout(0.03, timer_cb, data);
+    //     return;
+    // }
+    
     Fl::repeat_timeout(0.03, timer_cb, data);
   }
 
-  int MainWindow::handle(int event){
+  int disgrace_ns::MainWindow::handle(int event){
     if (event == FL_KEYDOWN)
     {
       switch (Fl::event_key())
@@ -266,24 +98,7 @@ namespace dg
           return 1;
       }
     }
-
+    return Fl_Double_Window::handle(event); // Call base class handle for unhandled events
   }
 
-  void MainWindow::cb_export_wav(
-    Fl_Widget*, void* data)
-  {
-    auto* self =
-    static_cast<MainWindow*>(data);
-
-    const char* path =
-    fl_file_chooser(
-      "Export WAV",
-      "*.wav",
-      "output.wav");
-
-    if (!path) return;
-
-    self->m_engine.render_to_wav(path);
-  }
-
-}
+} // namespace disgrace_ns

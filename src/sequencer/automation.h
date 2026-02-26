@@ -1,7 +1,8 @@
 #pragma once
 #include <array>
+#include <cstddef> // Added for size_t
 
-namespace dg
+namespace disgrace_ns
 {
 
     constexpr size_t MAX_AUTOMATION_POINTS = 512;
@@ -19,9 +20,9 @@ namespace dg
         float value_at(size_t row) const;
 
     private:
-        std::array<AutomationPoint,
+        ::std::array<disgrace_ns::AutomationPoint,
         MAX_AUTOMATION_POINTS> m_points{};
         size_t m_count = 0;
     };
 
-}
+} // namespace disgrace_ns

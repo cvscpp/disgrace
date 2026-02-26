@@ -1,14 +1,14 @@
 #pragma once
 #include "edit_command.h"
-#include "../pattern/pattern.h"
+#include "../sequencer/pattern.h"
 
-namespace dg
+namespace disgrace_ns
 {
 
-    class CmdSetNote : public EditCommand
+    class CmdSetNote : public disgrace_ns::EditCommand
     {
     public:
-        CmdSetNote(Pattern& pat,
+        CmdSetNote(disgrace_ns::Pattern& pat,
                    size_t track,
                    size_t row,
                    uint8_t new_note)
@@ -18,25 +18,23 @@ namespace dg
         m_new_note(new_note)
         {
             m_old_note =
-            pat.track(track).row(row).note;
+            pat.event(track, row, 0).note; // Changed from pat.track(track).row(row).note
         }
 
         void apply() override
         {
-            m_pattern.track(m_track)
-            .row(m_row).note =
+            m_pattern.event(m_track, m_row, 0).note = // Changed from m_pattern.track(m_track).row(m_row).note
             m_new_note;
         }
 
         void undo() override
         {
-            m_pattern.track(m_track)
-            .row(m_row).note =
+            m_pattern.event(m_track, m_row, 0).note = // Changed from m_pattern.track(m_track).row(m_row).note
             m_old_note;
         }
 
     private:
-        Pattern& m_pattern;
+        disgrace_ns::Pattern& m_pattern;
         size_t   m_track;
         size_t   m_row;
 
@@ -44,4 +42,4 @@ namespace dg
         uint8_t  m_new_note;
     };
 
-}
+} // namespace disgrace_ns

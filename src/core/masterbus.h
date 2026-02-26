@@ -2,6 +2,9 @@
 #include <atomic>
 #include <cstddef>
 
+namespace disgrace_ns
+{
+
 class MasterBus
 {
 public:
@@ -17,6 +20,8 @@ public:
 private:
     float soft_clip(float x);
 
-    std::atomic<float> m_gain{1.f};
-    std::atomic<float> m_meter{0.f};
+    ::std::atomic<float> m_gain{1.f};
+    ::std::atomic<float> m_meter{0.f};
 };
+
+} // namespace disgrace_ns

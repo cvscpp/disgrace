@@ -2,8 +2,9 @@
 
 #include "audio_backend.h"
 #include <jack/jack.h>
+#include <vector>
 
-namespace dg
+namespace disgrace_ns
 {
 
 class Engine;
@@ -11,7 +12,9 @@ class Engine;
 class JackBackend : public AudioBackend
 {
 public:
-    explicit JackBackend(Engine *engine);
+    explicit JackBackend(Engine *engine, 
+                         uint32_t num_ins = 2, uint32_t num_outs = 2,
+                         uint32_t num_midi_ins = 1, uint32_t num_midi_outs = 1);
     ~JackBackend();
 
     bool start() override;
@@ -28,11 +31,16 @@ private:
     Engine *m_engine;
 
     jack_client_t *m_client;
-    jack_port_t *m_out_l;
-    jack_port_t *m_out_r;
-    jack_port_t* m_in_l;
-    jack_port_t* m_in_r;mk
-    jack_port_t* m_midi_in;
+    
+    uint32_t m_num_ins;
+    uint32_t m_num_outs;
+    uint32_t m_num_midi_ins;
+    uint32_t m_num_midi_outs;
+
+    std::vector<jack_port_t*> m_input_ports;
+    std::vector<jack_port_t*> m_output_ports;
+    std::vector<jack_port_t*> m_midi_input_ports;
+    std::vector<jack_port_t*> m_midi_output_ports;
 };
 
-}
+} // namespace disgrace_ns

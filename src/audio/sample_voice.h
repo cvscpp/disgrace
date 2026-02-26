@@ -3,13 +3,13 @@
 #include "sample_data.h"
 #include "adsr.h"
 
-namespace dg
+namespace disgrace_ns
 {
 
     class SampleVoice : public Voice
     {
     public:
-        SampleVoice(SampleData* data,
+        SampleVoice(disgrace_ns::SampleData* data,
                     double engine_rate);
 
         void start(uint8_t note,
@@ -28,8 +28,8 @@ namespace dg
                                 bool active() const override;
 
     private:
-        SampleData* m_sample;
-        ADSR m_env;
+        disgrace_ns::SampleData* m_sample;
+        disgrace_ns::ADSR m_env;
 
         double m_engine_rate;
         double m_position = 0.0;
@@ -39,4 +39,4 @@ namespace dg
         bool m_active = false;
     };
 
-}
+} // namespace disgrace_ns

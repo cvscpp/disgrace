@@ -1,7 +1,8 @@
 #pragma once
 #include <cstdint>
+#include <cstddef> // Add this line
 
-namespace dg
+namespace disgrace_ns
 {
 
     class Voice
@@ -25,4 +26,4 @@ namespace dg
                                                 virtual bool active() const = 0;
     };
 
-}
+} // namespace disgrace_ns

@@ -1,11 +1,12 @@
 #include "timestretch.h"
 #include <soundtouch/SoundTouch.h>
+#include <cstdint> // Add this line
 
-namespace dg
+namespace disgrace_ns // Add this line
 {
 
-    bool TimeStretch::stretch(const std::vector<float>& input,
-                              std::vector<float>& output,
+    bool TimeStretch::stretch(const ::std::vector<float>& input,
+                              ::std::vector<float>& output,
                               float tempo_ratio)
     {
         if (input.empty() || tempo_ratio <= 0.0f)
@@ -19,7 +20,7 @@ namespace dg
         st.putSamples(input.data(), input.size());
 
         output.clear();
-        std::vector<float> temp(4096);
+        ::std::vector<float> temp(4096);
 
         while (true)
         {
@@ -37,4 +38,4 @@ namespace dg
         return true;
     }
 
-}
+} // namespace disgrace_ns

@@ -31,11 +31,22 @@ fi
 # pkg-config
 PKG_PROG_PKG_CONFIG
 
+# nlohmann/json
+PKG_CHECK_MODULES([NLOHMANN_JSON], [nlohmann_json])
+
 # JACK
 PKG_CHECK_MODULES([JACK], [jack >= 1.9.0])
 
 # FLTK
-PKG_CHECK_MODULES([FLTK], [fltk])
+AC_CHECK_PROG([FLTK_CONFIG], [fltk-config], [fltk-config])
+if test -n "$FLTK_CONFIG"; then
+    FLTK_CFLAGS=`$FLTK_CONFIG --cxxflags`
+    FLTK_LIBS=`$FLTK_CONFIG --ldflags`
+    AC_SUBST([FLTK_CFLAGS])
+    AC_SUBST([FLTK_LIBS])
+else
+    AC_MSG_ERROR([FLTK not found. Please install FLTK or ensure fltk-config is in your PATH.])
+fi
 
 # libsndfile
 PKG_CHECK_MODULES([SNDFILE], [sndfile])
@@ -43,15 +54,21 @@ PKG_CHECK_MODULES([SNDFILE], [sndfile])
 # libsamplerate
 PKG_CHECK_MODULES([SAMPLERATE], [samplerate])
 
+# FFTW3
+PKG_CHECK_MODULES([FFTW3], [fftw3])
+
+# libarchive
+PKG_CHECK_MODULES([LIBARCHIVE], [libarchive])
+
 # Optional: libsndtouch
 AC_ARG_ENABLE([sndtouch],
     AS_HELP_STRING([--enable-sndtouch], [Enable time-stretch support]),
     [enable_sndtouch=yes],
-    [enable_sndtouch=no]
+    [enable_sndtouch=yes]
 )
 
 if test "x$enable_sndtouch" = "xyes"; then
-    PKG_CHECK_MODULES([SNDTOUCH], [sndtouch])
+    PKG_CHECK_MODULES([SNDTOUCH], [soundtouch])
     AC_DEFINE([HAVE_SNDTOUCH], [1], [Define if sndtouch is available])
 fi
 

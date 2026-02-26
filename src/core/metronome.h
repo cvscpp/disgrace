@@ -2,6 +2,9 @@
 #include <cstddef>
 #include <cstdint>
 
+namespace disgrace_ns
+{
+
 class Metronome
 {
 public:
@@ -24,3 +27,5 @@ private:
 
     float m_phase{0.f};
 };
+
+} // namespace disgrace_ns

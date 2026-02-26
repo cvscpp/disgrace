@@ -1,15 +1,15 @@
 #pragma once
 #include "edit_command.h"
-#include "../pattern/pattern.h"
+#include "../sequencer/pattern.h"
 #include <vector>
 
-namespace dg
+namespace disgrace_ns
 {
 
-    class CmdClearBlock : public EditCommand
+    class CmdClearBlock : public disgrace_ns::EditCommand
     {
     public:
-        CmdClearBlock(Pattern& pat,
+        CmdClearBlock(disgrace_ns::Pattern& pat,
                       size_t track_start,
                       size_t track_end,
                       size_t row_start,
@@ -25,7 +25,7 @@ namespace dg
                 for (size_t r = m_r0; r <= m_r1; ++r)
                 {
                     m_old_values.push_back(
-                        pat.track(t).row(r).note);
+                        pat.event(t, r, 0).note); // Changed from pat.track(t).row(r).note
                 }
             }
         }
@@ -38,9 +38,8 @@ namespace dg
             {
                 for (size_t r = m_r0; r <= m_r1; ++r)
                 {
-                    m_pattern.track(t)
-                    .row(r).note =
-                    NOTE_EMPTY;
+                    m_pattern.event(t, r, 0).note = // Changed from m_pattern.track(t).row(r).note
+                    disgrace_ns::NOTE_EMPTY;
                     idx++;
                 }
             }
@@ -54,20 +53,19 @@ namespace dg
             {
                 for (size_t r = m_r0; r <= m_r1; ++r)
                 {
-                    m_pattern.track(t)
-                    .row(r).note =
+                    m_pattern.event(t, r, 0).note = // Changed from m_pattern.track(t).row(r).note
                     m_old_values[idx++];
                 }
             }
         }
 
     private:
-        Pattern& m_pattern;
+        disgrace_ns::Pattern& m_pattern;
 
         size_t m_t0, m_t1;
         size_t m_r0, m_r1;
 
-        std::vector<uint8_t> m_old_values;
+        ::std::vector<uint8_t> m_old_values;
     };
 
-}
+} // namespace disgrace_ns

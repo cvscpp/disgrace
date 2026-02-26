@@ -1,6 +1,9 @@
 #include "masterbus.h"
 #include <cmath>
 
+namespace disgrace_ns
+{
+
 void MasterBus::set_gain(float g)
 {
     m_gain.store(g);
@@ -14,7 +17,7 @@ float MasterBus::gain() const
 float MasterBus::soft_clip(float x)
 {
     // simple musical soft limiter
-    return std::tanh(x);
+    return ::std::tanh(x);
 }
 
 void MasterBus::process(float* l,
@@ -35,10 +38,10 @@ void MasterBus::process(float* l,
         l[i] = sl;
         r[i] = sr;
 
-        float p = std::fabs(sl);
+        float p = ::std::fabs(sl);
         if (p > peak) peak = p;
 
-        p = std::fabs(sr);
+        p = ::std::fabs(sr);
         if (p > peak) peak = p;
     }
 
@@ -53,3 +56,5 @@ float MasterBus::meter() const
 {
     return m_meter.load();
 }
+
+} // namespace disgrace_ns

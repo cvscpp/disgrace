@@ -1,3 +1,6 @@
+namespace disgrace_ns
+{
+
 enum class EngineCommandType
 {
     Play,
@@ -10,3 +13,5 @@ struct EngineCommand
     EngineCommandType type;
     float value;
 };
+
+} // namespace disgrace_ns

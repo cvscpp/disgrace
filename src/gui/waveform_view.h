@@ -1,9 +1,9 @@
 #pragma once
 #include <FL/Fl_Widget.H>
-#include "../audio/sample.h"
-#include "FL/Fl_File_Chooser.H>"
+#include "../audio/sample_data.h"
+#include "FL/Fl_File_Chooser.H"
 
-namespace dg
+namespace disgrace_ns
 {
 
     class WaveformView : public Fl_Widget
@@ -11,11 +11,11 @@ namespace dg
     public:
         WaveformView(int x, int y, int w, int h);
 
-        void set_sample(std::shared_ptr<Sample> s);
+        void set_sample(::std::shared_ptr<disgrace_ns::SampleData> s);
         void draw() override;
 
     private:
-        std::shared_ptr<Sample> m_sample;
+        ::std::shared_ptr<disgrace_ns::SampleData> m_sample;
     };
 
-}
+} // namespace disgrace_ns

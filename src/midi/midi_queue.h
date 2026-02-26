@@ -1,6 +1,10 @@
 #pragma once
 #include <atomic>
 #include <array>
+#include <cstddef> // For size_t
+
+namespace disgrace_ns
+{
 
 template<typename T, size_t Size>
 class MidiQueue
@@ -32,7 +36,9 @@ public:
     }
 
 private:
-    std::array<T, Size> m_buffer{};
-    std::atomic<size_t> m_write{0};
-    std::atomic<size_t> m_read{0};
+    ::std::array<T, Size> m_buffer{};
+    ::std::atomic<size_t> m_write{0};
+    ::std::atomic<size_t> m_read{0};
 };
+
+} // namespace disgrace_ns

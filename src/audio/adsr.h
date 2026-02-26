@@ -1,7 +1,7 @@
 #pragma once
 #include <cmath>
 
-namespace dg
+namespace disgrace_ns
 {
 
     class ADSR
@@ -107,4 +107,4 @@ namespace dg
         Stage m_stage = Stage::Idle;
     };
 
-}
+} // namespace disgrace_ns

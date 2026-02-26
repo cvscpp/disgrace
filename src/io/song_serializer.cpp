@@ -9,11 +9,11 @@
 
 using json = nlohmann::json;
 
-namespace dg
+namespace disgrace_ns
 {
 
-    bool SongSerializer::save(const Engine& engine,
-                              const std::string& path)
+    bool disgrace_ns::SongSerializer::save(const disgrace_ns::Engine& engine,
+                              const ::std::string& path)
     {
         json j;
 
@@ -30,7 +30,7 @@ namespace dg
         for (size_t p = 0; p < engine.pattern_count(); ++p)
         {
             json jp;
-            const Pattern& pat = engine.pattern(p);
+            const disgrace_ns::Pattern& pat = engine.pattern(p);
 
             jp["rows"] = pat.rows;
 
@@ -42,14 +42,15 @@ namespace dg
 
                 for (size_t r = 0; r < pat.rows; ++r)
                 {
-                    const NoteEvent& ev =
-                    pat.event(t, r);
+                    const disgrace_ns::NoteEvent& ev =
+                    pat.event(t, r, 0); // Corrected to 3 arguments
 
                     json jev;
                     jev["note"]       = ev.note;
                     jev["instrument"] = ev.instrument;
                     jev["effect"]     = static_cast<int>(ev.effect);
-                    jev["param"]      = ev.effect_param;
+                    jev["param"]      = ev.param;     // Corrected member name
+
 
                     jtrack.push_back(jev);
                 }
@@ -60,7 +61,7 @@ namespace dg
             j["patterns"].push_back(jp);
         }
 
-        std::ofstream file(path);
+        ::std::ofstream file(path);
         if (!file)
             return false;
 
@@ -68,10 +69,10 @@ namespace dg
         return true;
     }
 
-    bool SongSerializer::load(Engine& engine,
-                              const std::string& path)
+    bool disgrace_ns::SongSerializer::load(disgrace_ns::Engine& engine,
+                              const ::std::string& path)
     {
-        std::ifstream file(path);
+        ::std::ifstream file(path);
         if (!file)
             return false;
 
@@ -81,13 +82,13 @@ namespace dg
         engine.set_tempo(j["tempo"]);
         engine.set_lpb(j["lpb"]);
 
-        engine.set_order(j["order"].get<std::vector<uint8_t>>());
+        engine.set_order(j["order"].get<::std::vector<uint8_t>>());
 
         auto& patterns = j["patterns"];
 
         for (size_t p = 0; p < patterns.size(); ++p)
         {
-            Pattern& pat = engine.pattern(p);
+            disgrace_ns::Pattern& pat = engine.pattern(p);
 
             pat.rows = patterns[p]["rows"];
 
@@ -98,15 +99,14 @@ namespace dg
                     auto& jev =
                     patterns[p]["tracks"][t][r];
 
-                    auto& ev = pat.event(t, r);
+                    auto& ev = pat.event(t, r, 0); // Corrected to 3 arguments
 
                     ev.note       = jev["note"];
                     ev.instrument = jev["instrument"];
-                    ev.effect     =
-                    static_cast<EffectType>(
-                        jev["effect"]);
-                    ev.effect_param =
-                    jev["param"];
+                    ev.effect     = static_cast<uint8_t>(jev["effect"]);
+                    ev.param =
+                    jev["param"]; // Corrected member name
+
                 }
             }
         }
@@ -114,4 +114,4 @@ namespace dg
         return true;
     }
 
-}
+} // namespace disgrace_ns

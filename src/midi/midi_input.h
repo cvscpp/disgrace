@@ -1,10 +1,12 @@
-
 #pragma once
 #include <functional>
 #include <thread>
 #include <atomic>
 #include <vector>
 #include <cstdint>
+
+namespace disgrace_ns
+{
 
 struct MidiMessage
 {
@@ -17,7 +19,7 @@ class MidiInput
 {
 public:
     using Callback =
-    std::function<void(const MidiMessage&)>;
+    ::std::function<void(const MidiMessage&)>;
 
     MidiInput();
     ~MidiInput();
@@ -30,7 +32,9 @@ public:
 private:
     void run();
 
-    std::thread m_thread;
-    std::atomic<bool> m_running{false};
+    ::std::thread m_thread;
+    ::std::atomic<bool> m_running{false};
     Callback m_callback;
 };
+
+} // namespace disgrace_ns

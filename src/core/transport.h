@@ -1,8 +1,9 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef> // Add this line
 
-namespace dg
+namespace disgrace_ns
 {
     enum class TransportState
     {
@@ -16,29 +17,27 @@ class Transport
 public:
     Transport();
 
-    void play();
-    void stop();
-
     bool is_playing() const;
 
     void set_tempo(double bpm);
     double tempo() const;
     void play();
     void stop();
+    void record(); // Added record()
     void toggle_play();
     void set_loop(bool enable);
 
-    TransportState transport() const;
+    TransportState state() const; // Renamed transport() to state()
 
     void set_play_position(size_t pattern,
                            size_t row);
 
 private:
-    std::atomic<double> m_tempo;
-    std::atomic<TransportState> m_transport{TransportState::Stopped};
-    std::atomic<bool> m_loop_pattern{true};
+    ::std::atomic<double> m_tempo;
+    ::std::atomic<TransportState> m_transport{TransportState::Stopped};
+    ::std::atomic<bool> m_loop_pattern{true};
 
 
 };
 
-} // namespace dg
+} // namespace disgrace_ns

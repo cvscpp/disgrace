@@ -1,6 +1,6 @@
 #pragma once
 
-namespace dg
+namespace disgrace_ns
 {
 
     class Command
@@ -12,4 +12,4 @@ namespace dg
         virtual void undo() = 0;
     };
 
-}
+} // namespace disgrace_ns

@@ -1,6 +1,10 @@
 #include "main_window.h"
 #include "transport_panel.h"
 #include "tracker_panel.h"
+#include "mixer_panel.h"
+#include "instrument_panel.h"
+#include "project_panel.h"
+#include "settings_panel.h"
 #include "../core/engine.h"
 
 #include <FL/fl_draw.H>
@@ -26,7 +30,8 @@ namespace disgrace_ns
   m_tracker_panel(nullptr),
   m_instrument_panel(nullptr),
   m_mixer_panel(nullptr),
-  m_settings_panel(nullptr)
+  m_settings_panel(nullptr),
+  m_project_panel(nullptr)
   {
     begin();
 
@@ -65,6 +70,13 @@ namespace disgrace_ns
   {
       return m_engine.track(index);
   }
+
+void disgrace_ns::MainWindow::update_all_uis() {
+    if (m_mixer_panel) m_mixer_panel->update_mixer_ui();
+    if (m_tracker_panel) m_tracker_panel->update_pattern_list_browser();
+    if (m_project_panel) m_project_panel->update_track_list();
+    if (m_instrument_panel) m_instrument_panel->update_instrument_list();
+}
 
 void disgrace_ns::MainWindow::timer_cb(void* data)
   {

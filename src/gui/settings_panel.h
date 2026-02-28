@@ -30,6 +30,7 @@ private:
     Fl_Value_Input* m_audio_ins;
     Fl_Value_Input* m_audio_outs;
     Fl_Button* m_reinit_audio_btn;
+    Fl_Box* m_audio_status;
 
     Fl_Value_Input* m_midi_ins;
     Fl_Value_Input* m_midi_outs;
@@ -50,6 +51,7 @@ private:
     void init_kbd_grp(int x, int y, int w, int h);
     void init_misc_grp(int x, int y, int w, int h);
 
+    void update_audio_status();
     void update_kbd_list();
 
     static void cb_reinit_audio(Fl_Widget*, void*);

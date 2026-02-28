@@ -42,8 +42,10 @@ public:
 
     bool initialize();
     void shutdown();
+    void new_project();
     void reinitialize_audio(uint32_t num_ins = 2, uint32_t num_outs = 2,
                             uint32_t num_midi_ins = 1, uint32_t num_midi_outs = 1);
+    bool audio_active() const;
 
     void start();
     void stop();
@@ -86,10 +88,13 @@ public:
 
     disgrace_ns::Pattern& pattern();
 
-    ::std::vector<disgrace_ns::Instrument> m_instruments;
+    ::std::vector<::std::unique_ptr<disgrace_ns::Instrument>> m_instruments;
 
     disgrace_ns::Instrument& instrument(size_t index);
     size_t instrument_count() const;
+    int get_instrument_index(disgrace_ns::Instrument* inst) const;
+    void add_instrument();
+    void remove_instrument(size_t index);
     ::std::vector<size_t> m_order;
 
     void add_order(size_t pattern);
@@ -130,6 +135,10 @@ public:
     void set_loop(bool enable);
     void set_play_position(size_t pattern, size_t row);
     disgrace_ns::Track& track(size_t index);
+    size_t track_count() const;
+    void add_track();
+    void remove_track(size_t index);
+    void move_track(size_t from, size_t to);
 
     uint32_t m_num_ins = 2;
     uint32_t m_num_outs = 2;

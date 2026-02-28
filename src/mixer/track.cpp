@@ -6,13 +6,63 @@ namespace disgrace_ns
 {
 
 disgrace_ns::Track::Track()
-    : m_meter(0.0f), m_current_freq(440.0f) // Initialize m_meter here
+    : m_meter(0.0f), m_current_freq(440.0f), m_name("New Track")
 {
+}
+
+disgrace_ns::Track::Track(Track&& other) noexcept
+    : m_fx_state(other.m_fx_state),
+      m_frequency(other.m_frequency),
+      pan(other.pan),
+      last_volume(other.last_volume),
+      m_volume(other.m_volume),
+      m_mute(other.m_mute),
+      m_solo(other.m_solo),
+      m_name(std::move(other.m_name)),
+      m_instrument(other.m_instrument),
+      m_chain(std::move(other.m_chain)),
+      m_meter(other.m_meter.load()),
+      m_current_freq(other.m_current_freq)
+{
+}
+
+Track& disgrace_ns::Track::operator=(Track&& other) noexcept
+{
+    if (this != &other) {
+        m_fx_state = other.m_fx_state;
+        m_frequency = other.m_frequency;
+        pan = other.pan;
+        last_volume = other.last_volume;
+        m_volume = other.m_volume;
+        m_mute = other.m_mute;
+        m_solo = other.m_solo;
+        m_name = std::move(other.m_name);
+        m_instrument = other.m_instrument;
+        m_chain = std::move(other.m_chain);
+        m_meter.store(other.m_meter.load());
+        m_current_freq = other.m_current_freq;
+    }
+    return *this;
 }
 
 void disgrace_ns::Track::set_instrument(disgrace_ns::Instrument* inst)
 {
     m_instrument = inst;
+}
+
+disgrace_ns::Instrument* disgrace_ns::Track::instrument()
+{
+    return m_instrument;
+}
+
+void disgrace_ns::Track::set_name(const std::string& name)
+{
+    m_name = name.substr(0, 32);
+}
+
+const std::string& disgrace_ns::Track::name() const
+{
+    return m_name;
 }
 
 void disgrace_ns::Track::process(float* out_l,

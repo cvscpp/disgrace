@@ -16,6 +16,7 @@ disgrace_SOURCES = \
     audio/timestretch.cpp \
     dsp/dsp_chain.cpp \
     gui/main_window.cpp \
+    gui/project_panel.cpp \
     gui/tab_project.cpp \
     gui/tab_tracker.cpp \
     gui/tab_instrument.cpp \

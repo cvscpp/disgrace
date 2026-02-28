@@ -22,6 +22,7 @@ namespace disgrace_ns
     class InstrumentPanel;
     class MixerPanel;
     class SettingsPanel;
+    class ProjectPanel;
 
     class MainWindow : public Fl_Double_Window
     {
@@ -32,6 +33,8 @@ namespace disgrace_ns
 
         // Static callback for timer
         static void timer_cb(void* data);
+
+        void update_all_uis();
 
         // Standard FLTK event handler
         int handle(int event) override;
@@ -54,6 +57,7 @@ namespace disgrace_ns
         InstrumentPanel* m_instrument_panel;
         MixerPanel* m_mixer_panel;
         SettingsPanel* m_settings_panel;
+        ProjectPanel* m_project_panel;
 
     private:
         void init_project_tab(int w, int h);

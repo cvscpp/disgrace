@@ -92,8 +92,12 @@ bool Engine::initialize()
 {
     if (m_initialized) return true;
     m_transport = ::std::make_unique<Transport>();
+    
     m_backend = ::std::make_unique<JackBackend>(this, m_num_ins, m_num_outs, m_num_midi_ins, m_num_midi_outs);
-    if (!m_backend->start()) return false;
+    if (!m_backend->start()) {
+        fprintf(stderr, "Warning: Could not connect to JACK. Audio will be disabled.\n");
+    }
+
     m_initialized = true;
     return true;
 }
@@ -109,6 +113,22 @@ void Engine::reinitialize_audio(uint32_t num_ins, uint32_t num_outs, uint32_t nu
     m_backend->start();
 }
 
+bool Engine::audio_active() const
+{
+    return m_backend && m_backend->is_active();
+}
+
+void Engine::new_project()
+{
+    m_patterns.clear();
+    m_instruments.clear();
+    m_order.clear();
+    m_tracks.clear();
+    m_active_pattern = 0;
+    m_current_row = 0;
+    reset_transport_to_start();
+}
+
 void Engine::shutdown()
 {
     if (!m_initialized) return;
@@ -122,8 +142,36 @@ void Engine::stop() { if (m_initialized) m_transport->stop(); }
 void Engine::enable_record(bool e) { m_record_enabled.store(e); }
 void Engine::set_record_track(size_t t) { m_record_track = t; }
 void Engine::preview_note(size_t track, uint8_t note) { if (track < m_tracks.size()) m_tracks[track].note_on(note, 100); }
-Instrument& Engine::instrument(size_t i) { return m_instruments[i]; }
+Instrument& Engine::instrument(size_t i) { return *m_instruments[i]; }
 size_t Engine::instrument_count() const { return m_instruments.size(); }
+
+int Engine::get_instrument_index(Instrument* inst) const
+{
+    if (!inst) return -1;
+    for (size_t i = 0; i < m_instruments.size(); ++i) {
+        if (m_instruments[i].get() == inst) return (int)i;
+    }
+    return -1;
+}
+
+void Engine::add_instrument()
+{
+    m_instruments.push_back(std::make_unique<NoneInstrument>());
+    m_instruments.back()->set_name("Instrument " + std::to_string(m_instruments.size()));
+}
+
+void Engine::remove_instrument(size_t index)
+{
+    if (index < m_instruments.size()) {
+        // We should also check if any track is using this instrument
+        for (auto& track : m_tracks) {
+            if (track.instrument() == m_instruments[index].get()) {
+                track.set_instrument(nullptr);
+            }
+        }
+        m_instruments.erase(m_instruments.begin() + index);
+    }
+}
 size_t Engine::max_track_latency() const { size_t max = 0; for (const auto& t : m_tracks) max = ::std::max(max, t.total_latency()); return max; }
 Transport& Engine::transport() { return *m_transport; }
 
@@ -286,5 +334,32 @@ void Engine::toggle_metronome() { m_metronome_enabled.store(!m_metronome_enabled
 void Engine::reset_transport_to_start() { m_current_row = 0; m_current_tick = 0; m_samples_until_next_tick = 0; m_metronome.reset(); }
 void Engine::process_tick() { m_current_row = (m_current_row + 1) % m_patterns[m_active_pattern.load()].rows; }
 Track& Engine::track(size_t index) { if (index >= m_tracks.size()) throw std::out_of_range("Track index out of bounds"); return m_tracks[index]; }
+size_t Engine::track_count() const { return m_tracks.size(); }
+
+void Engine::add_track()
+{
+    m_tracks.emplace_back();
+    m_tracks.back().set_name("Track " + std::to_string(m_tracks.size()));
+}
+
+void Engine::remove_track(size_t index)
+{
+    if (index < m_tracks.size()) {
+        m_tracks.erase(m_tracks.begin() + index);
+    }
+}
+
+void Engine::move_track(size_t from, size_t to)
+{
+    if (from < m_tracks.size() && to < m_tracks.size() && from != to) {
+        auto it_from = m_tracks.begin() + from;
+        auto it_to = m_tracks.begin() + to;
+        
+        // Move element
+        Track t = std::move(*it_from);
+        m_tracks.erase(it_from);
+        m_tracks.insert(m_tracks.begin() + to, std::move(t));
+    }
+}
 
 } // namespace disgrace_ns

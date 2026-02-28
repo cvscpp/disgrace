@@ -1,14 +1,23 @@
 #pragma once
 #include <cstddef>
-#include <cstdint> // Added for uint8_t
-#include <memory>  // Added for std::unique_ptr
-#include <array>   // Added for std::array
-#include "../audio/voice.h" // Added for disgrace_ns::Voice
+#include <cstdint>
+#include <string>
+#include <memory>
+#include <array>
+#include "../audio/voice.h"
 
 namespace disgrace_ns
 {
 
 constexpr size_t MAX_VOICES = 32;
+
+enum class InstrumentType {
+    None,
+    Sampler,
+    SoundFont,
+    Plugin,
+    Midi
+};
 
 class Instrument
 {
@@ -25,13 +34,32 @@ public:
                          float* r,
                          size_t nframes) = 0;
 
+    void set_name(const std::string& name) { m_name = name.substr(0, 64); }
+    const std::string& name() const { return m_name; }
+
+    void set_type(InstrumentType type) { m_type = type; }
+    InstrumentType type() const { return m_type; }
+
 protected:
     virtual ::std::unique_ptr<disgrace_ns::Voice> create_voice() = 0;
 
     disgrace_ns::Voice* allocate_voice();
 
+    std::string m_name = "New Instrument";
+    InstrumentType m_type = InstrumentType::None;
 protected:
     ::std::array<::std::unique_ptr<disgrace_ns::Voice>, MAX_VOICES> m_voices;
+};
+
+class NoneInstrument : public Instrument {
+public:
+    void note_on(uint8_t, uint8_t) override {}
+    void note_off() override {}
+    void set_volume(float) override {}
+    void set_pitch(float) override {}
+    void process(float*, float*, size_t) override {}
+protected:
+    std::unique_ptr<Voice> create_voice() override { return nullptr; }
 };
 
 } // namespace disgrace_ns

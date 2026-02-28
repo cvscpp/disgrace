@@ -15,8 +15,11 @@ class MixerPanel : public Fl_Group {
 public:
     MixerPanel(int x, int y, int w, int h, Engine& engine);
 
+    void update_mixer_ui();
+
 private:
     Engine& m_engine;
+    Fl_Group* m_track_group;
     Fl_Value_Slider* m_master_gain;
     Fl_Button* m_detach_btn;
     DetachedWindow* m_detached_window = nullptr;

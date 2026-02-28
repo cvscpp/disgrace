@@ -55,14 +55,14 @@ TrackerPanel::TrackerPanel(int x, int y, int w, int h, Engine& engine)
 
 void TrackerPanel::cb_detach(Fl_Widget*, void* data) {
     TrackerPanel* self = static_cast<TrackerPanel*>(data);
-    Fl_Group* parent = self->parent();
+    Fl_Group* parent_grp = self->parent();
     if (self->m_detached_window) {
         self->m_detached_window->show();
     } else {
-        self->m_detached_window = new DetachedWindow(400, 300, "Tracker", self, parent);
+        self->m_detached_window = new DetachedWindow(400, 300, "Tracker", self, parent_grp);
         self->m_detached_window->show();
     }
-    self->hide(); // Hide the panel in its original location
+    self->hide();
 }
 
 
@@ -71,30 +71,33 @@ void TrackerPanel::update_pattern_list_browser() {
     m_pattern_list_container->begin();
     const auto& order = m_engine.order_list();
     int row_h = 25;
+    int start_y = m_pattern_list_container->y();
+    int start_x = m_pattern_list_container->x();
+
     for (size_t i = 0; i < order.size(); ++i) {
-        int row_y = m_pattern_list_container->y() + (i * row_h);
+        int cur_y = start_y + (int)(i * row_h);
         
         char pos_str[16];
         snprintf(pos_str, 16, "%02zu:", i);
-        Fl_Box* b = new Fl_Box(m_pattern_list_container->x(), row_y, 30, row_h, strdup(pos_str));
+        Fl_Box* b = new Fl_Box(start_x, cur_y, 30, row_h, strdup(pos_str));
         b->labelsize(12);
         
         char pat_str[16];
         snprintf(pat_str, 16, "%02u", order[i]);
-        Fl_Box* p = new Fl_Box(m_pattern_list_container->x() + 30, row_y, 30, row_h, strdup(pat_str));
+        Fl_Box* p = new Fl_Box(start_x + 30, cur_y, 30, row_h, strdup(pat_str));
         p->labelsize(12);
         p->labelcolor(FL_YELLOW);
         
-        Fl_Button* dec = new Fl_Button(m_pattern_list_container->x() + 65, row_y + 2, 20, 20, "-");
+        Fl_Button* dec = new Fl_Button(start_x + 65, cur_y + 2, 20, 20, "-");
         dec->labelsize(10);
         dec->callback(cb_dec_pattern, new std::pair<TrackerPanel*, size_t>(this, i));
         
-        Fl_Button* inc = new Fl_Button(m_pattern_list_container->x() + 90, row_y + 2, 20, 20, "+");
+        Fl_Button* inc = new Fl_Button(start_x + 90, cur_y + 2, 20, 20, "+");
         inc->labelsize(10);
         inc->callback(cb_inc_pattern, new std::pair<TrackerPanel*, size_t>(this, i));
     }
     m_pattern_list_container->end();
-    m_pattern_list_container->size(m_pattern_list_container->w(), order.size() * row_h);
+    m_pattern_list_container->size(m_pattern_list_container->w(), (int)(order.size() * row_h));
     m_pattern_scroll->redraw();
 }
 

@@ -12,6 +12,7 @@ public:
 
     virtual bool start() = 0;
     virtual void stop() = 0;
+    virtual bool is_active() const = 0;
 
     virtual uint32_t sample_rate() const = 0;
     virtual uint32_t buffer_size() const = 0;

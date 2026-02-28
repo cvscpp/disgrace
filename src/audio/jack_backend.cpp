@@ -85,6 +85,11 @@ uint32_t JackBackend::buffer_size() const
     return m_client ? jack_get_buffer_size(m_client) : 0;
 }
 
+bool JackBackend::is_active() const
+{
+    return m_client != nullptr;
+}
+
 int JackBackend::process_callback(jack_nframes_t nframes, void *arg)
 {
     return static_cast<JackBackend *>(arg)->process(nframes);

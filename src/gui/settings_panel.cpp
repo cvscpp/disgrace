@@ -39,14 +39,14 @@ SettingsPanel::SettingsPanel(int x, int y, int w, int h, Engine& engine)
     
     begin();
 
-    m_sub_tabs = new Fl_Tabs(x, y, w, h);
+    m_sub_tabs = new Fl_Tabs(0, 0, w, h);
     
-    init_audio_grp(x, y, w, h);
-    init_midi_grp(x, y, w, h);
-    init_mixer_grp(x, y, w, h);
-    init_gui_grp(x, y, w, h);
-    init_kbd_grp(x, y, w, h);
-    init_misc_grp(x, y, w, h);
+    init_audio_grp(0, 0, w, h);
+    init_midi_grp(0, 0, w, h);
+    init_mixer_grp(0, 0, w, h);
+    init_gui_grp(0, 0, w, h);
+    init_kbd_grp(0, 0, w, h);
+    init_misc_grp(0, 0, w, h);
 
     m_sub_tabs->end();
     resizable(m_sub_tabs);
@@ -61,14 +61,14 @@ void SettingsPanel::init_audio_grp(int x, int y, int w, int h) {
     title->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
     
     m_audio_ins = new Fl_Value_Input(x + 140, y + 70, 40, 25, "Input Channels:");
-    m_audio_ins->value(2);
+    m_audio_ins->value(m_engine.m_num_ins);
     m_audio_ins->minimum(1);
     m_audio_ins->maximum(64);
     m_audio_ins->step(1);
     m_audio_ins->align(FL_ALIGN_LEFT);
     
     m_audio_outs = new Fl_Value_Input(x + 140, y + 100, 40, 25, "Output Channels:");
-    m_audio_outs->value(2);
+    m_audio_outs->value(m_engine.m_num_outs);
     m_audio_outs->minimum(1);
     m_audio_outs->maximum(64);
     m_audio_outs->step(1);
@@ -77,7 +77,11 @@ void SettingsPanel::init_audio_grp(int x, int y, int w, int h) {
     m_reinit_audio_btn = new Fl_Button(x + 20, y + 140, 160, 25, "Reinitialize Audio");
     m_reinit_audio_btn->callback(cb_reinit_audio, this);
 
+    m_audio_status = new Fl_Box(x + 20, y + 170, 200, 25, "Status: Unknown");
+    m_audio_status->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+
     m_audio_grp->end();
+    update_audio_status();
 }
 
 void SettingsPanel::init_midi_grp(int x, int y, int w, int h) {
@@ -87,14 +91,14 @@ void SettingsPanel::init_midi_grp(int x, int y, int w, int h) {
     title->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
 
     m_midi_ins = new Fl_Value_Input(x + 140, y + 70, 40, 25, "MIDI Inputs:");
-    m_midi_ins->value(1);
+    m_midi_ins->value(m_engine.m_num_midi_ins);
     m_midi_ins->minimum(0);
     m_midi_ins->maximum(16);
     m_midi_ins->step(1);
     m_midi_ins->align(FL_ALIGN_LEFT);
 
     m_midi_outs = new Fl_Value_Input(x + 140, y + 100, 40, 25, "MIDI Outputs:");
-    m_midi_outs->value(1);
+    m_midi_outs->value(m_engine.m_num_midi_outs);
     m_midi_outs->minimum(0);
     m_midi_outs->maximum(16);
     m_midi_outs->step(1);
@@ -193,7 +197,6 @@ void SettingsPanel::init_kbd_grp(int x, int y, int w, int h) {
     m_assign_btn->callback(cb_assign_key, this);
 
     m_kbd_grp->end();
-
     update_kbd_list();
 }
 
@@ -216,6 +219,17 @@ void SettingsPanel::init_misc_grp(int x, int y, int w, int h) {
     m_misc_grp->end();
 }
 
+void SettingsPanel::update_audio_status() {
+    if (m_engine.audio_active()) {
+        m_audio_status->label("Status: Connected to JACK");
+        m_audio_status->labelcolor(FL_GREEN);
+    } else {
+        m_audio_status->label("Status: Disconnected");
+        m_audio_status->labelcolor(FL_RED);
+    }
+    m_audio_status->redraw();
+}
+
 void SettingsPanel::cb_reinit_audio(Fl_Widget*, void* data) {
     auto* self = static_cast<SettingsPanel*>(data);
     self->m_engine.reinitialize_audio(
@@ -224,6 +238,7 @@ void SettingsPanel::cb_reinit_audio(Fl_Widget*, void* data) {
         static_cast<uint32_t>(self->m_midi_ins->value()),
         static_cast<uint32_t>(self->m_midi_outs->value())
     );
+    self->update_audio_status();
 }
 
 void SettingsPanel::cb_reinit_midi(Fl_Widget*, void* data) {
@@ -234,6 +249,7 @@ void SettingsPanel::cb_reinit_midi(Fl_Widget*, void* data) {
         static_cast<uint32_t>(self->m_midi_ins->value()),
         static_cast<uint32_t>(self->m_midi_outs->value())
     );
+    self->update_audio_status();
 }
 
 void SettingsPanel::cb_gui_theme(Fl_Widget* w, void* data) {
@@ -279,15 +295,12 @@ public:
         if (event == FL_KEYDOWN) {
             int key = Fl::event_key();
             int mods = Fl::event_state() & (FL_CTRL | FL_SHIFT | FL_ALT | FL_META);
-            
-            // Ignore if it's just a modifier key
             if (key == FL_Control_L || key == FL_Control_R || 
                 key == FL_Shift_L || key == FL_Shift_R ||
                 key == FL_Alt_L || key == FL_Alt_R ||
                 key == FL_Meta_L || key == FL_Meta_R) {
                 return 1;
             }
-
             m_bindings.assign(m_action, key, mods);
             m_pressed = true;
             hide();
@@ -295,9 +308,7 @@ public:
         }
         return Fl_Double_Window::handle(event);
     }
-
     bool pressed() const { return m_pressed; }
-
 private:
     Action m_action;
     KeyBindings& m_bindings;
@@ -305,24 +316,15 @@ private:
     bool m_pressed = false;
 };
 
-void SettingsPanel::cb_assign_key(Fl_Widget* w, void* data) {
+void SettingsPanel::cb_assign_key(Fl_Widget*, void* data) {
     SettingsPanel* self = static_cast<SettingsPanel*>(data);
-    
     int idx = self->m_action_choice->value();
     if (idx < 0) return;
-
     Action action = (Action)(uintptr_t)self->m_action_choice->menu()[idx].user_data();
-
     KeyGrabber grabber(action, self->m_engine.m_key_bindings);
     grabber.show();
-    while (grabber.shown()) {
-        Fl::wait();
-    }
-
-    if (grabber.pressed()) {
-        self->update_kbd_list();
-    }
+    while (grabber.shown()) { Fl::wait(); }
+    if (grabber.pressed()) { self->update_kbd_list(); }
 }
-
 
 } // namespace disgrace_ns

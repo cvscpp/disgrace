@@ -19,6 +19,7 @@ public:
 
     bool start() override;
     void stop() override;
+    bool is_active() const override;
 
     uint32_t sample_rate() const override;
     uint32_t buffer_size() const override;

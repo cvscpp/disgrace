@@ -2,6 +2,7 @@
 
 #include "../dsp/dsp_chain.h"
 #include <vector>
+#include <string>
 #include <cstdint> // Added for uint8_t
 #include <atomic>  // Added for std::atomic
 
@@ -33,12 +34,22 @@ class Track
 {
 public:
     Track();
+    Track(Track&& other) noexcept;
+    Track& operator=(Track&& other) noexcept;
+
+    // Delete copy operations as they are complex with atomic/dsp
+    Track(const Track&) = delete;
+    Track& operator=(const Track&) = delete;
 
     void process(float* out_l,
                  float* out_r,
                  size_t nframes);
 
     void set_instrument(disgrace_ns::Instrument* inst);
+    disgrace_ns::Instrument* instrument();
+
+    void set_name(const std::string& name);
+    const std::string& name() const;
 
     TrackEffectState m_fx_state;
 
@@ -69,6 +80,7 @@ private:
     float m_volume = 1.f;
     bool  m_mute   = false;
     bool  m_solo   = false; // Add this
+    std::string m_name;
 
     disgrace_ns::Instrument* m_instrument = nullptr;
     disgrace_ns::DSPChain    m_chain;

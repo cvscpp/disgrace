@@ -40,7 +40,7 @@ namespace disgrace_ns
         for (auto& v : m_voices) if (v && v->active()) v->process(out_l, out_r, frames);
     }
 
-    void disgrace_ns::SampleInstrument::add_sample(const std::string& name, disgrace_ns::SampleData* data)
+    void disgrace_ns::SampleInstrument::add_sample(const std::string& name, std::shared_ptr<disgrace_ns::SampleData> data)
     {
         m_samples.push_back({name, data});
     }
@@ -62,13 +62,20 @@ namespace disgrace_ns
         }
     }
 
+    void disgrace_ns::SampleInstrument::set_sample_name(size_t index, const std::string& name)
+    {
+        if (index < m_samples.size()) {
+            m_samples[index].name = name;
+        }
+    }
+
     ::std::unique_ptr<disgrace_ns::Voice>
     disgrace_ns::SampleInstrument::create_voice()
     {
-        if (m_samples.empty()) return nullptr;
+        if (m_samples.empty() || !m_samples[0].data) return nullptr;
         // For now, always use the first sample
         return ::std::make_unique<disgrace_ns::SampleVoice>(
-            m_samples[0].data,
+            m_samples[0].data.get(),
             m_engine_rate);
     }
 

@@ -4,7 +4,7 @@
 namespace disgrace_ns
 {
 
-    bool disgrace_ns::AudioFile::load_wav(const ::std::string& path,
+    bool disgrace_ns::AudioFile::load_audio(const ::std::string& path,
                              ::std::vector<float>& left,
                              ::std::vector<float>& right,
                              uint32_t& sample_rate)

@@ -31,6 +31,7 @@ disgrace_SOURCES = \
     gui/tracker_view.cpp \
     gui/transport_panel.cpp \
     gui/transportbar.cpp \
+    gui/waveform_view.cpp \
     instrument/instrument.cpp \
     instrument/instrument_rack.cpp \
     instrument/sample_instrument.cpp \

@@ -1,5 +1,6 @@
 #pragma once
 #include <FL/Fl_Widget.H>
+#include <memory>
 #include "../audio/sample_data.h"
 #include "FL/Fl_File_Chooser.H"
 

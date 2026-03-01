@@ -1,6 +1,7 @@
 #include "engine.h"
 #include "transport.h"
 #include "../audio/jack_backend.h"
+#include "../instrument/sample_instrument.h"
 
 #include <stdexcept>
 #include <cstring>
@@ -171,6 +172,36 @@ void Engine::remove_instrument(size_t index)
         }
         m_instruments.erase(m_instruments.begin() + index);
     }
+}
+
+void Engine::set_instrument_type(size_t index, InstrumentType type)
+{
+    if (index >= m_instruments.size()) return;
+    if (m_instruments[index]->type() == type) return;
+
+    std::string name = m_instruments[index]->name();
+    std::unique_ptr<Instrument> new_inst;
+
+    switch (type) {
+        case InstrumentType::Sampler:
+            new_inst = std::make_unique<SampleInstrument>((double)m_sample_rate);
+            break;
+        default:
+            new_inst = std::make_unique<NoneInstrument>();
+            break;
+    }
+
+    new_inst->set_name(name);
+    new_inst->set_type(type);
+
+    // Update tracks that use this instrument
+    for (auto& track : m_tracks) {
+        if (track.instrument() == m_instruments[index].get()) {
+            track.set_instrument(new_inst.get());
+        }
+    }
+
+    m_instruments[index] = std::move(new_inst);
 }
 size_t Engine::max_track_latency() const { size_t max = 0; for (const auto& t : m_tracks) max = ::std::max(max, t.total_latency()); return max; }
 Transport& Engine::transport() { return *m_transport; }

@@ -95,6 +95,7 @@ public:
     int get_instrument_index(disgrace_ns::Instrument* inst) const;
     void add_instrument();
     void remove_instrument(size_t index);
+    void set_instrument_type(size_t index, InstrumentType type);
     ::std::vector<size_t> m_order;
 
     void add_order(size_t pattern);

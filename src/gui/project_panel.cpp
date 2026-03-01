@@ -1,0 +1,239 @@
+#include "project_panel.h"
+#include "main_window.h"
+#include "../core/engine.h"
+#include <FL/Fl_Native_File_Chooser.H>
+#include <FL/filename.H>
+#include <FL/fl_ask.H>
+
+namespace disgrace_ns {
+
+ProjectPanel::ProjectPanel(int x, int y, int w, int h, Engine& engine)
+    : Fl_Group(x, y, w, h), m_engine(engine) {
+    
+    begin();
+
+    int left_w = 300;
+    int margin = 10;
+
+    // Buttons at top left
+    int cur_y = margin;
+    int btn_w = (left_w - 4 * margin) / 3;
+
+    m_new_btn = new Fl_Button(x + margin, y + cur_y, btn_w, 25, "New");
+    m_new_btn->callback(cb_new, this);
+
+    m_load_btn = new Fl_Button(x + 2 * margin + btn_w, y + cur_y, btn_w, 25, "Load");
+    m_load_btn->callback(cb_load, this);
+
+    m_save_btn = new Fl_Button(x + 3 * margin + 2 * btn_w, y + cur_y, btn_w, 25, "Save");
+    m_save_btn->callback(cb_save, this);
+
+    cur_y += 25 + margin;
+
+    m_file_browser = new Fl_File_Browser(x + margin, y + cur_y, left_w - 2 * margin, h - cur_y - 45 - margin);
+    m_file_browser->type(FL_HOLD_BROWSER);
+    m_file_browser->load(".");
+    m_file_browser->callback(cb_file_select, this);
+
+    m_export_btn = new Fl_Button(x + margin, y + h - 35, left_w - 2 * margin, 25, "Export to WAV");
+    m_export_btn->callback(cb_export, this);
+
+    // Right side: Tracks
+    int rcur_y = margin;
+    m_add_track_btn = new Fl_Button(x + left_w + margin, y + rcur_y, 100, 25, "+ Add Track");
+    m_add_track_btn->callback(cb_add_track, this);
+
+    rcur_y += 25 + margin;
+
+    m_track_scroll = new Fl_Scroll(x + left_w + margin, y + rcur_y, w - left_w - 2 * margin, h - rcur_y - margin);
+    m_track_scroll->type(Fl_Scroll::VERTICAL);
+    m_track_container = new Fl_Group(x + left_w + margin, y + rcur_y, w - left_w - 40, 1000);
+    m_track_container->end();
+    m_track_scroll->add(m_track_container);
+    m_track_scroll->end();
+
+    resizable(m_track_scroll);
+
+    end();
+
+    update_track_list();
+}
+
+void ProjectPanel::cb_new(Fl_Widget*, void* data) {
+    auto* self = static_cast<ProjectPanel*>(data);
+    if (fl_ask("Create new project? All unsaved changes will be lost.")) {
+        self->m_engine.new_project();
+        for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+            MainWindow* mw = dynamic_cast<MainWindow*>(win);
+            if (mw) mw->update_all_uis();
+        }
+    }
+}
+
+void ProjectPanel::cb_load(Fl_Widget*, void* data) {
+    auto* self = static_cast<ProjectPanel*>(data);
+    Fl_Native_File_Chooser fnfc;
+    fnfc.title("Load Project");
+    fnfc.type(Fl_Native_File_Chooser::BROWSE_FILE);
+    fnfc.filter("Disgrace Projects\t*.dg\n");
+    if (fnfc.show() == 0) {
+        // self->m_engine.load_project(fnfc.filename());
+    }
+}
+
+void ProjectPanel::cb_save(Fl_Widget*, void* data) {
+    auto* self = static_cast<ProjectPanel*>(data);
+    Fl_Native_File_Chooser fnfc;
+    fnfc.title("Save Project");
+    fnfc.type(Fl_Native_File_Chooser::BROWSE_SAVE_FILE);
+    fnfc.filter("Disgrace Projects\t*.dg\n");
+    if (fnfc.show() == 0) {
+        self->m_engine.save_project(fnfc.filename());
+    }
+}
+
+void ProjectPanel::cb_export(Fl_Widget*, void* data) {
+    auto* self = static_cast<ProjectPanel*>(data);
+    Fl_Native_File_Chooser fnfc;
+    fnfc.title("Export to WAV");
+    fnfc.type(Fl_Native_File_Chooser::BROWSE_SAVE_FILE);
+    fnfc.filter("WAV Files\t*.wav\n");
+    fnfc.preset_file("output.wav");
+    if (fnfc.show() == 0) {
+        self->m_engine.render_to_wav(fnfc.filename());
+    }
+}
+
+void ProjectPanel::update_track_list() {
+    m_track_container->clear();
+    m_track_container->begin();
+
+    int row_h = 35;
+    int cur_y = m_track_container->y(); // Corrected: use container's absolute y
+    int label_w = 30;
+    int input_w = 150;
+    int choice_w = 150;
+    int btn_w = 30;
+
+    size_t num_tracks = m_engine.track_count();
+    size_t num_insts = m_engine.instrument_count();
+
+    for (size_t i = 0; i < num_tracks; ++i) {
+        int cur_x = m_track_container->x();
+        int row_y = cur_y + (int)(i * row_h);
+        
+        char idx_str[8];
+        snprintf(idx_str, 8, "%zu:", i + 1);
+        new Fl_Box(cur_x, row_y, label_w, row_h, strdup(idx_str));
+        cur_x += label_w + 5;
+
+        Fl_Input* name_in = new Fl_Input(cur_x, row_y + 5, input_w, 25);
+        name_in->value(m_engine.track(i).name().c_str());
+        name_in->maximum_size(32);
+        name_in->callback(cb_track_name, new std::pair<ProjectPanel*, size_t>(this, i));
+        name_in->when(FL_WHEN_ENTER_KEY | FL_WHEN_RELEASE);
+        cur_x += input_w + 5;
+
+        Fl_Choice* inst_ch = new Fl_Choice(cur_x, row_y + 5, choice_w, 25);
+        inst_ch->add("None");
+        for (size_t j = 0; j < num_insts; ++j) {
+            inst_ch->add(m_engine.instrument(j).name().c_str());
+        }
+        
+        int inst_idx = m_engine.get_instrument_index(m_engine.track(i).instrument());
+        inst_ch->value(inst_idx + 1);
+        inst_ch->callback(cb_track_inst, new std::pair<ProjectPanel*, size_t>(this, i));
+        cur_x += choice_w + 5;
+
+        Fl_Button* up = new Fl_Button(cur_x, row_y + 5, btn_w, 25, "Up");
+        up->labelsize(10);
+        up->callback(cb_move_track_up, new std::pair<ProjectPanel*, size_t>(this, i));
+        cur_x += btn_w + 2;
+
+        Fl_Button* down = new Fl_Button(cur_x, row_y + 5, btn_w, 25, "Dn");
+        down->labelsize(10);
+        down->callback(cb_move_track_down, new std::pair<ProjectPanel*, size_t>(this, i));
+        cur_x += btn_w + 10;
+
+        Fl_Button* rem = new Fl_Button(cur_x, row_y + 5, btn_w, 25, "X");
+        rem->callback(cb_remove_track, new std::pair<ProjectPanel*, size_t>(this, i));
+    }
+
+    m_track_container->end();
+    m_track_container->size(m_track_container->w(), (int)(num_tracks * row_h + 20));
+    m_track_scroll->redraw();
+}
+
+void ProjectPanel::cb_add_track(Fl_Widget*, void* data) {
+    auto* self = static_cast<ProjectPanel*>(data);
+    self->m_engine.add_track();
+    self->update_track_list();
+    for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+        MainWindow* mw = dynamic_cast<MainWindow*>(win);
+        if (mw) mw->update_all_uis();
+    }
+}
+
+void ProjectPanel::cb_remove_track(Fl_Widget*, void* data) {
+    auto* pair = static_cast<std::pair<ProjectPanel*, size_t>*>(data);
+    if (fl_ask("Remove track %zu?", pair->second + 1)) {
+        pair->first->m_engine.remove_track(pair->second);
+        pair->first->update_track_list();
+        for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+            MainWindow* mw = dynamic_cast<MainWindow*>(win);
+            if (mw) mw->update_all_uis();
+        }
+    }
+    delete pair;
+}
+
+void ProjectPanel::cb_track_name(Fl_Widget* w, void* data) {
+    auto* pair = static_cast<std::pair<ProjectPanel*, size_t>*>(data);
+    Fl_Input* in = static_cast<Fl_Input*>(w);
+    pair->first->m_engine.track(pair->second).set_name(in->value());
+    for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+        MainWindow* mw = dynamic_cast<MainWindow*>(win);
+        if (mw) mw->update_all_uis();
+    }
+}
+
+void ProjectPanel::cb_track_inst(Fl_Widget* w, void* data) {
+    auto* pair = static_cast<std::pair<ProjectPanel*, size_t>*>(data);
+    Fl_Choice* ch = static_cast<Fl_Choice*>(w);
+    int idx = ch->value();
+    if (idx <= 0) {
+        pair->first->m_engine.track(pair->second).set_instrument(nullptr);
+    } else {
+        pair->first->m_engine.track(pair->second).set_instrument(&pair->first->m_engine.instrument(idx - 1));
+    }
+}
+
+void ProjectPanel::cb_move_track_up(Fl_Widget*, void* data) {
+    auto* pair = static_cast<std::pair<ProjectPanel*, size_t>*>(data);
+    if (pair->second > 0) {
+        pair->first->m_engine.move_track(pair->second, pair->second - 1);
+        pair->first->update_track_list();
+        for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+            MainWindow* mw = dynamic_cast<MainWindow*>(win);
+            if (mw) mw->update_all_uis();
+        }
+    }
+    delete pair;
+}
+
+void ProjectPanel::cb_move_track_down(Fl_Widget*, void* data) {
+    auto* pair = static_cast<std::pair<ProjectPanel*, size_t>*>(data);
+    if (pair->second < pair->first->m_engine.track_count() - 1) {
+        pair->first->m_engine.move_track(pair->second, pair->second + 1);
+        pair->first->update_track_list();
+        for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+            MainWindow* mw = dynamic_cast<MainWindow*>(win);
+            if (mw) mw->update_all_uis();
+        }
+    }
+    delete pair;
+}
+
+void ProjectPanel::cb_file_select(Fl_Widget*, void*) {}
+
+} // namespace disgrace_ns

@@ -1,0 +1,20 @@
+#pragma once
+#include "instrument.h"
+
+namespace disgrace_ns {
+
+class LV2Instrument : public Instrument {
+public:
+    LV2Instrument(double sample_rate) {}
+    void note_on(uint8_t note, uint8_t velocity) override {}
+    void note_off() override {}
+    void set_volume(float vol) override {}
+    void set_pitch(float freq) override {}
+    void process(float* l, float* r, size_t nframes) override {
+        for(size_t i=0; i<nframes; ++i) { l[i]=0; r[i]=0; }
+    }
+protected:
+    std::unique_ptr<Voice> create_voice() override { return nullptr; }
+};
+
+} // namespace disgrace_ns

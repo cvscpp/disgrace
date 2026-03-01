@@ -4,11 +4,15 @@
 #include "../core/engine.h"
 #include "../instrument/sample_instrument.h"
 #include "../instrument/soundfont_instrument.h"
+#include "../instrument/dssi_instrument.h"
+#include "../instrument/lv2_instrument.h"
 #include "../io/audio_file.h"
 #include <FL/Fl_Native_File_Chooser.H>
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Value_Slider.H>
 #include <FL/fl_ask.H>
+#include <dirent.h>
+#include <sys/stat.h>
 
 namespace disgrace_ns {
 
@@ -158,6 +162,30 @@ InstrumentPanel::InstrumentPanel(int x, int y, int w, int h, Engine& engine)
     m_sfont_editor->end();
     m_sfont_editor->hide();
 
+    // --- Plugin Editor ---
+    m_plugin_editor = new Fl_Group(x + left_w, y, w - left_w, h);
+    m_plugin_editor->begin();
+    int pl_y = margin;
+    m_plugin_scan_btn = new Fl_Button(x + left_w + margin, y + pl_y, 100, 25, "Scan Plugins");
+    m_plugin_scan_btn->callback(cb_plugin_scan, this);
+    pl_y += 25 + margin;
+    
+    int pl_split_x = x + left_w + (w - left_w) / 2;
+    
+    m_plugin_browser = new Fl_Browser(x + left_w + margin, y + pl_y, (w - left_w) / 2 - 2 * margin, h - pl_y - margin);
+    m_plugin_browser->type(FL_HOLD_BROWSER);
+    m_plugin_browser->callback(cb_plugin_select, this);
+    
+    m_plugin_controls_grp = new Fl_Group(pl_split_x, y + pl_y, (w - left_w) / 2, h - pl_y, "Controls");
+    m_plugin_controls_grp->box(FL_ENGRAVED_FRAME);
+    m_plugin_controls_grp->align(FL_ALIGN_TOP_LEFT);
+    m_plugin_controls_grp->begin();
+    new Fl_Box(pl_split_x + 10, y + pl_y + 20, 150, 25, "Plugin Parameters");
+    m_plugin_controls_grp->end();
+
+    m_plugin_editor->end();
+    m_plugin_editor->hide();
+
     m_right_panel->end();
     resizable(m_right_panel);
     end();
@@ -217,6 +245,7 @@ void InstrumentPanel::update_instrument_list() {
 void InstrumentPanel::update_editor() {
     m_sampler_editor->hide();
     m_sfont_editor->hide();
+    m_plugin_editor->hide();
 
     if (m_selected_instrument < 0 || m_selected_instrument >= (int)m_engine.instrument_count()) {
         m_right_panel->redraw();
@@ -262,6 +291,11 @@ void InstrumentPanel::update_editor() {
             m_sfont_browser->add(strdup(buf));
         }
         if (sf->current_preset() >= 0) m_sfont_browser->select(sf->current_preset() + 1);
+    } else if (inst.type() == InstrumentType::Plugin) {
+        m_plugin_editor->show();
+        if (m_plugin_browser->size() == 0) {
+            cb_plugin_scan(nullptr, this);
+        }
     }
     m_right_panel->redraw();
 }
@@ -517,6 +551,69 @@ void InstrumentPanel::cb_adjust_vol(Fl_Widget*, void* data) {
     size_t s1 = self->m_waveform_view->selection_start(), s2 = self->m_waveform_view->selection_end();
     if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); } else if (s1 > s2) std::swap(s1, s2);
     sample.data->adjust_volume(s1, s2, (float)self->m_vol_input->value()); self->update_editor();
+}
+
+void InstrumentPanel::cb_plugin_scan(Fl_Widget*, void* data) {
+    InstrumentPanel* self = static_cast<InstrumentPanel*>(data);
+    self->m_plugin_browser->clear();
+    
+    // Scan DSSI
+    self->m_plugin_browser->add("@b@C4--- DSSI Plugins ---");
+    std::vector<std::string> dssi_paths = {"/usr/lib/dssi", "/usr/local/lib/dssi", "/usr/lib/x86_64-linux-gnu/dssi"};
+    for (const auto& path : dssi_paths) {
+        DIR* dir = opendir(path.c_str());
+        if (!dir) continue;
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            std::string name = entry->d_name;
+            if (name.find(".so") != std::string::npos) {
+                self->m_plugin_browser->add(strdup((path + "/" + name).c_str()));
+            }
+        }
+        closedir(dir);
+    }
+
+    // Scan LV2
+    self->m_plugin_browser->add("@b@C4--- LV2 Plugins ---");
+    std::vector<std::string> lv2_paths = {"/usr/lib/lv2", "/usr/local/lib/lv2", "/usr/lib/x86_64-linux-gnu/lv2"};
+    for (const auto& path : lv2_paths) {
+        DIR* dir = opendir(path.c_str());
+        if (!dir) continue;
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            std::string name = entry->d_name;
+            if (entry->d_type == DT_DIR && name != "." && name != "..") {
+                self->m_plugin_browser->add(strdup((path + "/" + name).c_str()));
+            }
+        }
+        closedir(dir);
+    }
+}
+
+void InstrumentPanel::cb_plugin_select(Fl_Widget* w, void* data) {
+    InstrumentPanel* self = static_cast<InstrumentPanel*>(data);
+    int idx = self->m_plugin_browser->value();
+    if (idx <= 0) return;
+    
+    const char* text = self->m_plugin_browser->text(idx);
+    if (text[0] == '@') return; // Skip headers
+
+    std::string path = text;
+    auto& inst = self->m_engine.instrument(self->m_selected_instrument);
+    
+    // We need to determine if it is DSSI or LV2 based on path or position in list
+    // Simple check for now:
+    if (path.find("dssi") != std::string::npos) {
+        // Change internal type if needed? 
+        // User wants it under "Plugin" instrument.
+        // My set_instrument_type currently always creates DSSIInstrument for Plugin type.
+        // This is fine for now as it's a skeleton.
+        if (static_cast<DSSIInstrument*>(&inst)->load_plugin(path)) {
+            fl_message("DSSI Plugin loaded: %s", path.c_str());
+        }
+    } else if (path.find("lv2") != std::string::npos) {
+        fl_message("LV2 Plugin selected: %s (Stub)", path.c_str());
+    }
 }
 
 void InstrumentPanel::cb_detach(Fl_Widget*, void* data) {

@@ -63,6 +63,12 @@ private:
     Fl_Browser* m_sfont_browser;
     Fl_Value_Slider* m_sfont_vol_slider;
 
+    // Plugin Editor members
+    Fl_Group* m_plugin_editor;
+    Fl_Button* m_plugin_scan_btn;
+    Fl_Browser* m_plugin_browser;
+    Fl_Group* m_plugin_controls_grp;
+
     Fl_Button* m_zoom_in_btn;
     Fl_Button* m_zoom_out_btn;
     Fl_Button* m_view_all_btn;
@@ -119,6 +125,10 @@ private:
     static void cb_sfont_load(Fl_Widget*, void*);
     static void cb_sfont_select(Fl_Widget*, void*);
     static void cb_sfont_vol(Fl_Widget*, void*);
+
+    // Plugin callbacks
+    static void cb_plugin_scan(Fl_Widget*, void*);
+    static void cb_plugin_select(Fl_Widget*, void*);
 
     static void cb_silence(Fl_Widget*, void*);
     static void cb_fade_in_lin(Fl_Widget*, void*);

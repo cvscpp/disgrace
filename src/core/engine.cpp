@@ -3,6 +3,8 @@
 #include "../audio/jack_backend.h"
 #include "../instrument/sample_instrument.h"
 #include "../instrument/soundfont_instrument.h"
+#include "../instrument/dssi_instrument.h"
+#include "../instrument/lv2_instrument.h"
 
 #include <stdexcept>
 #include <cstring>
@@ -189,6 +191,10 @@ void Engine::set_instrument_type(size_t index, InstrumentType type)
             break;
         case InstrumentType::SoundFont:
             new_inst = std::make_unique<SoundFontInstrument>((double)m_sample_rate);
+            break;
+        case InstrumentType::Plugin:
+            // For now, let's use a specialized PluginInstrument that will handle both
+            new_inst = std::make_unique<DSSIInstrument>((double)m_sample_rate); 
             break;
         default:
             new_inst = std::make_unique<NoneInstrument>();

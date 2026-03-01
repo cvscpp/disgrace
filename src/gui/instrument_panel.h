@@ -50,6 +50,13 @@ private:
     Fl_Check_Button* m_mono_btn;
     Fl_Choice* m_rec_input_ch;
     WaveformView* m_waveform_view;
+    
+    Fl_Button* m_zoom_in_btn;
+    Fl_Button* m_zoom_out_btn;
+    Fl_Button* m_view_all_btn;
+    Fl_Button* m_view_sel_btn;
+    Fl_Choice* m_view_mode_ch;
+    Fl_Choice* m_sample_fmt_ch;
 
     Fl_Button* m_detach_btn;
     DetachedWindow* m_detached_window = nullptr;
@@ -76,6 +83,13 @@ private:
     static void cb_sample_select(Fl_Widget*, void*);
     static void cb_record_sample(Fl_Widget*, void*);
     static void cb_mono_toggle(Fl_Widget*, void*);
+    
+    static void cb_zoom_in(Fl_Widget*, void*);
+    static void cb_zoom_out(Fl_Widget*, void*);
+    static void cb_view_all(Fl_Widget*, void*);
+    static void cb_view_sel(Fl_Widget*, void*);
+    static void cb_view_mode(Fl_Widget*, void*);
+    static void cb_sample_fmt(Fl_Widget*, void*);
 };
 
 } // namespace disgrace_ns

@@ -148,6 +148,7 @@ public:
 
     int m_gui_button_height = 25;
     int m_gui_font_size = 12;
+    unsigned int m_waveform_color = 0x00FF0000; // FL_GREEN in hex? Actually FL_GREEN is 63. Let's use 0x40FF4000 for a bright green.
 
     KeyBindings m_key_bindings;
 

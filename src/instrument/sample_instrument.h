@@ -10,6 +10,13 @@ namespace disgrace_ns
         std::shared_ptr<disgrace_ns::SampleData> data;
     };
 
+    enum class SampleFormatAction {
+        StereoToMonoL,
+        StereoToMonoR,
+        StereoToMonoMix,
+        MonoToStereo
+    };
+
     class SampleInstrument : public disgrace_ns::Instrument
     {
     public:
@@ -25,6 +32,7 @@ namespace disgrace_ns
         void remove_sample(size_t index);
         void move_sample(size_t from, size_t to);
         void set_sample_name(size_t index, const std::string& name);
+        void convert_sample_format(size_t index, SampleFormatAction action);
         size_t sample_count() const { return m_samples.size(); }
         const SampleEntry& get_sample(size_t index) const { return m_samples[index]; }
         SampleEntry& get_sample(size_t index) { return m_samples[index]; }

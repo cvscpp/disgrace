@@ -69,6 +69,18 @@ namespace disgrace_ns
         }
     }
 
+    void disgrace_ns::SampleInstrument::convert_sample_format(size_t index, SampleFormatAction action)
+    {
+        if (index >= m_samples.size() || !m_samples[index].data) return;
+        auto& data = *m_samples[index].data;
+        switch (action) {
+            case SampleFormatAction::StereoToMonoL:   data.to_mono_l(); break;
+            case SampleFormatAction::StereoToMonoR:   data.to_mono_r(); break;
+            case SampleFormatAction::StereoToMonoMix: data.to_mono_mix(); break;
+            case SampleFormatAction::MonoToStereo:    data.to_stereo(); break;
+        }
+    }
+
     ::std::unique_ptr<disgrace_ns::Voice>
     disgrace_ns::SampleInstrument::create_voice()
     {

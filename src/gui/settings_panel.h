@@ -7,6 +7,7 @@
 #include <FL/Fl_Scroll.H>
 #include <FL/Fl_Value_Input.H>
 #include <FL/Fl_Choice.H>
+#include <FL/Fl_Color_Chooser.H>
 
 namespace disgrace_ns {
 
@@ -39,6 +40,7 @@ private:
     Fl_Choice* m_gui_theme;
     Fl_Choice* m_gui_btn_h;
     Fl_Choice* m_gui_font_size;
+    Fl_Button* m_waveform_color_btn;
 
     Fl_Choice* m_action_choice;
     Fl_Button* m_assign_btn;
@@ -59,6 +61,7 @@ private:
     static void cb_gui_theme(Fl_Widget*, void*);
     static void cb_gui_btn_h(Fl_Widget*, void*);
     static void cb_gui_font_size(Fl_Widget*, void*);
+    static void cb_waveform_color(Fl_Widget*, void*);
     static void cb_assign_key(Fl_Widget*, void*);
 };
 

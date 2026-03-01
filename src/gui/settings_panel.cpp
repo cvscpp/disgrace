@@ -1,4 +1,5 @@
 #include "settings_panel.h"
+#include "main_window.h"
 #include "../core/engine.h"
 #include <FL/Fl_Button.H>
 #include <FL/Fl.H>
@@ -156,10 +157,31 @@ void SettingsPanel::init_gui_grp(int x, int y, int w, int h) {
     m_gui_font_size->callback(cb_gui_font_size, this);
     m_gui_font_size->align(FL_ALIGN_LEFT);
 
-    Fl_Check_Button* show_meters = new Fl_Check_Button(x + 20, y + 160, 150, 25, "Show Level Meters");
+    m_waveform_color_btn = new Fl_Button(x + 120, y + 160, 100, 25, "Waveform Color");
+    m_waveform_color_btn->callback(cb_waveform_color, this);
+
+    Fl_Check_Button* show_meters = new Fl_Check_Button(x + 20, y + 190, 150, 25, "Show Level Meters");
     show_meters->value(1);
     
     m_gui_grp->end();
+}
+
+void SettingsPanel::cb_waveform_color(Fl_Widget*, void* data) {
+    auto* self = static_cast<SettingsPanel*>(data);
+    unsigned char r, g, b;
+    unsigned int c = self->m_engine.m_waveform_color;
+    r = (c >> 24) & 0xFF;
+    g = (c >> 16) & 0xFF;
+    b = (c >> 8) & 0xFF;
+    
+    if (fl_color_chooser("Waveform Color", r, g, b)) {
+        self->m_engine.m_waveform_color = fl_rgb_color(r, g, b);
+        // Force update of waveform views
+        for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+            MainWindow* mw = dynamic_cast<MainWindow*>(win);
+            if (mw) mw->update_all_uis();
+        }
+    }
 }
 
 void SettingsPanel::init_kbd_grp(int x, int y, int w, int h) {

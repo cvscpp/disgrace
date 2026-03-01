@@ -9,6 +9,7 @@
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Value_Input.H>
+#include <FL/Fl_Value_Slider.H>
 #include "waveform_view.h"
 
 namespace disgrace_ns {
@@ -56,6 +57,12 @@ private:
     Fl_Choice* m_rec_input_ch;
     WaveformView* m_waveform_view;
     
+    // SoundFont Editor members
+    Fl_Group* m_sfont_editor;
+    Fl_Button* m_sfont_load_btn;
+    Fl_Browser* m_sfont_browser;
+    Fl_Value_Slider* m_sfont_vol_slider;
+
     Fl_Button* m_zoom_in_btn;
     Fl_Button* m_zoom_out_btn;
     Fl_Button* m_view_all_btn;
@@ -107,6 +114,11 @@ private:
     static void cb_view_sel(Fl_Widget*, void*);
     static void cb_view_mode(Fl_Widget*, void*);
     static void cb_sample_fmt(Fl_Widget*, void*);
+
+    // SoundFont callbacks
+    static void cb_sfont_load(Fl_Widget*, void*);
+    static void cb_sfont_select(Fl_Widget*, void*);
+    static void cb_sfont_vol(Fl_Widget*, void*);
 
     static void cb_silence(Fl_Widget*, void*);
     static void cb_fade_in_lin(Fl_Widget*, void*);

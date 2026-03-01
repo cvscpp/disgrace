@@ -35,6 +35,7 @@ disgrace_SOURCES = \
     instrument/instrument.cpp \
     instrument/instrument_rack.cpp \
     instrument/sample_instrument.cpp \
+    instrument/soundfont_instrument.cpp \
     io/audio_file.cpp \
     io/project_archive.cpp \
     io/song_serializer.cpp \
@@ -54,7 +55,8 @@ disgrace_CXXFLAGS = \
     $(SNDTOUCH_CFLAGS) \
     $(NLOHMANN_JSON_CFLAGS) \
     $(FFTW3_CFLAGS) \
-    $(LIBARCHIVE_CFLAGS)
+    $(LIBARCHIVE_CFLAGS) \
+    $(FLUIDSYNTH_CFLAGS)
 
 disgrace_LDADD = \
     $(JACK_LIBS) \
@@ -63,4 +65,5 @@ disgrace_LDADD = \
     $(SAMPLERATE_LIBS) \
     $(SNDTOUCH_LIBS) \
     $(FFTW3_LIBS) \
-    $(LIBARCHIVE_LIBS)
+    $(LIBARCHIVE_LIBS) \
+    $(FLUIDSYNTH_LIBS)

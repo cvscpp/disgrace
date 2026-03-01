@@ -1,0 +1,45 @@
+#pragma once
+#include "instrument.h"
+#include <fluidsynth.h>
+#include <vector>
+#include <string>
+
+namespace disgrace_ns
+{
+
+    struct SoundFontPreset {
+        int bank;
+        int num;
+        std::string name;
+    };
+
+    class SoundFontInstrument : public disgrace_ns::Instrument
+    {
+    public:
+        SoundFontInstrument(double sample_rate);
+        ~SoundFontInstrument();
+
+        void note_on(uint8_t note, uint8_t velocity) override;
+        void note_off() override;
+        void set_volume(float vol) override;
+        void set_pitch(float freq) override;
+        void process(float* l, float* r, size_t nframes) override;
+
+        bool load_soundfont(const std::string& path);
+        const std::vector<SoundFontPreset>& presets() const { return m_presets; }
+        void set_preset(int index);
+        int current_preset() const { return m_selected_preset; }
+
+    protected:
+        ::std::unique_ptr<disgrace_ns::Voice> create_voice() override { return nullptr; } // FluidSynth handles voices
+
+    private:
+        fluid_settings_t* m_fluid_settings;
+        fluid_synth_t* m_fluid_synth;
+        int m_sfont_id = -1;
+        std::vector<SoundFontPreset> m_presets;
+        int m_selected_preset = -1;
+        float m_volume = 1.0f;
+    };
+
+} // namespace disgrace_ns

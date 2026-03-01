@@ -60,6 +60,9 @@ PKG_CHECK_MODULES([FFTW3], [fftw3])
 # libarchive
 PKG_CHECK_MODULES([LIBARCHIVE], [libarchive])
 
+# FluidSynth
+PKG_CHECK_MODULES([FLUIDSYNTH], [fluidsynth])
+
 # Optional: libsndtouch
 AC_ARG_ENABLE([sndtouch],
     AS_HELP_STRING([--enable-sndtouch], [Enable time-stretch support]),

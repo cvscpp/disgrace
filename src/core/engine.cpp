@@ -2,6 +2,7 @@
 #include "transport.h"
 #include "../audio/jack_backend.h"
 #include "../instrument/sample_instrument.h"
+#include "../instrument/soundfont_instrument.h"
 
 #include <stdexcept>
 #include <cstring>
@@ -185,6 +186,9 @@ void Engine::set_instrument_type(size_t index, InstrumentType type)
     switch (type) {
         case InstrumentType::Sampler:
             new_inst = std::make_unique<SampleInstrument>((double)m_sample_rate);
+            break;
+        case InstrumentType::SoundFont:
+            new_inst = std::make_unique<SoundFontInstrument>((double)m_sample_rate);
             break;
         default:
             new_inst = std::make_unique<NoneInstrument>();

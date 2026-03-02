@@ -42,13 +42,12 @@ void Engine::shutdown() {
 
 void Engine::new_project() {
     m_tracks.clear();
-    for (size_t i = 0; i < 8; ++i) add_track();
     
     m_instruments.clear();
     add_instrument();
     
     m_patterns.clear();
-    m_patterns.emplace_back(64, 8);
+    m_patterns.emplace_back(64, 0); // Start with 0 tracks in pattern too
     
     m_order.clear();
     m_order.push_back(0);
@@ -200,7 +199,12 @@ void Engine::set_instrument_type(size_t index, InstrumentType type) {
     m_instruments[index] = std::move(new_inst);
 }
 
-void Engine::add_track() { m_tracks.emplace_back(); }
+void Engine::add_track() { 
+    m_tracks.emplace_back(); 
+    for (auto& pat : m_patterns) {
+        pat.resize_tracks(m_tracks.size());
+    }
+}
 void Engine::remove_track(size_t index) { if (index < m_tracks.size()) m_tracks.erase(m_tracks.begin() + index); }
 void Engine::move_track(size_t from, size_t to) {
     if (from < m_tracks.size() && to < m_tracks.size()) std::swap(m_tracks[from], m_tracks[to]);

@@ -24,6 +24,12 @@ namespace disgrace_ns
         Pattern& m_pattern;
         Engine&  m_engine;
 
+        struct TrackUI {
+            int x, w;
+            int btn_plus_x, btn_minus_x;
+        };
+        std::vector<TrackUI> m_track_ui;
+
         int m_cursor_row = 0;
         int m_cursor_track = 0;
 

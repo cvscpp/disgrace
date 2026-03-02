@@ -22,6 +22,8 @@ void TrackerView::draw() {
     size_t num_tracks = m_engine.track_count();
     size_t num_rows = m_pattern.row_count();
 
+    m_track_ui.clear();
+
     // Draw row numbers
     fl_color(100, 100, 100);
     fl_font(FL_COURIER, 12);
@@ -42,13 +44,28 @@ void TrackerView::draw() {
         bool is_sampler = (track_obj.instrument() && track_obj.instrument()->type() == InstrumentType::Sampler);
         size_t num_cols = m_pattern.column_count(t);
         
-        int track_w = (int)(num_cols * 10 * char_w + 2 * 4 * char_w);
+        int track_w = (int)(num_cols * 10 * char_w + 2 * 4 * char_w + 40); // Added padding for buttons
         
+        TrackUI ui;
+        ui.x = cur_x;
+        ui.w = track_w;
+        ui.btn_plus_x = cur_x + track_w - 20;
+        ui.btn_minus_x = cur_x + track_w - 40;
+        m_track_ui.push_back(ui);
+
         // Draw track header
         fl_color(60, 60, 60);
         fl_rectf(cur_x, y(), track_w, 20);
         fl_color(200, 200, 200);
         fl_draw(track_obj.name().c_str(), cur_x + 5, y() + 15);
+
+        // Draw + / - buttons
+        fl_color(80, 80, 80);
+        fl_rectf(ui.btn_minus_x, y() + 2, 18, 16);
+        fl_rectf(ui.btn_plus_x, y() + 2, 18, 16);
+        fl_color(255, 255, 255);
+        fl_draw("-", ui.btn_minus_x + 5, y() + 14);
+        fl_draw("+", ui.btn_plus_x + 5, y() + 14);
         
         // Draw grid and data
         for (size_t r = 0; r < num_rows; ++r) {
@@ -122,9 +139,32 @@ void TrackerView::draw() {
 
 int TrackerView::handle(int event) {
     switch (event) {
-        case FL_PUSH:
+        case FL_PUSH: {
             take_focus();
+            int mx = Fl::event_x();
+            int my = Fl::event_y();
+            
+            // Check if we clicked on a header button
+            if (my >= y() && my < y() + 20) {
+                for (size_t t = 0; t < m_track_ui.size(); ++t) {
+                    const auto& ui = m_track_ui[t];
+                    if (mx >= ui.btn_plus_x && mx < ui.btn_plus_x + 18) {
+                        m_pattern.set_column_count(t, m_pattern.column_count(t) + 1);
+                        redraw();
+                        return 1;
+                    }
+                    if (mx >= ui.btn_minus_x && mx < ui.btn_minus_x + 18) {
+                        size_t current = m_pattern.column_count(t);
+                        if (current > 1) {
+                            m_pattern.set_column_count(t, current - 1);
+                            redraw();
+                        }
+                        return 1;
+                    }
+                }
+            }
             return 1;
+        }
         case FL_KEYDOWN:
             return 1;
     }

@@ -32,6 +32,14 @@ namespace disgrace_ns
 
         int m_cursor_row = 0;
         int m_cursor_track = 0;
+        int m_cursor_col = 0;
+        int m_cursor_field = 0; // 0: note, 1: sample, 2: vol, 3: fx1, 4: fx2
+
+        bool m_sel_active = false;
+        int m_sel_start_track = -1;
+        int m_sel_start_row = -1;
+        int m_sel_end_track = -1;
+        int m_sel_end_row = -1;
 
         int m_rows  = 64;
         int m_tracks = 8;

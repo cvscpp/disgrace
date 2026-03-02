@@ -1,16 +1,18 @@
 #include "transportbar.h"
 #include "../core/engine.h"
+#include <FL/Fl_Check_Button.H>
 
 namespace disgrace_ns
 {
 
-TransportBar::TransportBar(
-    int X, int Y, int W, int H,
-    Engine& engine)
-: Fl_Group(X, Y, W, H),
-m_engine(engine)
+TransportBar::TransportBar(int X, int Y, int W, int H, Engine& engine)
+: Fl_Group(X, Y, W, H), m_engine(engine)
 {
     int x = X + 10;
+
+    m_record = new Fl_Light_Button(x, Y+5, 80, 25, "Record");
+    m_record->callback(cb_record, this);
+    x += 90;
 
     m_play = new Fl_Button(x, Y+5, 60, 25, "Play");
     m_play->callback(cb_play, this);
@@ -20,25 +22,43 @@ m_engine(engine)
     m_stop->callback(cb_stop, this);
     x += 70;
 
-    m_record = new Fl_Light_Button(x, Y+5, 80, 25, "Record");
-    m_record->callback(cb_record, this);
-    x += 90;
+    Fl_Check_Button* loop_btn = new Fl_Check_Button(x, Y+5, 70, 25, "Loop");
+    loop_btn->value(1);
+    loop_btn->callback([](Fl_Widget* w, void* d){ 
+        ((Engine*)d)->set_loop(((Fl_Check_Button*)w)->value()); 
+    }, &m_engine);
+    x += 80;
 
     m_metronome = new Fl_Light_Button(x, Y+5, 100, 25, "Metronome");
     m_metronome->value(1);
     m_metronome->callback(cb_metronome, this);
     x += 110;
 
-    m_tempo = new Fl_Value_Input(x, Y+5, 80, 25, "BPM");
+    m_tempo = new Fl_Value_Input(x, Y+5, 60, 25, "BPM");
     m_tempo->range(30, 300);
     m_tempo->step(1);
     m_tempo->value(m_engine.tempo());
     m_tempo->callback(cb_tempo, this);
+    x += 100;
 
-    x += 110;
+    Fl_Value_Input* octave_in = new Fl_Value_Input(x, Y+5, 40, 25, "Octave");
+    octave_in->range(0, 9);
+    octave_in->step(1);
+    octave_in->value(m_engine.base_octave());
+    octave_in->callback([](Fl_Widget* w, void* d){
+        ((Engine*)d)->set_base_octave((int)((Fl_Value_Input*)w)->value());
+    }, &m_engine);
+    x += 80;
 
+    Fl_Button* add_track_btn = new Fl_Button(x, Y+5, 80, 25, "+ Track");
+    add_track_btn->callback([](Fl_Widget*, void* d){
+        ((Engine*)d)->add_track();
+        // We need to notify MainWindow to update all UIs
+        // but for now, the timer_cb should handle periodic updates if implemented
+    }, &m_engine);
+    x += 90;
 
-    m_status = new Fl_Box(x, Y+5, 200, 25, "Stopped");
+    m_status = new Fl_Box(x, Y+5, 100, 25, "Stopped");
 
     end();
 }
@@ -46,13 +66,8 @@ m_engine(engine)
 void TransportBar::cb_tempo(Fl_Widget* w, void* data)
 {
     auto* self = static_cast<disgrace_ns::TransportBar*>(data);
-
-    double bpm =
-    static_cast<Fl_Value_Input*>(w)->value();
-
-    self->m_engine.set_tempo(bpm);
+    self->m_engine.set_tempo(static_cast<Fl_Value_Input*>(w)->value());
 }
-
 
 void TransportBar::cb_play(Fl_Widget*, void* data)
 {
@@ -69,63 +84,29 @@ void TransportBar::cb_stop(Fl_Widget*, void* data)
 void TransportBar::cb_record(Fl_Widget*, void* data)
 {
     auto* self = static_cast<disgrace_ns::TransportBar*>(data);
-
     bool rec = self->m_record->value();
     self->m_engine.enable_record(rec);
-
-    if (rec)
-        self->m_engine.record();
+    if (rec) self->m_engine.record();
 }
 
 void TransportBar::cb_metronome(Fl_Widget*, void* data)
 {
     auto* self = static_cast<disgrace_ns::TransportBar*>(data);
-
-    self->m_engine.set_metronome_enabled(
-        self->m_metronome->value());
+    self->m_engine.set_metronome_enabled(self->m_metronome->value());
 }
-
-// void Timing::set_tempo(double bpm)
-// {
-//     m_tempo = bpm;
-
-//     double beats_per_second =
-//     bpm / 6.0;
-
-//     double rows_per_second =
-//     beats_per_second * 4.0;
-
-//     m_samples_per_row =
-//     static_cast<size_t>(
-//         m_sample_rate / rows_per_second);
-// }
-
 
 void TransportBar::update()
 {
-    double engine_bpm =
-    m_engine.tempo();
-
-    if (m_tempo->value() != engine_bpm)
-        m_tempo->value(engine_bpm);
+    double engine_bpm = m_engine.tempo();
+    if (m_tempo->value() != engine_bpm) m_tempo->value(engine_bpm);
 
     auto state = m_engine.transport_state();
-
     switch (state)
     {
-        case disgrace_ns::TransportState::Stopped:
-            m_status->label("Stopped");
-            break;
-
-        case disgrace_ns::TransportState::Playing:
-            m_status->label("Playing");
-            break;
-
-        case disgrace_ns::TransportState::Recording:
-            m_status->label("Recording");
-            break;
+        case disgrace_ns::TransportState::Stopped: m_status->label("Stopped"); break;
+        case disgrace_ns::TransportState::Playing: m_status->label("Playing"); break;
+        case disgrace_ns::TransportState::Recording: m_status->label("Recording"); break;
     }
-
     redraw();
 }
 

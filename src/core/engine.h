@@ -160,6 +160,8 @@ public:
     KeyBindings m_key_bindings;
 
     uint32_t sample_rate() const { return m_sample_rate; }
+    int  base_octave() const { return m_base_octave; }
+    void set_base_octave(int oct) { m_base_octave = std::max(0, std::min(9, oct)); }
 
 private:
     disgrace_ns::UndoStack m_undo;
@@ -200,6 +202,7 @@ private:
     inline float soft_clip(float x);
     void handle_effect(const disgrace_ns::TrackEvent& ev);
     uint32_t m_sample_rate = 44100;
+    int m_base_octave = 4;
 };
 
 } // namespace disgrace_ns

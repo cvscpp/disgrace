@@ -1,5 +1,5 @@
 #include "main_window.h"
-#include "transport_panel.h"
+#include "transportbar.h"
 #include "tracker_panel.h"
 #include "mixer_panel.h"
 #include "instrument_panel.h"
@@ -8,7 +8,7 @@
 #include "../core/engine.h"
 
 #include <FL/fl_draw.H>
-#include <FL/Fl_Native_File_Chooser.H> // ADD THIS LINE for fl_file_chooser
+#include <FL/Fl_Native_File_Chooser.H> 
 
 namespace disgrace_ns
 {
@@ -35,20 +35,7 @@ namespace disgrace_ns
   {
     begin();
 
-    m_transport = new disgrace_ns::TransportPanel(0, 0, w, 40, m_engine);
-    m_loop_btn = new Fl_Check_Button(w - 70, 10, 60, 25, "Loop");
-    m_loop_btn->value(1);
-    m_loop_btn->callback(
-      [](Fl_Widget* w, void* data)
-      {
-        auto* engine =
-        static_cast<disgrace_ns::Engine*>(data);
-
-        engine->set_loop(
-          static_cast<Fl_Check_Button*>(w)
-          ->value());
-      },
-      &m_engine);
+    m_transport = new disgrace_ns::TransportBar(0, 0, w, 40, m_engine);
 
     m_tabs = new Fl_Tabs(0, 40, w, h - 75);
     
@@ -59,6 +46,8 @@ namespace disgrace_ns
     init_settings_tab(w, h);
 
     m_tabs->end();
+
+    Fl::add_timeout(0.03, timer_cb, this);
 
     resizable(m_tabs);
     end();
@@ -82,12 +71,10 @@ void disgrace_ns::MainWindow::timer_cb(void* data)
   {
     auto* self = static_cast<disgrace_ns::MainWindow*>(data);
 
-    // This check is no longer valid as m_tracker is now in TrackerPanel
-    // if (self->m_tracker == nullptr) {
-    //     fprintf(stderr, "DEBUG: m_tracker is nullptr in timer_cb! Skipping set_current_row.\n");
-    //     Fl::repeat_timeout(0.03, timer_cb, data);
-    //     return;
-    // }
+    if (self->m_transport) self->m_transport->update();
+    
+    // Periodically update other UIs if needed
+    // self->update_all_uis(); // Too frequent? 30ms might be okay.
     
     Fl::repeat_timeout(0.03, timer_cb, data);
   }

@@ -15,9 +15,9 @@ namespace disgrace_ns
 {
 
     class Engine;
-    class TransportPanel;
+    class TransportBar;
     class TrackerView;
-    class Track; // Added forward declaration for Track
+    class Track; 
     class TrackerPanel;
     class InstrumentPanel;
     class MixerPanel;
@@ -43,7 +43,7 @@ namespace disgrace_ns
         Engine& m_engine;
         int m_cursor_row = 0; // Add this line
 
-        TransportPanel*  m_transport;
+        TransportBar*    m_transport;
         Fl_Box*          m_status;
         Fl_Tabs* m_tabs;
         Fl_Group* m_project_tab;

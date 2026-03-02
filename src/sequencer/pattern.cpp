@@ -4,34 +4,38 @@
 namespace disgrace_ns
 {
 
-// Helper function to serialize NoteEvent
-void to_json(nlohmann::json& j, const NoteEvent& p) {
+void to_json(nlohmann::json& j, const TrackEvent& p) {
     j = nlohmann::json{
         {"note", p.note},
-        {"instrument", p.instrument},
+        {"sample_idx", p.sample_idx},
         {"volume", p.volume},
-        {"effect", p.effect},
-        {"param", p.param}
+        {"effect1", p.effect1},
+        {"param1", p.param1},
+        {"effect2", p.effect2},
+        {"param2", p.param2}
     };
 }
 
 nlohmann::json Pattern::to_json() const
 {
     nlohmann::json j;
-    j["rows"] = rows;
+    j["rows"] = m_row_count;
 
     nlohmann::json tracks_json = nlohmann::json::array();
-    for (size_t track_idx = 0; track_idx < MAX_TRACKS; ++track_idx) {
+    for (size_t track_idx = 0; track_idx < m_tracks.size(); ++track_idx) {
+        nlohmann::json track_info;
+        track_info["cols"] = m_tracks[track_idx].columns;
+        
         nlohmann::json rows_json = nlohmann::json::array();
-        for (size_t row_idx = 0; row_idx < rows; ++row_idx) {
+        for (size_t row_idx = 0; row_idx < m_row_count; ++row_idx) {
             nlohmann::json columns_json = nlohmann::json::array();
-            for (size_t col_idx = 0; col_idx < MAX_COLUMNS; ++col_idx) {
-                // Accessing private member m_data - this is fine since it's a member function
-                columns_json.push_back(m_data[track_idx][row_idx][col_idx]);
+            for (size_t col_idx = 0; col_idx < m_tracks[track_idx].columns; ++col_idx) {
+                columns_json.push_back(m_tracks[track_idx].rows[row_idx][col_idx]);
             }
             rows_json.push_back(columns_json);
         }
-        tracks_json.push_back(rows_json);
+        track_info["data"] = rows_json;
+        tracks_json.push_back(track_info);
     }
     j["tracks"] = tracks_json;
 

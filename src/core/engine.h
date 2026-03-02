@@ -11,15 +11,15 @@
 #include "../mixer/track.h"
 #include "../instrument/instrument.h"
 #include "../audio/sample_data.h"
-#include "core/undo_stack.h"
+#include "undo_stack.h"
 #include "transport.h"
 #include "key_bindings.h"
 #include "../midi/midi_queue.h"
 #include "../midi/midi_input.h"
-#include "core/metronome.h"
-#include "core/masterbus.h"
+#include "metronome.h"
+#include "masterbus.h"
 #include "../util/ringbuffer.h"
-#include "core/engine_command.h"
+#include "engine_command.h"
 
 namespace disgrace_ns
 {
@@ -58,6 +58,7 @@ public:
     void record();
 
     disgrace_ns::Transport& transport();
+    const disgrace_ns::Transport& transport() const;
 
     void process_audio(float* out_l, float* out_r, size_t nframes);
 
@@ -83,7 +84,7 @@ public:
     int    m_current_tick = 0;
     size_t m_current_row = 0;
 
-    void handle_effect_row_start(size_t track_index, const disgrace_ns::NoteEvent& ev);
+    void handle_effect_row_start(size_t track_index, const disgrace_ns::TrackEvent& ev);
 
     size_t current_row() const;
     bool   is_playing() const;
@@ -154,9 +155,11 @@ public:
 
     int m_gui_button_height = 25;
     int m_gui_font_size = 12;
-    unsigned int m_waveform_color = 0x00FF0000; // FL_GREEN in hex? Actually FL_GREEN is 63. Let's use 0x40FF4000 for a bright green.
+    unsigned int m_waveform_color = 0x00FF0000; 
 
     KeyBindings m_key_bindings;
+
+    uint32_t sample_rate() const { return m_sample_rate; }
 
 private:
     disgrace_ns::UndoStack m_undo;
@@ -174,12 +177,13 @@ private:
     ::std::vector<disgrace_ns::Track> m_tracks;
 
     static constexpr size_t MAX_BLOCK = 2048;
+    static constexpr size_t MAX_TRACKS_INTERNAL = 64;
 
     float m_mix_l[MAX_BLOCK];
     float m_mix_r[MAX_BLOCK];
 
-    float m_track_l[MAX_TRACKS][MAX_BLOCK];
-    float m_track_r[MAX_TRACKS][MAX_BLOCK];
+    float m_track_l[MAX_TRACKS_INTERNAL][MAX_BLOCK];
+    float m_track_r[MAX_TRACKS_INTERNAL][MAX_BLOCK];
 
     disgrace_ns::RingBuffer<disgrace_ns::EngineCommand, 128> m_cmd_queue;
 
@@ -194,7 +198,7 @@ private:
     void process_tick();
     void render_block(float* out_l, float* out_r, size_t frames);
     inline float soft_clip(float x);
-    void handle_effect(const disgrace_ns::NoteEvent& ev);
+    void handle_effect(const disgrace_ns::TrackEvent& ev);
     uint32_t m_sample_rate = 44100;
 };
 

@@ -1,10 +1,12 @@
 #include "transport.h"
+#include "engine.h"
 
 namespace disgrace_ns
 {
 
-Transport::Transport()
-    : m_tempo(120.0), // Default tempo
+Transport::Transport(Engine& engine)
+    : m_engine(engine),
+      m_tempo(120.0), // Default tempo
       m_transport(TransportState::Stopped),
       m_loop_pattern(true)
 {
@@ -12,7 +14,6 @@ Transport::Transport()
 
 bool Transport::is_playing() const
 {
-    // This can be derived from the state()
     return m_transport.load(::std::memory_order_relaxed) == TransportState::Playing ||
            m_transport.load(::std::memory_order_relaxed) == TransportState::Recording;
 }
@@ -67,9 +68,6 @@ TransportState Transport::state() const
 void Transport::set_play_position(size_t pattern,
                            size_t row)
 {
-    // Implementation for setting play position
-    // This will likely involve communicating with the sequencer or engine directly
-    // For now, leave empty or add a placeholder for future implementation
 }
 
 } // namespace disgrace_ns

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include <cstddef> // Added for size_t
+#include <cstddef> 
 
 namespace disgrace_ns
 {
@@ -9,11 +9,13 @@ namespace disgrace_ns
 class Timing
 {
 public:
-    void set_sample_rate(uint32_t sr);
-    void set_bpm(int bpm); // Renamed from set_tempo
-    double tempo() const { return m_bpm; } // Added tempo()
+    Timing(uint32_t sr = 44100) : m_sample_rate((double)sr) {}
+
+    void set_sample_rate(uint32_t sr) { m_sample_rate = (double)sr; }
+    void set_bpm(int bpm); 
+    double tempo() const { return (double)m_bpm; } 
     void set_lpb(uint32_t lpb);
-    uint32_t lpb() const { return m_speed; } // Added this line
+    uint32_t lpb() const { return (uint32_t)m_speed; } 
     void set_speed(int speed);
 
     int bpm() const { return m_bpm; }
@@ -27,9 +29,9 @@ public:
 
 
 private:
-    double m_sample_rate = 48000.0;
-    int m_bpm = 125;     // default tracker tempo
-    int m_speed = 6;     // ticks per row
+    double m_sample_rate = 44100.0;
+    int m_bpm = 125;     
+    int m_speed = 6;     
 };
 
 } // namespace disgrace_ns

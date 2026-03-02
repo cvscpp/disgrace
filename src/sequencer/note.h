@@ -14,13 +14,17 @@ enum class EffectType : uint8_t
     NoteCut
 };
 
-struct NoteEvent
+struct TrackEvent
 {
     uint8_t note = 255;      // 0-119, 255 = empty
-    uint8_t instrument = 0;
-    uint8_t volume = 0;      // optional
-    uint8_t effect = 0;      // effect command
-    uint8_t param = 0;       // effect parameter
+    uint8_t sample_idx = 0;  // 0 = none/default
+    uint8_t volume = 255;    // 255 = empty/default, 0-127 = actual
+    
+    // Each track row has two effect columns
+    uint8_t effect1 = 0;
+    uint8_t param1 = 0;
+    uint8_t effect2 = 0;
+    uint8_t param2 = 0;
 };
 
 } // namespace disgrace_ns

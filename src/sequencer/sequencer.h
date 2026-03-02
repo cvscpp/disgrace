@@ -3,6 +3,7 @@
 #include "pattern.h"
 #include "timing.h"
 #include <array>
+#include <vector>
 
 namespace disgrace_ns
 {
@@ -17,8 +18,8 @@ public:
     void advance_row();
     void jump_to_order(int order);
     void break_to_row(int row);
-    void pattern_break(); // Added
-    void jump_to(size_t order); // Added
+    void pattern_break(); 
+    void jump_to(size_t order); 
 
     size_t current_order() const { return m_current_order; }
     size_t current_row() const { return m_current_row; }
@@ -26,7 +27,7 @@ public:
     void set_patterns(const ::std::vector<disgrace_ns::Pattern>& patterns_list);
 
 
-    const disgrace_ns::NoteEvent& current_event(size_t track) const;
+    const TrackEvent& current_event(size_t track) const;
 
     static constexpr size_t MAX_ORDER = 256;
 

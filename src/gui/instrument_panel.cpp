@@ -6,13 +6,16 @@
 #include "../instrument/soundfont_instrument.h"
 #include "../instrument/dssi_instrument.h"
 #include "../instrument/lv2_instrument.h"
+#include "../instrument/midi_instrument.h"
 #include "../io/audio_file.h"
 #include <FL/Fl_Native_File_Chooser.H>
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Value_Slider.H>
 #include <FL/fl_ask.H>
+#include <FL/fl_message.H>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <dlfcn.h>
 
 namespace disgrace_ns {
 
@@ -169,22 +172,60 @@ InstrumentPanel::InstrumentPanel(int x, int y, int w, int h, Engine& engine)
     m_plugin_scan_btn = new Fl_Button(x + left_w + margin, y + pl_y, 100, 25, "Scan Plugins");
     m_plugin_scan_btn->callback(cb_plugin_scan, this);
     pl_y += 25 + margin;
-    
     int pl_split_x = x + left_w + (w - left_w) / 2;
-    
     m_plugin_browser = new Fl_Browser(x + left_w + margin, y + pl_y, (w - left_w) / 2 - 2 * margin, h - pl_y - margin);
     m_plugin_browser->type(FL_HOLD_BROWSER);
     m_plugin_browser->callback(cb_plugin_select, this);
-    
     m_plugin_controls_grp = new Fl_Group(pl_split_x, y + pl_y, (w - left_w) / 2, h - pl_y, "Controls");
     m_plugin_controls_grp->box(FL_ENGRAVED_FRAME);
     m_plugin_controls_grp->align(FL_ALIGN_TOP_LEFT);
     m_plugin_controls_grp->begin();
-    new Fl_Box(pl_split_x + 10, y + pl_y + 20, 150, 25, "Plugin Parameters");
+    m_plugin_scroll = new Fl_Scroll(pl_split_x + 5, y + pl_y + 5, (w - left_w) / 2 - 10, h - pl_y - 10);
+    m_plugin_scroll->type(Fl_Scroll::VERTICAL);
+    m_plugin_controls_container = new Fl_Group(pl_split_x + 5, y + pl_y + 5, (w - left_w) / 2 - 30, 1000);
+    m_plugin_controls_container->begin(); m_plugin_controls_container->end();
+    m_plugin_scroll->add(m_plugin_controls_container);
+    m_plugin_scroll->end();
     m_plugin_controls_grp->end();
+
+    // --- ZynAddSubFX Editor (Embedded in Plugin Editor right pane) ---
+    m_zyn_editor = new Fl_Group(pl_split_x, y + pl_y, (w - left_w) / 2, 220);
+    m_zyn_editor->begin();
+    int z_y = 5;
+    m_zyn_bank_ch = new Fl_Choice(pl_split_x + 60, y + pl_y + z_y, (w - left_w) / 2 - 70, 25, "Bank:");
+    m_zyn_bank_ch->callback(cb_zyn_bank, this);
+    z_y += 30;
+    m_zyn_prev_btn = new Fl_Button(pl_split_x + 10, y + pl_y + z_y, 40, 25, "@<");
+    m_zyn_prev_btn->callback(cb_zyn_prev, this);
+    m_zyn_next_btn = new Fl_Button(pl_split_x + 55, y + pl_y + z_y, 40, 25, "@>");
+    m_zyn_next_btn->callback(cb_zyn_next, this);
+    z_y += 30;
+    m_zyn_preset_browser = new Fl_Browser(pl_split_x + 10, y + pl_y + z_y, (w - left_w) / 2 - 20, 150);
+    m_zyn_preset_browser->type(FL_HOLD_BROWSER);
+    m_zyn_preset_browser->callback(cb_zyn_preset, this);
+    m_zyn_editor->end();
+    m_zyn_editor->hide();
 
     m_plugin_editor->end();
     m_plugin_editor->hide();
+
+    // --- MIDI Editor ---
+    m_midi_editor = new Fl_Group(x + left_w, y, w - left_w, h);
+    m_midi_editor->begin();
+    int m_y = margin;
+    m_midi_channel = new Fl_Value_Input(x + left_w + 120, y + m_y, 50, 25, "MIDI Channel:");
+    m_midi_channel->minimum(1);
+    m_midi_channel->maximum(16);
+    m_midi_channel->step(1);
+    m_midi_channel->callback(cb_midi_ch, this);
+    m_y += 30;
+    m_midi_program = new Fl_Value_Input(x + left_w + 120, y + m_y, 50, 25, "MIDI Program:");
+    m_midi_program->minimum(0);
+    m_midi_program->maximum(127);
+    m_midi_program->step(1);
+    m_midi_program->callback(cb_midi_pg, this);
+    m_midi_editor->end();
+    m_midi_editor->hide();
 
     m_right_panel->end();
     resizable(m_right_panel);
@@ -246,6 +287,8 @@ void InstrumentPanel::update_editor() {
     m_sampler_editor->hide();
     m_sfont_editor->hide();
     m_plugin_editor->hide();
+    m_zyn_editor->hide();
+    m_midi_editor->hide();
 
     if (m_selected_instrument < 0 || m_selected_instrument >= (int)m_engine.instrument_count()) {
         m_right_panel->redraw();
@@ -296,6 +339,46 @@ void InstrumentPanel::update_editor() {
         if (m_plugin_browser->size() == 0) {
             cb_plugin_scan(nullptr, this);
         }
+        bool is_zyn = (inst.plugin_name().find("ZynAddSubFX") != std::string::npos);
+        if (is_zyn) {
+            m_zyn_editor->show();
+            int zyn_h = 220;
+            m_plugin_controls_grp->resize(m_plugin_controls_grp->x(), m_sampler_editor->y() + zyn_h + 5, 
+                                        m_plugin_controls_grp->w(), m_right_panel->h() - (m_zyn_editor->y() - m_right_panel->y()) - zyn_h - 15);
+            if (m_zyn_bank_ch->size() == 0) {
+                std::vector<std::string> bank_paths = {"/usr/share/zynaddsubfx/banks", "/usr/local/share/zynaddsubfx/banks"};
+                for (const auto& bp : bank_paths) {
+                    DIR* dir = opendir(bp.c_str()); if (!dir) continue;
+                    struct dirent* entry; while ((entry = readdir(dir)) != nullptr) {
+                        if (entry->d_type == DT_DIR && entry->d_name[0] != '.') m_zyn_bank_ch->add(strdup(entry->d_name));
+                    }
+                    closedir(dir);
+                }
+                if (m_zyn_bank_ch->size() > 0) { m_zyn_bank_ch->value(0); cb_zyn_bank(nullptr, this); }
+            }
+        } else {
+            m_zyn_editor->hide();
+            m_plugin_controls_grp->resize(m_plugin_controls_grp->x(), m_sampler_editor->y(), 
+                                        m_plugin_controls_grp->w(), m_sampler_editor->h());
+        }
+        m_plugin_controls_container->clear(); m_plugin_controls_container->begin();
+        int row_h = 45; int cur_y = m_plugin_controls_container->y(); int start_x = m_plugin_controls_container->x();
+        size_t num_params = inst.parameter_count();
+        for (size_t i = 0; i < num_params; ++i) {
+            auto param = inst.get_parameter(i);
+            Fl_Value_Slider* slider = new Fl_Value_Slider(start_x, cur_y + 15, m_plugin_controls_container->w(), 20, strdup(param.name.c_str()));
+            slider->type(FL_HOR_NICE_SLIDER); slider->align(FL_ALIGN_TOP_LEFT); slider->labelsize(10);
+            slider->range(param.min, param.max); slider->value(param.value);
+            slider->callback(cb_plugin_param, new std::pair<InstrumentPanel*, size_t>(this, i));
+            cur_y += row_h;
+        }
+        m_plugin_controls_container->end(); m_plugin_controls_container->size(m_plugin_controls_container->w(), (int)(num_params * row_h + 20));
+        m_plugin_scroll->redraw();
+    } else if (inst.type() == InstrumentType::Midi) {
+        m_midi_editor->show();
+        MidiInstrument* midi = static_cast<MidiInstrument*>(&inst);
+        m_midi_channel->value(midi->channel() + 1);
+        m_midi_program->value(midi->program());
     }
     m_right_panel->redraw();
 }
@@ -460,6 +543,89 @@ void InstrumentPanel::cb_sfont_vol(Fl_Widget* w, void* data) {
     }
 }
 
+void InstrumentPanel::cb_plugin_scan(Fl_Widget*, void* data) {
+    InstrumentPanel* self = static_cast<InstrumentPanel*>(data);
+    self->m_plugin_browser->clear(); self->m_plugin_map.clear();
+    const char* dssi_header = "@b@C4--- DSSI Plugins ---";
+    self->m_plugin_browser->add(dssi_header);
+    std::vector<std::string> dssi_paths = {"/usr/lib/dssi", "/usr/local/lib/dssi", "/usr/lib/x86_64-linux-gnu/dssi"};
+    for (const auto& path : dssi_paths) {
+        DIR* dir = opendir(path.c_str()); if (!dir) continue;
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            std::string full_path = path + "/" + entry->d_name;
+            if (full_path.find(".so") != std::string::npos) {
+                void* handle = dlopen(full_path.c_str(), RTLD_LAZY);
+                if (handle) {
+                    DSSI_Descriptor_Function df = (DSSI_Descriptor_Function)dlsym(handle, "dssi_descriptor");
+                    if (df) {
+                        for (int i = 0; ; ++i) {
+                            const DSSI_Descriptor* desc = df(i); if (!desc) break;
+                            std::string label = std::string(desc->LADSPA_Plugin->Name) + " (DSSI)";
+                            int item_idx = self->m_plugin_browser->size() + 1;
+                            self->m_plugin_browser->add(label.c_str());
+                            self->m_plugin_map[item_idx] = {desc->LADSPA_Plugin->Name, full_path, i, false};
+                        }
+                    }
+                    dlclose(handle);
+                }
+            }
+        }
+        closedir(dir);
+    }
+    self->m_plugin_browser->add("@b@C4--- LV2 Plugins (Stub) ---");
+}
+
+void InstrumentPanel::cb_plugin_select(Fl_Widget* w, void* data) {
+    InstrumentPanel* self = static_cast<InstrumentPanel*>(data);
+    int idx = self->m_plugin_browser->value();
+    if (idx <= 0 || self->m_plugin_map.find(idx) == self->m_plugin_map.end()) return;
+    auto info = self->m_plugin_map[idx];
+    auto& inst = self->m_engine.instrument(self->m_selected_instrument);
+    if (inst.type() == InstrumentType::Plugin) {
+        if (static_cast<DSSIInstrument*>(&inst)->load_plugin(info.path, info.index)) { self->update_editor(); }
+    }
+}
+
+void InstrumentPanel::cb_plugin_param(Fl_Widget* w, void* data) {
+    auto* pair = static_cast<std::pair<InstrumentPanel*, size_t>*>(data);
+    pair->first->m_engine.instrument(pair->first->m_selected_instrument).set_parameter(pair->second, (float)static_cast<Fl_Value_Slider*>(w)->value());
+}
+
+void InstrumentPanel::cb_zyn_bank(Fl_Widget*, void* data) {
+    InstrumentPanel* self = static_cast<InstrumentPanel*>(data);
+    self->m_zyn_preset_browser->clear();
+    int bidx = self->m_zyn_bank_ch->value(); if (bidx < 0) return;
+    std::string bank_name = self->m_zyn_bank_ch->text(bidx);
+    std::vector<std::string> bank_paths = {"/usr/share/zynaddsubfx/banks", "/usr/local/share/zynaddsubfx/banks"};
+    for (const auto& bp : bank_paths) {
+        std::string full_path = bp + "/" + bank_name;
+        DIR* dir = opendir(full_path.c_str()); if (!dir) continue;
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            std::string fname = entry->d_name;
+            if (fname.size() > 4 && fname.substr(fname.size() - 4) == ".xiz") self->m_zyn_preset_browser->add(strdup(fname.c_str()));
+        }
+        closedir(dir);
+    }
+}
+
+void InstrumentPanel::cb_zyn_preset(Fl_Widget* w, void* data) {
+    InstrumentPanel* self = static_cast<InstrumentPanel*>(data);
+    int pidx = self->m_zyn_preset_browser->value(); if (pidx <= 0) return;
+    fl_message("Loading ZynAddSubFX preset: %s (Stub)", self->m_zyn_preset_browser->text(pidx));
+}
+
+void InstrumentPanel::cb_zyn_prev(Fl_Widget*, void* data) {
+    InstrumentPanel* self = static_cast<InstrumentPanel*>(data);
+    int v = self->m_zyn_preset_browser->value(); if (v > 1) { self->m_zyn_preset_browser->value(v - 1); cb_zyn_preset(self->m_zyn_preset_browser, self); }
+}
+
+void InstrumentPanel::cb_zyn_next(Fl_Widget*, void* data) {
+    InstrumentPanel* self = static_cast<InstrumentPanel*>(data);
+    int v = self->m_zyn_preset_browser->value(); if (v > 0 && v < self->m_zyn_preset_browser->size()) { self->m_zyn_preset_browser->value(v + 1); cb_zyn_preset(self->m_zyn_preset_browser, self); }
+}
+
 void InstrumentPanel::cb_cut(Fl_Widget*, void* data) {
     auto* self = static_cast<InstrumentPanel*>(data); if (self->m_selected_sample < 0) return;
     SampleInstrument* sampler = static_cast<SampleInstrument*>(&self->m_engine.instrument(self->m_selected_instrument));
@@ -553,67 +719,18 @@ void InstrumentPanel::cb_adjust_vol(Fl_Widget*, void* data) {
     sample.data->adjust_volume(s1, s2, (float)self->m_vol_input->value()); self->update_editor();
 }
 
-void InstrumentPanel::cb_plugin_scan(Fl_Widget*, void* data) {
+void InstrumentPanel::cb_midi_ch(Fl_Widget* w, void* data) {
     InstrumentPanel* self = static_cast<InstrumentPanel*>(data);
-    self->m_plugin_browser->clear();
-    
-    // Scan DSSI
-    self->m_plugin_browser->add("@b@C4--- DSSI Plugins ---");
-    std::vector<std::string> dssi_paths = {"/usr/lib/dssi", "/usr/local/lib/dssi", "/usr/lib/x86_64-linux-gnu/dssi"};
-    for (const auto& path : dssi_paths) {
-        DIR* dir = opendir(path.c_str());
-        if (!dir) continue;
-        struct dirent* entry;
-        while ((entry = readdir(dir)) != nullptr) {
-            std::string name = entry->d_name;
-            if (name.find(".so") != std::string::npos) {
-                self->m_plugin_browser->add(strdup((path + "/" + name).c_str()));
-            }
-        }
-        closedir(dir);
-    }
-
-    // Scan LV2
-    self->m_plugin_browser->add("@b@C4--- LV2 Plugins ---");
-    std::vector<std::string> lv2_paths = {"/usr/lib/lv2", "/usr/local/lib/lv2", "/usr/lib/x86_64-linux-gnu/lv2"};
-    for (const auto& path : lv2_paths) {
-        DIR* dir = opendir(path.c_str());
-        if (!dir) continue;
-        struct dirent* entry;
-        while ((entry = readdir(dir)) != nullptr) {
-            std::string name = entry->d_name;
-            if (entry->d_type == DT_DIR && name != "." && name != "..") {
-                self->m_plugin_browser->add(strdup((path + "/" + name).c_str()));
-            }
-        }
-        closedir(dir);
-    }
+    if (self->m_selected_instrument < 0) return;
+    auto& inst = self->m_engine.instrument(self->m_selected_instrument);
+    if (inst.type() == InstrumentType::Midi) static_cast<MidiInstrument*>(&inst)->set_channel((int)static_cast<Fl_Value_Input*>(w)->value() - 1);
 }
 
-void InstrumentPanel::cb_plugin_select(Fl_Widget* w, void* data) {
+void InstrumentPanel::cb_midi_pg(Fl_Widget* w, void* data) {
     InstrumentPanel* self = static_cast<InstrumentPanel*>(data);
-    int idx = self->m_plugin_browser->value();
-    if (idx <= 0) return;
-    
-    const char* text = self->m_plugin_browser->text(idx);
-    if (text[0] == '@') return; // Skip headers
-
-    std::string path = text;
+    if (self->m_selected_instrument < 0) return;
     auto& inst = self->m_engine.instrument(self->m_selected_instrument);
-    
-    // We need to determine if it is DSSI or LV2 based on path or position in list
-    // Simple check for now:
-    if (path.find("dssi") != std::string::npos) {
-        // Change internal type if needed? 
-        // User wants it under "Plugin" instrument.
-        // My set_instrument_type currently always creates DSSIInstrument for Plugin type.
-        // This is fine for now as it's a skeleton.
-        if (static_cast<DSSIInstrument*>(&inst)->load_plugin(path)) {
-            fl_message("DSSI Plugin loaded: %s", path.c_str());
-        }
-    } else if (path.find("lv2") != std::string::npos) {
-        fl_message("LV2 Plugin selected: %s (Stub)", path.c_str());
-    }
+    if (inst.type() == InstrumentType::Midi) static_cast<MidiInstrument*>(&inst)->set_program((int)static_cast<Fl_Value_Input*>(w)->value());
 }
 
 void InstrumentPanel::cb_detach(Fl_Widget*, void* data) {

@@ -5,6 +5,7 @@
 #include "../instrument/soundfont_instrument.h"
 #include "../instrument/dssi_instrument.h"
 #include "../instrument/lv2_instrument.h"
+#include "../instrument/midi_instrument.h"
 
 #include <stdexcept>
 #include <cstring>
@@ -195,6 +196,9 @@ void Engine::set_instrument_type(size_t index, InstrumentType type)
         case InstrumentType::Plugin:
             // For now, let's use a specialized PluginInstrument that will handle both
             new_inst = std::make_unique<DSSIInstrument>((double)m_sample_rate); 
+            break;
+        case InstrumentType::Midi:
+            new_inst = std::make_unique<MidiInstrument>(this);
             break;
         default:
             new_inst = std::make_unique<NoneInstrument>();

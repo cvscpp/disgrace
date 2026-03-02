@@ -11,6 +11,7 @@
 #include <FL/Fl_Value_Input.H>
 #include <FL/Fl_Value_Slider.H>
 #include "waveform_view.h"
+#include <map>
 
 namespace disgrace_ns {
 
@@ -28,10 +29,19 @@ public:
     static void cb_copy(Fl_Widget*, void*);
     static void cb_paste(Fl_Widget*, void*);
 
+    struct PluginInfo {
+        std::string name;
+        std::string path;
+        int index; // Index within the .so file
+        bool is_lv2;
+    };
+
 private:
     Engine& m_engine;
     int m_selected_instrument = -1;
     int m_selected_sample = -1;
+    
+    std::map<int, PluginInfo> m_plugin_map; // Browser item index -> PluginInfo
     
     Fl_Group* m_left_panel;
     Fl_Group* m_right_panel;
@@ -67,7 +77,21 @@ private:
     Fl_Group* m_plugin_editor;
     Fl_Button* m_plugin_scan_btn;
     Fl_Browser* m_plugin_browser;
-    Fl_Group* m_plugin_controls_grp;
+    Fl_Group*  m_plugin_controls_grp;
+    Fl_Scroll* m_plugin_scroll;
+    Fl_Group*  m_plugin_controls_container;
+
+    // MIDI Editor members
+    Fl_Group* m_midi_editor;
+    Fl_Value_Input* m_midi_channel;
+    Fl_Value_Input* m_midi_program;
+
+    // ZynAddSubFX specific
+    Fl_Group* m_zyn_editor;
+    Fl_Choice* m_zyn_bank_ch;
+    Fl_Browser* m_zyn_preset_browser;
+    Fl_Button* m_zyn_prev_btn;
+    Fl_Button* m_zyn_next_btn;
 
     Fl_Button* m_zoom_in_btn;
     Fl_Button* m_zoom_out_btn;
@@ -129,6 +153,17 @@ private:
     // Plugin callbacks
     static void cb_plugin_scan(Fl_Widget*, void*);
     static void cb_plugin_select(Fl_Widget*, void*);
+    static void cb_plugin_param(Fl_Widget*, void*);
+
+    // MIDI callbacks
+    static void cb_midi_ch(Fl_Widget*, void*);
+    static void cb_midi_pg(Fl_Widget*, void*);
+
+    // ZynAddSubFX callbacks
+    static void cb_zyn_bank(Fl_Widget*, void*);
+    static void cb_zyn_preset(Fl_Widget*, void*);
+    static void cb_zyn_prev(Fl_Widget*, void*);
+    static void cb_zyn_next(Fl_Widget*, void*);
 
     static void cb_silence(Fl_Widget*, void*);
     static void cb_fade_in_lin(Fl_Widget*, void*);

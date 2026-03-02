@@ -2,6 +2,7 @@
 #include "instrument.h"
 #include <dssi.h>
 #include <dlfcn.h>
+#include <vector>
 
 namespace disgrace_ns {
 
@@ -16,7 +17,11 @@ public:
     void set_pitch(float freq) override;
     void process(float* l, float* r, size_t nframes) override;
 
-    bool load_plugin(const std::string& path);
+    bool load_plugin(const std::string& path, int index = 0);
+
+    size_t parameter_count() const override { return m_control_indices.size(); }
+    Parameter get_parameter(size_t index) const override;
+    void set_parameter(size_t index, float value) override;
 
 protected:
     std::unique_ptr<Voice> create_voice() override { return nullptr; }
@@ -26,6 +31,9 @@ private:
     const DSSI_Descriptor* m_descriptor = nullptr;
     LADSPA_Handle m_instance = nullptr;
     double m_sample_rate;
+
+    std::vector<float> m_port_values;
+    std::vector<int>   m_control_indices;
 };
 
 } // namespace disgrace_ns

@@ -37,8 +37,23 @@ public:
     void set_name(const std::string& name) { m_name = name.substr(0, 64); }
     const std::string& name() const { return m_name; }
 
+    void set_plugin_name(const std::string& name) { m_plugin_name = name; }
+    const std::string& plugin_name() const { return m_plugin_name; }
+
     void set_type(InstrumentType type) { m_type = type; }
     InstrumentType type() const { return m_type; }
+
+    struct Parameter {
+        int index;
+        std::string name;
+        float min = 0.0f;
+        float max = 1.0f;
+        float value = 0.0f;
+    };
+
+    virtual size_t parameter_count() const { return 0; }
+    virtual Parameter get_parameter(size_t) const { return {}; }
+    virtual void set_parameter(size_t, float) {}
 
 protected:
     virtual ::std::unique_ptr<disgrace_ns::Voice> create_voice() = 0;
@@ -46,6 +61,7 @@ protected:
     disgrace_ns::Voice* allocate_voice();
 
     std::string m_name = "New Instrument";
+    std::string m_plugin_name = "";
     InstrumentType m_type = InstrumentType::None;
 protected:
     ::std::array<::std::unique_ptr<disgrace_ns::Voice>, MAX_VOICES> m_voices;

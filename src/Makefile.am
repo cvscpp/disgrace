@@ -38,6 +38,7 @@ disgrace_SOURCES = \
     instrument/soundfont_instrument.cpp \
     instrument/dssi_instrument.cpp \
     instrument/lv2_instrument.cpp \
+    instrument/midi_instrument.cpp \
     io/audio_file.cpp \
     io/project_archive.cpp \
     io/song_serializer.cpp \

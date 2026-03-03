@@ -30,6 +30,7 @@ MixerPanel::MixerPanel(int x, int y, int w, int h, Engine& engine)
     m_master_gain->callback(cb_master_gain, this);
 
     m_master_meter = new VUMeter(w - 40, h - 30, 30, 25);
+    m_spectral_view = new SpectralView(w - 200, h - 140, 190, 100, m_engine);
 
     Fl_Box* mixer_spacer = new Fl_Box(0, 0, w, h);
     mixer_spacer->hide();
@@ -73,7 +74,10 @@ void MixerPanel::update_mixer_ui() {
 
 void MixerPanel::update_meters() {
     if (m_master_meter) {
-        m_master_meter->level(m_engine.master_meter());
+        m_master_meter->level(m_engine.master_meter_l());
+    }
+    if (m_spectral_view) {
+        m_spectral_view->update();
     }
 
     for (size_t i = 0; i < m_track_meters.size() && i < m_engine.track_count(); ++i) {

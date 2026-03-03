@@ -15,13 +15,15 @@ public:
                  float* r,
                  size_t nframes);
 
-    float meter() const;
+    float meter_l() const;
+    float meter_r() const;
 
 private:
     float soft_clip(float x);
 
     ::std::atomic<float> m_gain{1.f};
-    ::std::atomic<float> m_meter{0.f};
+    ::std::atomic<float> m_meter_l{0.f};
+    ::std::atomic<float> m_meter_r{0.f};
 };
 
 } // namespace disgrace_ns

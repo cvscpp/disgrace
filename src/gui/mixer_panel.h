@@ -6,6 +6,7 @@
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
 #include "vu_meter.h"
+#include "spectral_view.h"
 #include <vector>
 
 namespace disgrace_ns {
@@ -25,6 +26,7 @@ private:
     Fl_Group* m_track_group;
     Fl_Value_Slider* m_master_gain;
     VUMeter* m_master_meter;
+    SpectralView* m_spectral_view;
     std::vector<VUMeter*> m_track_meters;
     Fl_Button* m_detach_btn;
     DetachedWindow* m_detached_window = nullptr;

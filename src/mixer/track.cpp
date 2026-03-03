@@ -69,6 +69,9 @@ void disgrace_ns::Track::process(float* out_l,
                     float* out_r,
                     size_t nframes)
 {
+    std::fill(out_l, out_l + nframes, 0.f);
+    std::fill(out_r, out_r + nframes, 0.f);
+
     if (m_instrument)
         m_instrument->process(out_l, out_r, nframes);
 

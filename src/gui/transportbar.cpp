@@ -60,7 +60,8 @@ TransportBar::TransportBar(int X, int Y, int W, int H, Engine& engine)
 
     m_status = new Fl_Box(x, Y+5, 100, 25, "Stopped");
     x += 110;
-    m_spectral_view = new SpectralView(x, Y+5, 200, 25, m_engine);
+    m_meter_l = new VUMeter(x, Y+5, 100, 10, nullptr, true);
+    m_meter_r = new VUMeter(x, Y+18, 100, 10, nullptr, true);
 
     end();
 }
@@ -109,7 +110,8 @@ void TransportBar::update()
         case disgrace_ns::TransportState::Playing: m_status->label("Playing"); break;
         case disgrace_ns::TransportState::Recording: m_status->label("Recording"); break;
     }
-    if (m_spectral_view) m_spectral_view->update();
+    if (m_meter_l) m_meter_l->level(m_engine.master_meter_l());
+    if (m_meter_r) m_meter_r->level(m_engine.master_meter_r());
     redraw();
 }
 

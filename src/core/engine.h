@@ -135,7 +135,8 @@ public:
 
     void set_master_gain(float g);
     float master_gain() const;
-    float master_meter() const;
+    float master_meter_l() const;
+    float master_meter_r() const;
     bool render_to_wav(const ::std::string& path);
     void process_block(float* l, float* r, size_t nframes);
     void save_project(const ::std::string& path);

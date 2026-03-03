@@ -265,7 +265,8 @@ void Engine::set_loop(bool e) { transport().set_loop(e); }
 
 void Engine::set_master_gain(float g) { m_master.set_gain(g); }
 float Engine::master_gain() const { return m_master.gain(); }
-float Engine::master_meter() const { return m_master.meter(); }
+float Engine::master_meter_l() const { return m_master.meter_l(); }
+float Engine::master_meter_r() const { return m_master.meter_r(); }
 Transport& Engine::transport() { return *m_transport; }
 const Transport& Engine::transport() const { return *m_transport; }
 size_t Engine::total_song_samples() const { size_t total = 0; for (const auto& p : m_patterns) total += p.row_count(); return total * m_timing.samples_per_row(); }

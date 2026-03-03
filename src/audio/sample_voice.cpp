@@ -74,8 +74,8 @@ namespace disgrace_ns
         {
             if (m_position >= sample_size - 1)
             {
-                m_env.note_off();
-                break;
+                m_active = false;
+                return;
             }
 
             size_t idx = size_t(m_position);

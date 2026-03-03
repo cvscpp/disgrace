@@ -59,6 +59,24 @@ bool JackBackend::start()
     if (jack_activate(m_client))
         return false;
 
+    // Auto-connect output ports to physical playback ports
+    const char **ports = jack_get_ports(m_client, nullptr, nullptr, JackPortIsPhysical | JackPortIsInput);
+    if (ports) {
+        for (uint32_t i = 0; i < m_num_outs && ports[i]; ++i) {
+            jack_connect(m_client, jack_port_name(m_output_ports[i]), ports[i]);
+        }
+        jack_free(ports);
+    }
+
+    // Auto-connect physical capture ports to input ports
+    ports = jack_get_ports(m_client, nullptr, nullptr, JackPortIsPhysical | JackPortIsOutput);
+    if (ports) {
+        for (uint32_t i = 0; i < m_num_ins && ports[i]; ++i) {
+            jack_connect(m_client, ports[i], jack_port_name(m_input_ports[i]));
+        }
+        jack_free(ports);
+    }
+
     return true;
 }
 

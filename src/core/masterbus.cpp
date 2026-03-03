@@ -25,7 +25,8 @@ void MasterBus::process(float* l,
                         size_t nframes)
 {
     float gain = m_gain.load();
-    float peak = 0.f;
+    float peak_l = 0.f;
+    float peak_r = 0.f;
 
     for (size_t i = 0; i < nframes; ++i)
     {
@@ -38,23 +39,30 @@ void MasterBus::process(float* l,
         l[i] = sl;
         r[i] = sr;
 
-        float p = ::std::fabs(sl);
-        if (p > peak) peak = p;
+        float pl = ::std::fabs(sl);
+        if (pl > peak_l) peak_l = pl;
 
-        p = ::std::fabs(sr);
-        if (p > peak) peak = p;
+        float pr = ::std::fabs(sr);
+        if (pr > peak_r) peak_r = pr;
     }
 
-    float prev = m_meter.load();
-    float smoothed =
-    0.9f * prev + 0.1f * peak;
+    float prev_l = m_meter_l.load();
+    float smoothed_l = 0.9f * prev_l + 0.1f * peak_l;
+    m_meter_l.store(smoothed_l);
 
-    m_meter.store(smoothed);
+    float prev_r = m_meter_r.load();
+    float smoothed_r = 0.9f * prev_r + 0.1f * peak_r;
+    m_meter_r.store(smoothed_r);
 }
 
-float MasterBus::meter() const
+float MasterBus::meter_l() const
 {
-    return m_meter.load();
+    return m_meter_l.load();
+}
+
+float MasterBus::meter_r() const
+{
+    return m_meter_r.load();
 }
 
 } // namespace disgrace_ns

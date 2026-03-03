@@ -35,6 +35,7 @@ namespace disgrace_ns
         void note_on()
         {
             m_stage = Stage::Attack;
+            m_level = 0.f;
         }
 
         void note_off()

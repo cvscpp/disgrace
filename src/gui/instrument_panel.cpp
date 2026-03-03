@@ -84,8 +84,13 @@ InstrumentPanel::InstrumentPanel(int x, int y, int w, int h, Engine& engine)
     m_sampler_list_grp->box(FL_ENGRAVED_FRAME);
     m_sampler_list_grp->align(FL_ALIGN_TOP_LEFT);
     m_sampler_list_grp->begin();
-    m_add_sample_btn = new Fl_Button(x + left_w + margin, y + margin, middle_w - 2 * margin, 25, "+ Add");
+    m_add_sample_btn = new Fl_Button(x + left_w + margin, y + margin, (middle_w - 3 * margin) / 3, 25, "+");
     m_add_sample_btn->callback(cb_add_sample, this);
+    m_sample_play_btn = new Fl_Button(x + left_w + 2 * margin + (middle_w - 3 * margin) / 3, y + margin, (middle_w - 3 * margin) / 3, 25, "@>");
+    m_sample_play_btn->callback(cb_sample_play, this);
+    m_sample_stop_btn = new Fl_Button(x + left_w + 3 * margin + 2 * (middle_w - 3 * margin) / 3, y + margin, (middle_w - 3 * margin) / 3, 25, "@||");
+    m_sample_stop_btn->callback(cb_sample_stop, this);
+    
     m_sample_scroll = new Fl_Scroll(x + left_w + margin, y + margin + 35, middle_w - 2 * margin, h - margin*2 - 35);
     m_sample_scroll->type(Fl_Scroll::VERTICAL);
     m_sample_container = new Fl_Group(x + left_w + margin, y + margin + 35, middle_w - 40, 1000);
@@ -289,6 +294,8 @@ void InstrumentPanel::update_editor() {
     m_plugin_editor->hide();
     m_zyn_editor->hide();
     m_midi_editor->hide();
+    m_sample_play_btn->hide();
+    m_sample_stop_btn->hide();
 
     if (m_selected_instrument < 0 || m_selected_instrument >= (int)m_engine.instrument_count()) {
         m_right_panel->redraw();
@@ -298,6 +305,8 @@ void InstrumentPanel::update_editor() {
     auto& inst = m_engine.instrument(m_selected_instrument);
     if (inst.type() == InstrumentType::Sampler) {
         m_sampler_editor->show();
+        m_sample_play_btn->show();
+        m_sample_stop_btn->show();
         m_sample_container->clear();
         m_sample_container->begin();
         SampleInstrument* sampler = static_cast<SampleInstrument*>(&inst);
@@ -401,9 +410,38 @@ void InstrumentPanel::cb_inst_select(Fl_Widget*, void* data) {
 
 void InstrumentPanel::cb_sample_select(Fl_Widget*, void* data) {
     auto* pair = static_cast<std::pair<InstrumentPanel*, size_t>*>(data);
-    pair->first->m_selected_sample = (int)pair->second;
-    pair->first->update_editor();
+    InstrumentPanel* self = pair->first;
+    self->m_selected_sample = (int)pair->second;
+    
+    auto& inst = self->m_engine.instrument(self->m_selected_instrument);
+    if (inst.type() == InstrumentType::Sampler) {
+        static_cast<SampleInstrument*>(&inst)->set_selected_sample(pair->second);
+        // Clear voices when switching samples to ensure next play uses new sample
+        // Actually SampleInstrument::create_voice handles this but existing voices 
+        // in m_voices still point to the old sample if they are active.
+    }
+    
+    self->update_editor();
     delete pair;
+}
+
+void InstrumentPanel::cb_sample_play(Fl_Widget*, void* data) {
+    auto* self = static_cast<InstrumentPanel*>(data);
+    if (self->m_selected_instrument >= 0) {
+        auto& inst = self->m_engine.instrument(self->m_selected_instrument);
+        // Stop current play first
+        inst.note_off();
+        // Play at middle C (60)
+        inst.note_on(60, 100);
+    }
+}
+
+void InstrumentPanel::cb_sample_stop(Fl_Widget*, void* data) {
+    auto* self = static_cast<InstrumentPanel*>(data);
+    if (self->m_selected_instrument >= 0) {
+        auto& inst = self->m_engine.instrument(self->m_selected_instrument);
+        inst.note_off();
+    }
 }
 
 void InstrumentPanel::cb_load(Fl_Widget*, void*) {}

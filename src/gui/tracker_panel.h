@@ -16,10 +16,12 @@ public:
 
     void update_pattern_list_browser();
     void grab_focus();
+    void resize(int x, int y, int w, int h) override;
 
 private:
     Engine& m_engine;
     TrackerView* m_tracker;
+    Fl_Scroll*   m_main_scroll;
 
     Fl_Button* m_add_pattern_btn;
     Fl_Button* m_remove_pattern_btn;

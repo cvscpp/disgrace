@@ -2,6 +2,7 @@
 #include "../core/engine.h"
 #include <FL/fl_draw.H>
 #include <FL/Fl.H>
+#include <FL/Fl_Group.H>
 #include <algorithm>
 
 namespace disgrace_ns {
@@ -11,6 +12,7 @@ TrackerView::TrackerView(int x, int y, int w, int h, Pattern& pattern, Engine& e
 }
 
 void TrackerView::draw() {
+    recalculate_size();
     fl_push_clip(x(), y(), w(), h());
     fl_color(30, 30, 30);
     fl_rectf(x(), y(), w(), h());
@@ -175,6 +177,17 @@ int TrackerView::handle(int event) {
             }
             return 1;
         }
+        case FL_KEYUP: {
+             Action action = m_engine.m_key_bindings.get_action(Fl::event_key(), Fl::event_state() & (FL_CTRL | FL_SHIFT | FL_ALT | FL_META));
+             auto is_note_action = [](Action a) -> bool {
+                return (int)a >= (int)Action::NoteC && (int)a <= (int)Action::NoteB;
+             };
+             if (is_note_action(action)) {
+                 m_engine.stop_preview(m_cursor_track);
+                 return 1;
+             }
+             return 0;
+        }
         case FL_DRAG: {
             int my = Fl::event_y(), mx = Fl::event_x();
             m_cursor_row = std::min((int)m_pattern.row_count()-1, std::max(0, (my - y() - 20) / 18));
@@ -277,6 +290,33 @@ void TrackerView::insert_note(uint8_t note) {
         m_pattern.event(m_cursor_track, m_cursor_row, m_cursor_col).note = note;
         m_cursor_row = std::min((int)m_pattern.row_count()-1, m_cursor_row + 1);
         redraw();
+    }
+}
+
+void TrackerView::recalculate_size() {
+    int char_w = 8;
+    int row_h = 18;
+    size_t num_tracks = m_engine.track_count();
+    size_t num_rows = m_pattern.row_count();
+    
+    int total_w = 40; // row numbers
+    for (size_t t = 0; t < num_tracks; ++t) {
+        size_t num_cols = m_pattern.column_count(t);
+        total_w += (int)(num_cols * 10 * char_w + 2 * 4 * char_w + 40 + 10);
+    }
+    
+    int total_h = 20 + (int)num_rows * row_h + 20;
+    
+    if (parent()) {
+        if (parent()->w() > total_w) total_w = parent()->w();
+        if (parent()->h() > total_h) total_h = parent()->h();
+    }
+    
+    if (total_w != w() || total_h != h()) {
+        // Use Fl_Widget::resize directly to avoid recursion if called from draw
+        // Actually, in FLTK, resize() doesn't usually call draw() immediately, but marks for redraw.
+        // But let's be careful.
+        this->size(total_w, total_h);
     }
 }
 

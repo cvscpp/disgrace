@@ -84,10 +84,9 @@ namespace disgrace_ns
     ::std::unique_ptr<disgrace_ns::Voice>
     disgrace_ns::SampleInstrument::create_voice()
     {
-        if (m_samples.empty() || !m_samples[0].data) return nullptr;
-        // For now, always use the first sample
+        if (m_samples.empty() || m_selected_sample_index >= m_samples.size() || !m_samples[m_selected_sample_index].data) return nullptr;
         return ::std::make_unique<disgrace_ns::SampleVoice>(
-            m_samples[0].data.get(),
+            m_samples[m_selected_sample_index].data.get(),
             m_engine_rate);
     }
 

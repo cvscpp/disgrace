@@ -91,6 +91,7 @@ public:
     void set_active_pattern(size_t index);
     size_t active_pattern() const;
     void preview_note(size_t track, uint8_t note);
+    void stop_preview(size_t track);
 
     disgrace_ns::Pattern& pattern();
 
@@ -130,6 +131,7 @@ public:
     ::std::atomic<bool> m_metronome_enabled{true};
 
     disgrace_ns::MasterBus m_master;
+    disgrace_ns::RingBuffer<float, 4096> m_spectral_rb;
 
     void set_master_gain(float g);
     float master_gain() const;

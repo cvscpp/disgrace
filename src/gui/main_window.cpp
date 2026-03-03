@@ -79,6 +79,7 @@ void disgrace_ns::MainWindow::timer_cb(void* data)
     auto* self = static_cast<disgrace_ns::MainWindow*>(data);
 
     if (self->m_transport) self->m_transport->update();
+    if (self->m_mixer_panel) self->m_mixer_panel->update_meters();
     
     // Periodically update other UIs if needed
     // self->update_all_uis(); // Too frequent? 30ms might be okay.

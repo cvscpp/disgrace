@@ -59,6 +59,8 @@ TransportBar::TransportBar(int X, int Y, int W, int H, Engine& engine)
     x += 90;
 
     m_status = new Fl_Box(x, Y+5, 100, 25, "Stopped");
+    x += 110;
+    m_spectral_view = new SpectralView(x, Y+5, 200, 25, m_engine);
 
     end();
 }
@@ -107,6 +109,7 @@ void TransportBar::update()
         case disgrace_ns::TransportState::Playing: m_status->label("Playing"); break;
         case disgrace_ns::TransportState::Recording: m_status->label("Recording"); break;
     }
+    if (m_spectral_view) m_spectral_view->update();
     redraw();
 }
 

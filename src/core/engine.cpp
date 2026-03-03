@@ -75,6 +75,10 @@ void Engine::preview_note(size_t t, uint8_t note) {
     if (t < m_tracks.size()) m_tracks[t].note_on(note, 100);
 }
 
+void Engine::stop_preview(size_t t) {
+    if (t < m_tracks.size()) m_tracks[t].note_off();
+}
+
 void Engine::record_note(uint8_t note)
 {
     size_t row = current_row();
@@ -146,10 +150,14 @@ void Engine::process_audio(float* out_l, float* out_r, size_t nframes)
     }
 
     if (transport().state() != TransportState::Playing && transport().state() != TransportState::Recording) {
-        std::fill(out_l, out_l + nframes, 0.f); std::fill(out_r, out_r + nframes, 0.f);
+        // Just render a static block (no sequencer ticks)
+        render_block(out_l, out_r, nframes);
+        m_master.process(out_l, out_r, nframes);
+        for (size_t i = 0; i < nframes; ++i) m_spectral_rb.push((out_l[i] + out_r[i]) * 0.5f);
         return;
     }
     process_block(out_l, out_r, nframes);
+    for (size_t i = 0; i < nframes; ++i) m_spectral_rb.push((out_l[i] + out_r[i]) * 0.5f);
 }
 
 void Engine::process_block(float* l, float* r, size_t nframes) {
@@ -163,17 +171,18 @@ void Engine::process_block(float* l, float* r, size_t nframes) {
         render_block(l + processed, r + processed, block);
         processed += block; m_samples_until_next_tick -= block;
     }
-    m_master.process(m_mix_l, m_mix_r, nframes);
-    for (size_t i = 0; i < nframes; ++i) { l[i] = m_mix_l[i]; r[i] = m_mix_r[i]; }
+    m_master.process(l, r, nframes);
 }
 
 void Engine::render_block(float* out_l, float* out_r, size_t frames) {
-    for (size_t i = 0; i < frames; ++i) { m_mix_l[i] = 0.f; m_mix_r[i] = 0.f; }
+    for (size_t i = 0; i < frames; ++i) { out_l[i] = 0.f; out_r[i] = 0.f; }
     for (size_t t = 0; t < m_tracks.size(); ++t) {
         m_tracks[t].process(m_track_l[t], m_track_r[t], frames);
-        for (size_t i = 0; i < frames; ++i) { m_mix_l[i] += m_track_l[t][i]; m_mix_r[i] += m_track_r[t][i]; }
+        for (size_t i = 0; i < frames; ++i) {
+            out_l[i] += m_track_l[t][i];
+            out_r[i] += m_track_r[t][i];
+        }
     }
-    for (size_t i = 0; i < frames; ++i) { out_l[i] = soft_clip(m_mix_l[i] * master_gain()); out_r[i] = soft_clip(m_mix_r[i] * master_gain()); }
 }
 
 void Engine::handle_midi(uint8_t* data, size_t size) {

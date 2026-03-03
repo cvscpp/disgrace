@@ -38,21 +38,26 @@ TrackerPanel::TrackerPanel(int x, int y, int w, int h, Engine& engine)
     m_pattern_scroll->type(Fl_Scroll::VERTICAL);
     m_pattern_list_container = new Fl_Group(x, content_y, pattern_list_width, 1000);
     m_pattern_list_container->end();
-    m_pattern_scroll->add(m_pattern_list_container);
-    m_pattern_scroll->end();
-
-    Fl_Scroll* scroll = new Fl_Scroll(x + pattern_list_width, content_y, w - pattern_list_width, content_h);
-    m_tracker = new TrackerView(x + pattern_list_width, content_y, scroll->w(), scroll->h(), m_engine.pattern(), m_engine);
-    scroll->add(m_tracker);
-    scroll->end();
+        m_pattern_scroll->add(m_pattern_list_container);
+        m_pattern_scroll->end();
     
-    resizable(scroll);
-
-    end();
-
-    update_pattern_list_browser();
-}
-
+        m_main_scroll = new Fl_Scroll(x + pattern_list_width, content_y, w - pattern_list_width, content_h);
+        m_tracker = new TrackerView(x + pattern_list_width, content_y, m_main_scroll->w(), m_main_scroll->h(), m_engine.pattern(), m_engine);
+        m_main_scroll->add(m_tracker);
+        m_main_scroll->end();
+        
+        resizable(m_main_scroll);
+        end();
+    
+        update_pattern_list_browser();
+    }
+    
+    void TrackerPanel::resize(int x, int y, int w, int h) {
+        Fl_Group::resize(x, y, w, h);
+        if (m_tracker && m_main_scroll) {
+            m_tracker->recalculate_size();
+        }
+    }
 void TrackerPanel::cb_detach(Fl_Widget*, void* data) {
     TrackerPanel* self = static_cast<TrackerPanel*>(data);
     Fl_Group* parent_grp = self->parent();

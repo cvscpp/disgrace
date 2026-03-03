@@ -5,6 +5,8 @@
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
+#include "vu_meter.h"
+#include <vector>
 
 namespace disgrace_ns {
 
@@ -16,11 +18,14 @@ public:
     MixerPanel(int x, int y, int w, int h, Engine& engine);
 
     void update_mixer_ui();
+    void update_meters();
 
 private:
     Engine& m_engine;
     Fl_Group* m_track_group;
     Fl_Value_Slider* m_master_gain;
+    VUMeter* m_master_meter;
+    std::vector<VUMeter*> m_track_meters;
     Fl_Button* m_detach_btn;
     DetachedWindow* m_detached_window = nullptr;
 

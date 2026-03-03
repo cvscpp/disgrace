@@ -62,6 +62,8 @@ private:
     Fl_Scroll* m_sample_scroll;
     Fl_Group* m_sample_container;
     Fl_Button* m_add_sample_btn;
+    Fl_Button* m_sample_play_btn;
+    Fl_Button* m_sample_stop_btn;
     Fl_Button* m_rec_btn;
     Fl_Check_Button* m_mono_btn;
     Fl_Choice* m_rec_input_ch;
@@ -135,6 +137,8 @@ private:
     static void cb_save_sample(Fl_Widget*, void*);
     static void cb_sample_name(Fl_Widget*, void*);
     static void cb_sample_select(Fl_Widget*, void*);
+    static void cb_sample_play(Fl_Widget*, void*);
+    static void cb_sample_stop(Fl_Widget*, void*);
     static void cb_record_sample(Fl_Widget*, void*);
     static void cb_mono_toggle(Fl_Widget*, void*);
     

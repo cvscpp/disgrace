@@ -37,11 +37,15 @@ namespace disgrace_ns
         const SampleEntry& get_sample(size_t index) const { return m_samples[index]; }
         SampleEntry& get_sample(size_t index) { return m_samples[index]; }
 
+        void set_selected_sample(size_t index) { m_selected_sample_index = index; }
+        size_t selected_sample() const { return m_selected_sample_index; }
+
     protected:
         ::std::unique_ptr<disgrace_ns::Voice> create_voice() override;
 
     private:
         std::vector<SampleEntry> m_samples;
+        size_t m_selected_sample_index = 0;
         double m_engine_rate;
     };
 

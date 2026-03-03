@@ -129,6 +129,10 @@ int JackBackend::process(jack_nframes_t nframes)
         if (midi_buf) jack_midi_clear_buffer(midi_buf);
     }
 
+    if (out_bufs.size() >= 2 && out_bufs[0] && out_bufs[1]) {
+        m_engine->process_audio(out_bufs[0], out_bufs[1], nframes);
+    }
+
     return 0;
 }
 

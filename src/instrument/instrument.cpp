@@ -10,15 +10,19 @@ namespace disgrace_ns
         // find inactive voice
         for (auto& v : m_voices)
         {
-            if (!v)
+            if (!v) {
                 v = create_voice();
+                if (v) return v.get();
+                continue;
+            }
 
             if (!v->active())
                 return v.get();
         }
 
         // voice stealing: steal oldest (voice 0)
-        return m_voices[0].get();
+        if (m_voices[0]) return m_voices[0].get();
+        return nullptr;
     }
 
 } // namespace disgrace_ns

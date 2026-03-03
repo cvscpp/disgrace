@@ -26,12 +26,14 @@ disgrace_SOURCES = \
     gui/instrument_panel.cpp \
     gui/mixer_panel.cpp \
     gui/settings_panel.cpp \
+    gui/vu_meter.cpp \
     gui/detached_window.cpp \
     gui/model/mixer_model.cpp \
     gui/tracker_view.cpp \
     gui/transport_panel.cpp \
     gui/transportbar.cpp \
     gui/waveform_view.cpp \
+    gui/spectral_view.cpp \
     instrument/instrument.cpp \
     instrument/instrument_rack.cpp \
     instrument/sample_instrument.cpp \

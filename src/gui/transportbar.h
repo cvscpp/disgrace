@@ -4,6 +4,7 @@
 #include <FL/Fl_Light_Button.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Value_Input.H>
+#include "spectral_view.h"
 #include "../core/transport.h" // Add this for TransportState
 
 namespace disgrace_ns
@@ -34,6 +35,7 @@ private:
     Fl_Light_Button* m_metronome;
     Fl_Value_Input* m_tempo;
     Fl_Box* m_status;
+    SpectralView* m_spectral_view;
 };
 
 } // namespace disgrace_ns

@@ -101,6 +101,10 @@ void TrackerPanel::update_pattern_list_browser() {
     m_pattern_scroll->redraw();
 }
 
+void TrackerPanel::grab_focus() {
+    if (m_tracker) m_tracker->take_focus();
+}
+
 void TrackerPanel::cb_add_pattern(Fl_Widget*, void* data) {
     TrackerPanel* self = static_cast<TrackerPanel*>(data);
     self->m_engine.add_pattern_to_order();

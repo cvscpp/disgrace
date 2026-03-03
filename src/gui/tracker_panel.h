@@ -15,6 +15,7 @@ public:
     TrackerPanel(int x, int y, int w, int h, Engine& engine);
 
     void update_pattern_list_browser();
+    void grab_focus();
 
 private:
     Engine& m_engine;

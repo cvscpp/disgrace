@@ -38,6 +38,13 @@ namespace disgrace_ns
     m_transport = new disgrace_ns::TransportBar(0, 0, w, 40, m_engine);
 
     m_tabs = new Fl_Tabs(0, 40, w, h - 75);
+    m_tabs->callback([](Fl_Widget* w, void* d) {
+        MainWindow* self = (MainWindow*)d;
+        Fl_Tabs* tabs = (Fl_Tabs*)w;
+        if (tabs->value() == self->m_tracker_tab && self->m_tracker_panel) {
+            self->m_tracker_panel->grab_focus();
+        }
+    }, this);
     
     init_project_tab(w, h);
     init_tracker_tab(w, h);

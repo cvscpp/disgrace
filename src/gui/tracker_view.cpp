@@ -3,6 +3,7 @@
 #include <FL/fl_draw.H>
 #include <FL/Fl.H>
 #include <FL/Fl_Group.H>
+#include <FL/Fl_Scroll.H>
 #include <algorithm>
 
 namespace disgrace_ns {
@@ -171,6 +172,57 @@ void TrackerView::draw() {
     fl_pop_clip();
 }
 
+void TrackerView::delete_current_field() {
+    if (m_cursor_track < (int)m_engine.track_count()) {
+        auto& ev = m_pattern.event(m_cursor_track, m_cursor_row, m_cursor_col);
+        ev.note = 255;
+        ev.sample_idx = 0;
+        ev.volume = 255;
+        if (m_cursor_col == 0) {
+            ev.effect1 = 0; ev.param1 = 0;
+            ev.effect2 = 0; ev.param2 = 0;
+        }
+        redraw();
+    }
+}
+
+void TrackerView::ensure_cursor_visible() {
+    Fl_Scroll* scroll = dynamic_cast<Fl_Scroll*>(parent());
+    if (!scroll) return;
+
+    int row_h = 18;
+    int header_h = 20;
+    
+    int target_row = m_cursor_row;
+    if (m_engine.transport_state() != TransportState::Stopped) {
+        target_row = (int)m_engine.current_row();
+    }
+
+    int row_y = header_h + target_row * row_h;
+    int scroll_y = scroll->yposition();
+    int scroll_h = scroll->h();
+
+    if (row_y < scroll_y) {
+        scroll->scroll_to(scroll->xposition(), std::max(0, row_y - row_h * 2));
+    } else if (row_y + row_h > scroll_y + scroll_h) {
+        scroll->scroll_to(scroll->xposition(), row_y - scroll_h + row_h * 3);
+    }
+
+    // Horizontal scroll
+    if (m_cursor_track < (int)m_track_ui.size()) {
+        int tx = m_track_ui[m_cursor_track].x - x(); // Relative to widget start
+        int tw = m_track_ui[m_cursor_track].w;
+        int scroll_x = scroll->xposition();
+        int scroll_w = scroll->w();
+
+        if (tx < scroll_x) {
+            scroll->scroll_to(std::max(0, tx - 20), scroll->yposition());
+        } else if (tx + tw > scroll_x + scroll_w) {
+            scroll->scroll_to(tx - scroll_w + tw + 20, scroll->yposition());
+        }
+    }
+}
+
 int TrackerView::handle(int event) {
     switch (event) {
         case FL_FOCUS:
@@ -196,6 +248,7 @@ int TrackerView::handle(int event) {
                     if (!m_sel_active) { m_sel_active = true; m_sel_start_row = m_cursor_row; m_sel_start_track = m_cursor_track; }
                     m_sel_end_row = m_cursor_row; m_sel_end_track = m_cursor_track;
                 } else { m_sel_active = false; }
+                ensure_cursor_visible();
                 redraw();
             }
             return 1;
@@ -219,6 +272,7 @@ int TrackerView::handle(int event) {
             }
             if (!m_sel_active) { m_sel_active = true; m_sel_start_row = m_cursor_row; m_sel_start_track = m_cursor_track; }
             m_sel_end_row = m_cursor_row; m_sel_end_track = m_cursor_track;
+            ensure_cursor_visible();
             redraw();
             return 1;
         }
@@ -249,6 +303,7 @@ int TrackerView::handle(int event) {
                 } else {
                     m_engine.preview_note(m_cursor_track, final_note);
                 }
+                ensure_cursor_visible();
                 return 1;
             }
 
@@ -303,9 +358,18 @@ int TrackerView::handle(int event) {
                 case FL_Home: m_cursor_row = 0; break;
                 case FL_End: m_cursor_row = (int)m_pattern.row_count() - 1; break;
                 case FL_Escape: m_sel_active = false; break;
+                case FL_BackSpace:
+                    delete_current_field();
+                    m_cursor_row--;
+                    if (m_cursor_row < 0) m_cursor_row = (int)m_pattern.row_count() - 1;
+                    break;
+                case FL_Delete:
+                    delete_current_field();
+                    break;
             }
             if (shift) { m_sel_end_row = m_cursor_row; m_sel_end_track = m_cursor_track; }
             else if (key != FL_Shift_L && key != FL_Shift_R) { m_sel_active = false; }
+            ensure_cursor_visible();
             redraw();
             return 1;
         }

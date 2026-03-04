@@ -42,6 +42,7 @@ TrackerPanel::TrackerPanel(int x, int y, int w, int h, Engine& engine)
         m_pattern_scroll->end();
     
         m_main_scroll = new Fl_Scroll(x + pattern_list_width, content_y, w - pattern_list_width, content_h);
+        m_main_scroll->type(0); // Hide both scrollbars
         m_tracker = new TrackerView(x + pattern_list_width, content_y, m_main_scroll->w(), m_main_scroll->h(), m_engine.pattern(), m_engine);
         m_main_scroll->add(m_tracker);
         m_main_scroll->end();
@@ -72,7 +73,12 @@ void TrackerPanel::cb_detach(Fl_Widget*, void* data) {
 
 
 void TrackerPanel::update() {
-    if (m_tracker) m_tracker->redraw();
+    if (m_tracker) {
+        if (m_engine.transport_state() != TransportState::Stopped) {
+            m_tracker->ensure_cursor_visible();
+        }
+        m_tracker->redraw();
+    }
 }
 
 void TrackerPanel::update_pattern_list_browser() {

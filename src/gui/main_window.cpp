@@ -80,6 +80,8 @@ void disgrace_ns::MainWindow::timer_cb(void* data)
 
     if (self->m_transport) self->m_transport->update();
     if (self->m_mixer_panel) self->m_mixer_panel->update_meters();
+    if (self->m_tracker_panel && self->m_engine.transport_state() != TransportState::Stopped) 
+        self->m_tracker_panel->update();
     
     // Periodically update other UIs if needed
     // self->update_all_uis(); // Too frequent? 30ms might be okay.
@@ -99,7 +101,8 @@ void disgrace_ns::MainWindow::timer_cb(void* data)
           return 1;
 
         case Action::Record:
-          m_engine.record();
+          m_engine.enable_record(!m_engine.m_record_enabled);
+          if (m_transport) m_transport->update();
           return 1;
 
         case Action::ToggleMetronome:

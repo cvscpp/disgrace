@@ -71,6 +71,10 @@ void TrackerPanel::cb_detach(Fl_Widget*, void* data) {
 }
 
 
+void TrackerPanel::update() {
+    if (m_tracker) m_tracker->redraw();
+}
+
 void TrackerPanel::update_pattern_list_browser() {
     m_pattern_list_container->clear();
     m_pattern_list_container->begin();

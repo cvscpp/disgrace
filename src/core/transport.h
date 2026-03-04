@@ -10,8 +10,7 @@ namespace disgrace_ns
     enum class TransportState
     {
         Stopped,
-        Playing,
-        Recording
+        Playing
     };
 
 class Transport
@@ -25,7 +24,6 @@ public:
     double tempo() const;
     void play();
     void stop();
-    void record(); 
     void toggle_play();
     void set_loop(bool enable);
 

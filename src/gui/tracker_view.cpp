@@ -55,6 +55,29 @@ void TrackerView::draw() {
         fl_draw(buf, x() + 2, ry + 14);
     }
 
+    int playing_row = (int)m_engine.current_row();
+    bool is_playing = m_engine.transport_state() != TransportState::Stopped;
+
+    // Draw row highlights (Playing and Cursor)
+    for (size_t r = 0; r < num_rows; ++r) {
+        int ry = y() + 20 + (int)r * row_h;
+        if (ry < y() + 20 - row_h) continue;
+        if (ry > y() + h()) break;
+
+        // Playing row highlight (Full width)
+        if (is_playing && (int)r == playing_row) {
+            fl_color(40, 80, 40); 
+            fl_rectf(x(), ry, w(), row_h);
+        }
+        
+        // Cursor row highlight (Full width, but lighter if not focused)
+        if ((int)r == m_cursor_row) {
+            if (Fl::focus() == this) fl_color(45, 45, 60);
+            else fl_color(35, 35, 45);
+            fl_rectf(x() + 40, ry, w() - 40, row_h);
+        }
+    }
+
     int cur_x = x() + 40;
     for (size_t t = 0; t < num_tracks; ++t) {
         auto& track_obj = m_engine.track(t);
@@ -235,8 +258,14 @@ int TrackerView::handle(int event) {
             size_t num_cols = m_pattern.column_count(m_cursor_track);
 
             switch (key) {
-                case FL_Up: m_cursor_row = std::max(0, m_cursor_row - 1); break;
-                case FL_Down: m_cursor_row = std::min((int)m_pattern.row_count() - 1, m_cursor_row + 1); break;
+                case FL_Up: 
+                    m_cursor_row--;
+                    if (m_cursor_row < 0) m_cursor_row = (int)m_pattern.row_count() - 1;
+                    break;
+                case FL_Down: 
+                    m_cursor_row++;
+                    if (m_cursor_row >= (int)m_pattern.row_count()) m_cursor_row = 0;
+                    break;
                 case FL_Left: 
                     m_cursor_field--;
                     if (m_cursor_field < 0) {

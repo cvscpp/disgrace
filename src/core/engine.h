@@ -55,7 +55,6 @@ public:
     void start();
     void stop();
     void play();
-    void record();
 
     disgrace_ns::Transport& transport();
     const disgrace_ns::Transport& transport() const;

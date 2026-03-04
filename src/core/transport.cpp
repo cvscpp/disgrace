@@ -14,8 +14,7 @@ Transport::Transport(Engine& engine)
 
 bool Transport::is_playing() const
 {
-    return m_transport.load(::std::memory_order_relaxed) == TransportState::Playing ||
-           m_transport.load(::std::memory_order_relaxed) == TransportState::Recording;
+    return m_transport.load(::std::memory_order_relaxed) == TransportState::Playing;
 }
 
 void Transport::set_tempo(double bpm)
@@ -36,11 +35,6 @@ void Transport::play()
 void Transport::stop()
 {
     m_transport.store(TransportState::Stopped, ::std::memory_order_relaxed);
-}
-
-void Transport::record()
-{
-    m_transport.store(TransportState::Recording, ::std::memory_order_relaxed);
 }
 
 void Transport::toggle_play()

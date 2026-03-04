@@ -89,7 +89,6 @@ void TransportBar::cb_record(Fl_Widget*, void* data)
     auto* self = static_cast<disgrace_ns::TransportBar*>(data);
     bool rec = self->m_record->value();
     self->m_engine.enable_record(rec);
-    if (rec) self->m_engine.record();
 }
 
 void TransportBar::cb_metronome(Fl_Widget*, void* data)
@@ -103,12 +102,14 @@ void TransportBar::update()
     double engine_bpm = m_engine.tempo();
     if (m_tempo->value() != engine_bpm) m_tempo->value(engine_bpm);
 
+    if (m_record->value() != (int)m_engine.m_record_enabled) 
+        m_record->value(m_engine.m_record_enabled);
+
     auto state = m_engine.transport_state();
     switch (state)
     {
         case disgrace_ns::TransportState::Stopped: m_status->label("Stopped"); break;
         case disgrace_ns::TransportState::Playing: m_status->label("Playing"); break;
-        case disgrace_ns::TransportState::Recording: m_status->label("Recording"); break;
     }
     if (m_meter_l) m_meter_l->level(m_engine.master_meter_l());
     if (m_meter_r) m_meter_r->level(m_engine.master_meter_r());

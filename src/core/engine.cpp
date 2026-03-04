@@ -69,7 +69,6 @@ bool Engine::audio_active() const { return m_initialized; }
 void Engine::start() { transport().play(); }
 void Engine::stop() { transport().stop(); }
 void Engine::play() { transport().play(); }
-void Engine::record() { transport().record(); }
 
 void Engine::preview_note(size_t t, uint8_t note) {
     if (t < m_tracks.size()) m_tracks[t].note_on(note, 100);
@@ -136,7 +135,7 @@ void Engine::process_audio(float* out_l, float* out_r, size_t nframes)
         uint8_t status = msg.status & 0xF0;
         if (status == 0x90 || status == 0x80) {
             m_tracks[m_record_track].note_on(msg.data1, msg.data2);
-            if (m_record_enabled && transport().state() == TransportState::Recording) record_note(msg.data1);
+            if (m_record_enabled && transport().is_playing()) record_note(msg.data1);
         }
     }
 
@@ -149,7 +148,7 @@ void Engine::process_audio(float* out_l, float* out_r, size_t nframes)
         }
     }
 
-    if (transport().state() != TransportState::Playing && transport().state() != TransportState::Recording) {
+    if (!transport().is_playing()) {
         // Just render a static block (no sequencer ticks)
         render_block(out_l, out_r, nframes);
         m_master.process(out_l, out_r, nframes);

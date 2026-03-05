@@ -51,24 +51,29 @@ void TrackerView::draw() {
         return;
     }
 
+    int playing_row = (int)m_engine.current_row();
+    bool is_playing = m_engine.transport_state() != TransportState::Stopped;
+
+    int center_row = is_playing ? playing_row : m_cursor_row;
+    int center_y = y() + 20 + (h() - 20) / 2;
+    // Align center_y to row grid to avoid half-row offsets
+    center_y = ((center_y - (y() + 20)) / row_h) * row_h + (y() + 20);
+
     // Draw row numbers
     fl_color(100, 100, 100);
     fl_font(FL_COURIER, 12);
     for (size_t r = 0; r < num_rows; ++r) {
-        int ry = y() + 20 + (int)r * row_h;
-        if (ry < y() + 20 - row_h) continue;
+        int ry = center_y + ((int)r - center_row) * row_h;
+        if (ry < y() + 20) continue;
         if (ry > y() + h()) break;
         char buf[8]; snprintf(buf, 8, "%03zu", r);
         fl_draw(buf, x() + 2, ry + 14);
     }
 
-    int playing_row = (int)m_engine.current_row();
-    bool is_playing = m_engine.transport_state() != TransportState::Stopped;
-
     // Draw row highlights (Playing and Cursor)
     for (size_t r = 0; r < num_rows; ++r) {
-        int ry = y() + 20 + (int)r * row_h;
-        if (ry < y() + 20 - row_h) continue;
+        int ry = center_y + ((int)r - center_row) * row_h;
+        if (ry < y() + 20) continue;
         if (ry > y() + h()) break;
 
         // LPB highlight
@@ -108,8 +113,8 @@ void TrackerView::draw() {
         fl_color(255, 255, 255); fl_draw("-", ui.btn_minus_x + 5, y() + 14); fl_draw("+", ui.btn_plus_x + 5, y() + 14);
         
         for (size_t r = 0; r < num_rows; ++r) {
-            int ry = y() + 20 + (int)r * row_h;
-            if (ry < y() + 20 - row_h) continue;
+            int ry = center_y + ((int)r - center_row) * row_h;
+            if (ry < y() + 20) continue;
             if (ry > y() + h()) break;
 
             // Selection highlight
@@ -203,23 +208,8 @@ void TrackerView::ensure_cursor_visible() {
     Fl_Scroll* scroll = dynamic_cast<Fl_Scroll*>(parent());
     if (!scroll) return;
 
-    int row_h = 18;
-    int header_h = 20;
-    
-    int target_row = m_cursor_row;
-    if (m_engine.transport_state() != TransportState::Stopped) {
-        target_row = (int)m_engine.current_row();
-    }
-
-    int row_y = header_h + target_row * row_h;
-    int scroll_y = scroll->yposition();
-    int scroll_h = scroll->h();
-
-    if (row_y < scroll_y) {
-        scroll->scroll_to(scroll->xposition(), std::max(0, row_y - row_h * 2));
-    } else if (row_y + row_h > scroll_y + scroll_h) {
-        scroll->scroll_to(scroll->xposition(), row_y - scroll_h + row_h * 3);
-    }
+    // Vertical scroll is now handled by centered drawing,
+    // we don't need to scroll the parent Fl_Scroll vertically.
 
     // Horizontal scroll
     if (m_cursor_track < (int)m_track_ui.size()) {
@@ -252,7 +242,14 @@ int TrackerView::handle(int event) {
                     if (mx >= ui.btn_minus_x && mx < ui.btn_minus_x + 18) { size_t current = m_pattern->column_count(t); if (current > 1) { m_pattern->set_column_count(t, current - 1); redraw(); } return 1; }
                 }
             } else { // Grid
-                m_cursor_row = std::min((int)m_pattern->row_count()-1, std::max(0, (my - y() - 20) / 18));
+                int row_h = 18;
+                int center_row = (m_engine.transport_state() != TransportState::Stopped) ? (int)m_engine.current_row() : m_cursor_row;
+                int center_y = y() + 20 + (h() - 20) / 2;
+                center_y = ((center_y - (y() + 20)) / row_h) * row_h + (y() + 20);
+                
+                m_cursor_row = center_row + (my - center_y) / row_h;
+                m_cursor_row = std::max(0, std::min((int)m_pattern->row_count() - 1, m_cursor_row));
+
                 int tx = x() + 40;
                 for (size_t t = 0; t < m_track_ui.size(); ++t) {
                     if (mx >= m_track_ui[t].x && mx < m_track_ui[t].x + m_track_ui[t].w) { m_cursor_track = (int)t; break; }
@@ -278,8 +275,15 @@ int TrackerView::handle(int event) {
              return 0;
         }
         case FL_DRAG: {
-            int my = Fl::event_y(), mx = Fl::event_x();
-            m_cursor_row = std::min((int)m_pattern->row_count()-1, std::max(0, (my - y() - 20) / 18));
+            int mx = Fl::event_x(), my = Fl::event_y();
+            int row_h = 18;
+            int center_row = (m_engine.transport_state() != TransportState::Stopped) ? (int)m_engine.current_row() : m_cursor_row;
+            int center_y = y() + 20 + (h() - 20) / 2;
+            center_y = ((center_y - (y() + 20)) / row_h) * row_h + (y() + 20);
+
+            m_cursor_row = center_row + (my - center_y) / row_h;
+            m_cursor_row = std::max(0, std::min((int)m_pattern->row_count() - 1, m_cursor_row));
+
             for (size_t t = 0; t < m_track_ui.size(); ++t) {
                 if (mx >= m_track_ui[t].x && mx < m_track_ui[t].x + m_track_ui[t].w) { m_cursor_track = (int)t; break; }
             }
@@ -411,11 +415,12 @@ void TrackerView::recalculate_size() {
         total_w += (int)(num_cols * 10 * char_w + 2 * 4 * char_w + 40 + 10);
     }
     
-    int total_h = 20 + (int)num_rows * row_h + 20;
+    int total_h = parent() ? parent()->h() : 20 + (int)num_rows * row_h + 20;
     
     if (parent()) {
         if (parent()->w() > total_w) total_w = parent()->w();
-        if (parent()->h() > total_h) total_h = parent()->h();
+        // Vertically we want to match parent height if we are in a scroll, 
+        // to avoid Fl_Scroll showing a vertical scrollbar.
     }
     
     if (total_w != w() || total_h != h()) {

@@ -54,6 +54,7 @@ public:
 
     void start();
     void stop();
+    void panic();
     void play();
     void play_song();
     void play_pattern();

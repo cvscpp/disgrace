@@ -111,6 +111,7 @@ void DSSIInstrument::set_parameter(size_t index, float value) {
 }
 
 void DSSIInstrument::note_off() {}
+void DSSIInstrument::panic() {}
 void DSSIInstrument::set_volume(float vol) {}
 void DSSIInstrument::set_pitch(float freq) {}
 

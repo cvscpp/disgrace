@@ -27,6 +27,11 @@ namespace disgrace_ns
         fluid_synth_all_notes_off(m_fluid_synth, 0);
     }
 
+    void SoundFontInstrument::panic()
+    {
+        fluid_synth_system_reset(m_fluid_synth);
+    }
+
     void SoundFontInstrument::set_volume(float vol)
     {
         m_volume = vol;

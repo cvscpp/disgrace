@@ -37,6 +37,12 @@ namespace disgrace_ns
          m_env.note_off();
     }
 
+    void disgrace_ns::SampleVoice::panic()
+    {
+        m_env.reset();
+        m_active = false;
+    }
+
     void disgrace_ns::SampleVoice::set_pitch(float freq)
     {
         double base_freq = 440.0;

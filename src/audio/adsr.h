@@ -44,6 +44,12 @@ namespace disgrace_ns
                 m_stage = Stage::Release;
         }
 
+        void reset()
+        {
+            m_stage = Stage::Idle;
+            m_level = 0.f;
+        }
+
         float process()
         {
             switch (m_stage)

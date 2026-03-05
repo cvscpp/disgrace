@@ -60,6 +60,7 @@ public:
 
     void note_on(uint8_t note, uint8_t velocity, size_t offset_samples = 0);
     void note_off();
+    void panic();
 
     size_t total_latency() const; // Added const
 

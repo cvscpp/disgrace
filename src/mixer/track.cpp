@@ -146,6 +146,19 @@ void disgrace_ns::Track::note_off()
         m_instrument->note_off();
 }
 
+void disgrace_ns::Track::panic()
+{
+    if (m_instrument)
+        m_instrument->panic();
+    
+    // Reset FX states
+    m_fx_state.vol_slide_up = 0;
+    m_fx_state.vol_slide_down = 0;
+    m_fx_state.porta_active = false;
+    m_fx_state.retrig_ticks = 0;
+    m_fx_state.note_cut_tick = -1;
+}
+
 size_t disgrace_ns::Track::total_latency() const
 {
     size_t sum = 0;

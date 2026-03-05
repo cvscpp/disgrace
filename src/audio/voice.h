@@ -16,6 +16,7 @@ namespace disgrace_ns
                            size_t offset_samples = 0) = 0;
 
                            virtual void stop() = 0;
+                           virtual void panic() = 0;
 
                            virtual void set_pitch(float freq) = 0;
                            virtual void set_volume(float vol) = 0;

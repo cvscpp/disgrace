@@ -22,6 +22,15 @@ void MidiInstrument::note_off() {
     m_engine->m_midi_queue.push(msg);
 }
 
+void MidiInstrument::panic() {
+    if (!m_engine) return;
+    MidiMessage msg;
+    msg.status = 0xB0 | (m_channel & 0x0F);
+    msg.data1 = 123; // All Notes Off
+    msg.data2 = 0;
+    m_engine->m_midi_queue.push(msg);
+}
+
 void MidiInstrument::set_volume(float vol) {
     if (!m_engine) return;
     MidiMessage msg;

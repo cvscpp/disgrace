@@ -24,6 +24,11 @@ namespace disgrace_ns
         for (auto& v : m_voices) if (v && v->active()) v->stop();
     }
 
+    void disgrace_ns::SampleInstrument::panic()
+    {
+        for (auto& v : m_voices) if (v && v->active()) v->panic();
+    }
+
     void disgrace_ns::SampleInstrument::set_volume(float vol)
     {
         for (auto& v : m_voices) if (v && v->active()) v->set_volume(vol);

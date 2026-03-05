@@ -26,6 +26,7 @@ public:
 
     virtual void note_on(uint8_t note, uint8_t velocity, size_t offset_samples = 0) = 0;
     virtual void note_off() = 0;
+    virtual void panic() = 0;
 
     virtual void set_volume(float vol) = 0;
 
@@ -71,6 +72,7 @@ class NoneInstrument : public Instrument {
 public:
     void note_on(uint8_t, uint8_t, size_t) override {}
     void note_off() override {}
+    void panic() override {}
     void set_volume(float) override {}
     void set_pitch(float) override {}
     void process(float*, float*, size_t) override {}

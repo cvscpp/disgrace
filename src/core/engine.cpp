@@ -69,7 +69,16 @@ void Engine::reinitialize_audio(uint32_t num_ins, uint32_t num_outs, uint32_t nu
 bool Engine::audio_active() const { return m_initialized; }
 
 void Engine::start() { transport().play(); }
-void Engine::stop() { transport().stop(); }
+void Engine::stop() { 
+    transport().stop(); 
+    panic();
+}
+
+void Engine::panic() {
+    for (auto& track : m_tracks) {
+        track.panic();
+    }
+}
 void Engine::play() { transport().play(); }
 
 void Engine::play_song() {

@@ -18,6 +18,7 @@ namespace disgrace_ns
                    size_t offset_samples = 0) override;
 
                    void stop() override;
+                   void panic() override;
 
                    void set_pitch(float freq) override;
                    void set_volume(float vol) override;

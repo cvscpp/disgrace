@@ -68,11 +68,17 @@ void MixerPanel::update_mixer_ui() {
       VUMeter* meter_r = new VUMeter(55 + x_offset, 25, 8, 150);
       m_track_meters.push_back({meter_l, meter_r});
 
-      Fl_Check_Button* mute = new Fl_Check_Button(20 + x_offset, 180, 35, 20, "M");
+      Fl_Slider* pan_slider = new Fl_Slider(20 + x_offset, 180, 75, 15);
+      pan_slider->type(FL_HOR_SLIDER);
+      pan_slider->range(-1.0, 1.0);
+      pan_slider->value(m_engine.track(i).get_pan());
+      pan_slider->callback(cb_track_pan, new ::std::pair<MixerPanel*,int>(this, (int)i));
+
+      Fl_Check_Button* mute = new Fl_Check_Button(20 + x_offset, 200, 35, 20, "M");
       mute->value(m_engine.track(i).muted());
       mute->callback(cb_track_mute, new ::std::pair<MixerPanel*,int>(this, (int)i));
 
-      Fl_Check_Button* solo = new Fl_Check_Button(60 + x_offset, 180, 35, 20, "S");
+      Fl_Check_Button* solo = new Fl_Check_Button(60 + x_offset, 200, 35, 20, "S");
       solo->value(m_engine.track(i).solo());
       solo->callback(cb_track_solo, new ::std::pair<MixerPanel*,int>(this, (int)i));
     }
@@ -107,6 +113,13 @@ void MixerPanel::cb_track_volume(Fl_Widget* w, void* data) {
     MixerPanel* self = pair->first;
     float v = static_cast<Fl_Slider*>(w)->value();
     self->m_engine.track(pair->second).set_volume(v);
+}
+
+void MixerPanel::cb_track_pan(Fl_Widget* w, void* data) {
+    auto* pair = static_cast<::std::pair<MixerPanel*,int>*>(data);
+    MixerPanel* self = pair->first;
+    float p = static_cast<Fl_Slider*>(w)->value();
+    self->m_engine.track(pair->second).set_pan(p);
 }
 
 void MixerPanel::cb_track_mute(Fl_Widget* w, void* data) {

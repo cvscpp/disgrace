@@ -67,6 +67,9 @@ public:
     void set_volume(float v);
     float volume() const;
 
+    void set_pan(float p);
+    float get_pan() const;
+
     void set_mute(bool m);
     bool muted() const;
 

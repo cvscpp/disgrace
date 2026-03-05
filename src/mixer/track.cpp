@@ -183,6 +183,16 @@ float disgrace_ns::Track::volume() const
     return m_volume;
 }
 
+void disgrace_ns::Track::set_pan(float p)
+{
+    pan = std::max(-1.0f, std::min(1.0f, p));
+}
+
+float disgrace_ns::Track::get_pan() const
+{
+    return pan;
+}
+
 void disgrace_ns::Track::set_mute(bool m)
 {
     m_mute = m;

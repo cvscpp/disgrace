@@ -34,6 +34,7 @@ private:
 
     static void cb_master_gain(Fl_Widget*, void*);
     static void cb_track_volume(Fl_Widget*, void*);
+    static void cb_track_pan(Fl_Widget*, void*);
     static void cb_track_mute(Fl_Widget*, void*);
     static void cb_track_solo(Fl_Widget*, void*);
     static void cb_detach(Fl_Widget*, void*);

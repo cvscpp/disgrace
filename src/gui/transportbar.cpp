@@ -41,6 +41,13 @@ TransportBar::TransportBar(int X, int Y, int W, int H, Engine& engine)
     m_tempo->callback(cb_tempo, this);
     x += 100;
 
+    m_lpb = new Fl_Value_Input(x, Y+5, 40, 25, "LPB");
+    m_lpb->range(1, 128);
+    m_lpb->step(1);
+    m_lpb->value(m_engine.lpb());
+    m_lpb->callback(cb_lpb, this);
+    x += 70;
+
     Fl_Value_Input* octave_in = new Fl_Value_Input(x, Y+5, 40, 25, "Octave");
     octave_in->range(0, 9);
     octave_in->step(1);
@@ -62,6 +69,12 @@ void TransportBar::cb_tempo(Fl_Widget* w, void* data)
 {
     auto* self = static_cast<disgrace_ns::TransportBar*>(data);
     self->m_engine.set_tempo(static_cast<Fl_Value_Input*>(w)->value());
+}
+
+void TransportBar::cb_lpb(Fl_Widget* w, void* data)
+{
+    auto* self = static_cast<disgrace_ns::TransportBar*>(data);
+    self->m_engine.set_lpb((uint32_t)static_cast<Fl_Value_Input*>(w)->value());
 }
 
 void TransportBar::cb_play(Fl_Widget*, void* data)
@@ -93,6 +106,9 @@ void TransportBar::update()
 {
     double engine_bpm = m_engine.tempo();
     if (m_tempo->value() != engine_bpm) m_tempo->value(engine_bpm);
+
+    uint32_t engine_lpb = m_engine.lpb();
+    if (m_lpb->value() != (double)engine_lpb) m_lpb->value((double)engine_lpb);
 
     if (m_record->value() != (int)m_engine.m_record_enabled) 
         m_record->value(m_engine.m_record_enabled);

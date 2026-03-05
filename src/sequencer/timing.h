@@ -15,7 +15,7 @@ public:
     void set_bpm(int bpm); 
     double tempo() const { return (double)m_bpm; } 
     void set_lpb(uint32_t lpb);
-    uint32_t lpb() const { return (uint32_t)m_speed; } 
+    uint32_t lpb() const { return m_lpb; } 
     void set_speed(int speed);
 
     int bpm() const { return m_bpm; }
@@ -32,6 +32,7 @@ private:
     double m_sample_rate = 44100.0;
     int m_bpm = 125;     
     int m_speed = 6;     
+    uint32_t m_lpb = 4;
 };
 
 } // namespace disgrace_ns

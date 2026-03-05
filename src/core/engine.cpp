@@ -114,7 +114,7 @@ void Engine::handle_effect_row_start(size_t t, const TrackEvent& ev)
     auto process_fx = [&](uint8_t fx, uint8_t param) {
         if (fx == 0) return;
         switch (fx) {
-            case 0x0F: if (param < 32) m_timing.set_speed(param); else m_timing.set_lpb(param); break;
+            case 0x0F: if (param < 32) m_timing.set_speed(param); else m_timing.set_bpm(param); break;
             case 0x0C: track.set_volume(param / 64.f); break;
             case 0x0A: track.m_fx_state.vol_slide_up = (param >> 4); track.m_fx_state.vol_slide_down = (param & 0x0F); break;
             case 0x03: track.m_fx_state.porta_speed = param * 0.0005f; track.m_fx_state.porta_active = true; break;

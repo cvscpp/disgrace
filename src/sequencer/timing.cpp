@@ -12,7 +12,8 @@ namespace disgrace_ns
 
     void Timing::set_lpb(uint32_t lpb)
     {
-        set_speed((int)lpb);
+        if (lpb > 0 && lpb < 128)
+            m_lpb = lpb;
     }
 
     void Timing::set_speed(int speed)
@@ -33,7 +34,7 @@ namespace disgrace_ns
     }
     size_t Timing::samples_per_beat() const
     {
-        return samples_per_row() * 4;
+        return samples_per_row() * m_lpb;
     }
 
     size_t Timing::samples_per_bar() const

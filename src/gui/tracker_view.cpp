@@ -71,6 +71,13 @@ void TrackerView::draw() {
         if (ry < y() + 20 - row_h) continue;
         if (ry > y() + h()) break;
 
+        // LPB highlight
+        uint32_t lpb = m_engine.lpb();
+        if (lpb > 0 && r % lpb == 0) {
+            fl_color(40, 40, 40); 
+            fl_rectf(x(), ry, w(), row_h);
+        }
+
         // Playing row highlight (Full width)
         if (is_playing && (int)r == playing_row) {
             fl_color(40, 80, 40); 

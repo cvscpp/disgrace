@@ -19,7 +19,7 @@ namespace disgrace_ns
         SoundFontInstrument(double sample_rate);
         ~SoundFontInstrument();
 
-        void note_on(uint8_t note, uint8_t velocity) override;
+        void note_on(uint8_t note, uint8_t velocity, size_t offset_samples = 0) override;
         void note_off() override;
         void set_volume(float vol) override;
         void set_pitch(float freq) override;

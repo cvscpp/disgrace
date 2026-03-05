@@ -81,6 +81,7 @@ void Engine::play_song() {
     m_current_row = 0;
     m_current_tick = 0;
     set_loop(false);
+    auto_seek();
     start();
 }
 
@@ -89,6 +90,7 @@ void Engine::play_pattern() {
     m_current_row = 0;
     m_current_tick = 0;
     set_loop(true);
+    auto_seek();
     start();
 }
 
@@ -97,7 +99,46 @@ void Engine::play_from_position(size_t row) {
     m_current_row = row;
     m_current_tick = 0;
     set_loop(true);
+    auto_seek();
     start();
+}
+
+void Engine::auto_seek() {
+    size_t pat_idx = m_active_pattern.load();
+    if (pat_idx >= m_patterns.size()) return;
+    
+    Pattern& pat = m_patterns[pat_idx];
+    size_t target_row = m_current_row;
+
+    for (size_t t = 0; t < m_tracks.size() && t < pat.track_count(); ++t) {
+        // Find most recent note on this track, starting from current row and going backwards
+        int found_row = -1;
+        uint8_t found_note = 255;
+        uint8_t found_vol = 255;
+
+        for (int r = (int)target_row - 1; r >= 0; --r) {
+            // Check all note columns on this track
+            size_t num_cols = pat.column_count(t);
+            bool found_in_row = false;
+            for (size_t c = 0; c < num_cols; ++c) {
+                const auto& ev = pat.event(t, (size_t)r, c);
+                if (ev.note != 255) {
+                    found_row = r;
+                    found_note = ev.note;
+                    found_vol = ev.volume;
+                    found_in_row = true;
+                    break; 
+                }
+            }
+            if (found_in_row) break;
+        }
+
+        if (found_row != -1 && found_note != 255) {
+            size_t row_diff = target_row - (size_t)found_row;
+            size_t offset_samples = row_diff * m_timing.samples_per_row();
+            m_tracks[t].note_on(found_note, found_vol == 255 ? 100 : found_vol, offset_samples);
+        }
+    }
 }
 
 void Engine::preview_note(size_t t, uint8_t note) {
@@ -193,6 +234,13 @@ void Engine::process_audio(float* out_l, float* out_r, size_t nframes)
             case EngineCommandType::Play: m_playing.store(true); break;
             case EngineCommandType::Stop: m_playing.store(false); break;
             case EngineCommandType::SetTempo: m_timing.set_bpm((int)cmd.value); break;
+            case EngineCommandType::PlayPattern:
+                m_current_row = 0;
+                m_current_tick = 0;
+                transport().set_loop(true);
+                auto_seek();
+                m_playing.store(true);
+                break;
         }
     }
 

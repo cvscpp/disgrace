@@ -14,7 +14,8 @@ namespace disgrace_ns
 
         void start(uint8_t note,
                    uint8_t velocity,
-                   float freq) override;
+                   float freq,
+                   size_t offset_samples = 0) override;
 
                    void stop() override;
 

@@ -12,7 +12,8 @@ namespace disgrace_ns
 
         virtual void start(uint8_t note,
                            uint8_t velocity,
-                           float frequency) = 0;
+                           float frequency,
+                           size_t offset_samples = 0) = 0;
 
                            virtual void stop() = 0;
 

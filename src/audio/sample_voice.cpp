@@ -12,11 +12,12 @@ namespace disgrace_ns
         m_env.set(0.005f, 0.05f, 0.9f, 0.2f); // Moved to constructor body
     }
 
-    void disgrace_ns::SampleVoice::start(uint8_t,
+    void disgrace_ns::SampleVoice::start(uint8_t note,
                             uint8_t velocity,
-                            float freq)
+                            float freq,
+                            size_t offset_samples)
     {
-        m_position = 0.0;
+        m_position = (double)offset_samples;
 
         double base_freq =
         440.0; // assume sample tuned to A4

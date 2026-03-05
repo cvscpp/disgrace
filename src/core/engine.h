@@ -58,6 +58,7 @@ public:
     void play_song();
     void play_pattern();
     void play_from_position(size_t row);
+    void auto_seek();
 
     disgrace_ns::Transport& transport();
     const disgrace_ns::Transport& transport() const;

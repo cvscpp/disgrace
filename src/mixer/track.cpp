@@ -121,7 +121,7 @@ float disgrace_ns::Track::note_to_frequency(uint8_t note) // Added namespace and
 }
 
 
-void disgrace_ns::Track::note_on(uint8_t note, uint8_t velocity) // Added namespace and class prefix
+void disgrace_ns::Track::note_on(uint8_t note, uint8_t velocity, size_t offset_samples) // Added namespace and class prefix
 {
     if (!m_instrument)
         return;
@@ -135,7 +135,7 @@ void disgrace_ns::Track::note_on(uint8_t note, uint8_t velocity) // Added namesp
     else
     {
         m_instrument->set_pitch(freq);
-        m_instrument->note_on(note, velocity);
+        m_instrument->note_on(note, velocity, offset_samples);
         m_current_freq = freq; // Update m_current_freq on note_on
     }
 }

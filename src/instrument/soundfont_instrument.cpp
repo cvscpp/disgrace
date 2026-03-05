@@ -17,7 +17,7 @@ namespace disgrace_ns
         delete_fluid_settings(m_fluid_settings);
     }
 
-    void SoundFontInstrument::note_on(uint8_t note, uint8_t velocity)
+    void SoundFontInstrument::note_on(uint8_t note, uint8_t velocity, size_t)
     {
         fluid_synth_noteon(m_fluid_synth, 0, note, velocity);
     }

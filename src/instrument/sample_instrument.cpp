@@ -10,13 +10,13 @@ namespace disgrace_ns
     {
     }
 
-    void disgrace_ns::SampleInstrument::note_on(uint8_t note, uint8_t velocity)
+    void disgrace_ns::SampleInstrument::note_on(uint8_t note, uint8_t velocity, size_t offset_samples)
     {
         if (m_samples.empty()) return;
         
         float freq = 440.0f * powf(2.0f, (int(note) - 69) / 12.0f);
         disgrace_ns::Voice* v = allocate_voice();
-        if (v) v->start(note, velocity, freq);
+        if (v) v->start(note, velocity, freq, offset_samples);
     }
 
     void disgrace_ns::SampleInstrument::note_off()

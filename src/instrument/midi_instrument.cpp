@@ -3,7 +3,8 @@
 
 namespace disgrace_ns {
 
-void MidiInstrument::note_on(uint8_t note, uint8_t velocity) {
+    void MidiInstrument::note_on(uint8_t note, uint8_t velocity, size_t)
+ {
     if (!m_engine) return;
     MidiMessage msg;
     msg.status = 0x90 | (m_channel & 0x0F);

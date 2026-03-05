@@ -22,7 +22,7 @@ namespace disgrace_ns
     public:
         SampleInstrument(double engine_rate);
 
-        void note_on(uint8_t note, uint8_t velocity) override;
+        void note_on(uint8_t note, uint8_t velocity, size_t offset_samples = 0) override;
         void note_off() override;
         void set_volume(float vol) override;
         void set_pitch(float freq) override;

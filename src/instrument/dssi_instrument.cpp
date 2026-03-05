@@ -105,7 +105,8 @@ void DSSIInstrument::set_parameter(size_t index, float value) {
     m_port_values[port_idx] = value;
 }
 
-void DSSIInstrument::note_on(uint8_t note, uint8_t velocity) {
+    void DSSIInstrument::note_on(uint8_t note, uint8_t velocity, size_t)
+ {
     // DSSI specific note on handling would go here (MIDI or OSC)
 }
 

@@ -219,12 +219,14 @@ void Engine::move_track(size_t from, size_t to) {
 }
 size_t Engine::track_count() const { return m_tracks.size(); }
 Track& Engine::track(size_t index) { return m_tracks[index]; }
+const Track& Engine::track(size_t index) const { return m_tracks[index]; }
 
 void Engine::add_instrument() { m_instruments.push_back(std::make_unique<NoneInstrument>()); }
 void Engine::remove_instrument(size_t index) { if (index < m_instruments.size()) m_instruments.erase(m_instruments.begin() + index); }
 Instrument& Engine::instrument(size_t index) { return *m_instruments[index]; }
+const Instrument& Engine::instrument(size_t index) const { return *m_instruments[index]; }
 size_t Engine::instrument_count() const { return m_instruments.size(); }
-int Engine::get_instrument_index(Instrument* inst) const {
+int Engine::get_instrument_index(const Instrument* inst) const {
     for (size_t i = 0; i < m_instruments.size(); ++i) if (m_instruments[i].get() == inst) return (int)i;
     return -1;
 }
@@ -237,6 +239,24 @@ Pattern& Engine::pattern(size_t index) { return m_patterns[index]; }
 const Pattern& Engine::pattern(size_t index) const { return m_patterns[index]; }
 size_t Engine::pattern_count() const { return m_patterns.size(); }
 
+size_t Engine::create_pattern() {
+    size_t rows = 64;
+    if (!m_patterns.empty()) rows = m_patterns[0].row_count();
+    m_patterns.emplace_back(rows, m_tracks.size());
+    // Ensure column counts match current tracks
+    Pattern& p = m_patterns.back();
+    for (size_t i = 0; i < m_tracks.size(); ++i) {
+        p.set_column_count(i, 1); // Default to 1 column
+    }
+    return m_patterns.size() - 1;
+}
+
+size_t Engine::copy_pattern(size_t index) {
+    if (index >= m_patterns.size()) return create_pattern();
+    m_patterns.push_back(m_patterns[index]);
+    return m_patterns.size() - 1;
+}
+
 std::vector<uint8_t> Engine::order_list() const {
     std::vector<uint8_t> o; for (auto v : m_order) o.push_back((uint8_t)v);
     return o;
@@ -244,10 +264,18 @@ std::vector<uint8_t> Engine::order_list() const {
 void Engine::set_order(const std::vector<uint8_t>& o) {
     m_order.clear(); for (auto v : o) m_order.push_back(v);
 }
-size_t Engine::add_pattern_to_order() { m_order.push_back(0); return m_order.size() - 1; }
+size_t Engine::add_pattern_to_order() { 
+    size_t new_pat = create_pattern();
+    m_order.push_back(new_pat); 
+    return m_order.size() - 1; 
+}
 void Engine::remove_pattern_from_order(size_t pos) { if (pos < m_order.size()) m_order.erase(m_order.begin() + pos); }
 size_t Engine::copy_pattern_in_order(size_t pos) {
-    if (pos < m_order.size()) { m_order.insert(m_order.begin() + pos + 1, m_order[pos]); return pos + 1; }
+    if (pos < m_order.size()) { 
+        size_t new_pat = copy_pattern(m_order[pos]);
+        m_order.insert(m_order.begin() + pos + 1, new_pat); 
+        return pos + 1; 
+    }
     return pos;
 }
 

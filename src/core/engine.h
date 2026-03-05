@@ -71,6 +71,8 @@ public:
     disgrace_ns::Pattern& pattern(size_t);
 
     size_t pattern_count() const;
+    size_t create_pattern();
+    size_t copy_pattern(size_t index);
 
     ::std::vector<uint8_t> order_list() const;
     void set_order(const ::std::vector<uint8_t>&);
@@ -97,8 +99,9 @@ public:
     ::std::vector<::std::unique_ptr<disgrace_ns::Instrument>> m_instruments;
 
     disgrace_ns::Instrument& instrument(size_t index);
+    const disgrace_ns::Instrument& instrument(size_t index) const;
     size_t instrument_count() const;
-    int get_instrument_index(disgrace_ns::Instrument* inst) const;
+    int get_instrument_index(const disgrace_ns::Instrument* inst) const;
     void add_instrument();
     void remove_instrument(size_t index);
     void set_instrument_type(size_t index, InstrumentType type);
@@ -139,12 +142,14 @@ public:
     bool render_to_wav(const ::std::string& path);
     void process_block(float* l, float* r, size_t nframes);
     void save_project(const ::std::string& path);
+    void load_project(const ::std::string& path);
     void handle_midi(uint8_t* data, size_t size);
 
     void toggle_play();
     void set_loop(bool enable);
     void set_play_position(size_t pattern, size_t row);
     disgrace_ns::Track& track(size_t index);
+    const disgrace_ns::Track& track(size_t index) const;
     size_t track_count() const;
     void add_track();
     void remove_track(size_t index);
@@ -164,6 +169,8 @@ public:
     uint32_t sample_rate() const { return m_sample_rate; }
     int  base_octave() const { return m_base_octave; }
     void set_base_octave(int oct) { m_base_octave = std::max(0, std::min(9, oct)); }
+
+    friend class SongSerializer;
 
 private:
     disgrace_ns::UndoStack m_undo;

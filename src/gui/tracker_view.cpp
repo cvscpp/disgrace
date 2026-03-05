@@ -9,7 +9,13 @@
 namespace disgrace_ns {
 
 TrackerView::TrackerView(int x, int y, int w, int h, Pattern& pattern, Engine& engine)
-    : Fl_Widget(x, y, w, h), m_pattern(pattern), m_engine(engine) {
+    : Fl_Widget(x, y, w, h), m_pattern(&pattern), m_engine(engine) {
+}
+
+void TrackerView::set_pattern(Pattern& pattern) {
+    m_pattern = &pattern;
+    recalculate_size();
+    redraw();
 }
 
 void TrackerView::draw() {
@@ -27,7 +33,7 @@ void TrackerView::draw() {
     int char_w = 8;
     
     size_t num_tracks = m_engine.track_count();
-    size_t num_rows = m_pattern.row_count();
+    size_t num_rows = m_pattern->row_count();
 
     // Clamp cursor
     if (m_cursor_track >= (int)num_tracks) m_cursor_track = (int)num_tracks - 1;
@@ -83,7 +89,7 @@ void TrackerView::draw() {
     for (size_t t = 0; t < num_tracks; ++t) {
         auto& track_obj = m_engine.track(t);
         bool is_sampler = (track_obj.instrument() && track_obj.instrument()->type() == InstrumentType::Sampler);
-        size_t num_cols = m_pattern.column_count(t);
+        size_t num_cols = m_pattern->column_count(t);
         int track_w = (int)(num_cols * 10 * char_w + 2 * 4 * char_w + 40);
         
         TrackUI ui; ui.x = cur_x; ui.w = track_w; ui.btn_plus_x = cur_x + track_w - 20; ui.btn_minus_x = cur_x + track_w - 40;
@@ -116,7 +122,7 @@ void TrackerView::draw() {
 
             int col_x = cur_x + 2;
             for (size_t c = 0; c < num_cols; ++c) {
-                const auto& ev = m_pattern.event(t, r, c);
+                const auto& ev = m_pattern->event(t, r, c);
                 
                 // Note
                 if ((int)r == m_cursor_row && (int)t == m_cursor_track && (int)c == m_cursor_col && m_cursor_field == 0) {
@@ -150,7 +156,7 @@ void TrackerView::draw() {
                 col_x += 3 * char_w;
             }
 
-            const auto& row_ev = m_pattern.event(t, r, 0); 
+            const auto& row_ev = m_pattern->event(t, r, 0); 
             
             // FX1
             if ((int)r == m_cursor_row && (int)t == m_cursor_track && m_cursor_field == 3) {
@@ -174,7 +180,7 @@ void TrackerView::draw() {
 
 void TrackerView::delete_current_field() {
     if (m_cursor_track < (int)m_engine.track_count()) {
-        auto& ev = m_pattern.event(m_cursor_track, m_cursor_row, m_cursor_col);
+        auto& ev = m_pattern->event(m_cursor_track, m_cursor_row, m_cursor_col);
         ev.note = 255;
         ev.sample_idx = 0;
         ev.volume = 255;
@@ -235,11 +241,11 @@ int TrackerView::handle(int event) {
             if (my >= y() && my < y() + 20) { // Header
                 for (size_t t = 0; t < m_track_ui.size(); ++t) {
                     const auto& ui = m_track_ui[t];
-                    if (mx >= ui.btn_plus_x && mx < ui.btn_plus_x + 18) { m_pattern.set_column_count(t, m_pattern.column_count(t) + 1); redraw(); return 1; }
-                    if (mx >= ui.btn_minus_x && mx < ui.btn_minus_x + 18) { size_t current = m_pattern.column_count(t); if (current > 1) { m_pattern.set_column_count(t, current - 1); redraw(); } return 1; }
+                    if (mx >= ui.btn_plus_x && mx < ui.btn_plus_x + 18) { m_pattern->set_column_count(t, m_pattern->column_count(t) + 1); redraw(); return 1; }
+                    if (mx >= ui.btn_minus_x && mx < ui.btn_minus_x + 18) { size_t current = m_pattern->column_count(t); if (current > 1) { m_pattern->set_column_count(t, current - 1); redraw(); } return 1; }
                 }
             } else { // Grid
-                m_cursor_row = std::min((int)m_pattern.row_count()-1, std::max(0, (my - y() - 20) / 18));
+                m_cursor_row = std::min((int)m_pattern->row_count()-1, std::max(0, (my - y() - 20) / 18));
                 int tx = x() + 40;
                 for (size_t t = 0; t < m_track_ui.size(); ++t) {
                     if (mx >= m_track_ui[t].x && mx < m_track_ui[t].x + m_track_ui[t].w) { m_cursor_track = (int)t; break; }
@@ -266,7 +272,7 @@ int TrackerView::handle(int event) {
         }
         case FL_DRAG: {
             int my = Fl::event_y(), mx = Fl::event_x();
-            m_cursor_row = std::min((int)m_pattern.row_count()-1, std::max(0, (my - y() - 20) / 18));
+            m_cursor_row = std::min((int)m_pattern->row_count()-1, std::max(0, (my - y() - 20) / 18));
             for (size_t t = 0; t < m_track_ui.size(); ++t) {
                 if (mx >= m_track_ui[t].x && mx < m_track_ui[t].x + m_track_ui[t].w) { m_cursor_track = (int)t; break; }
             }
@@ -310,16 +316,16 @@ int TrackerView::handle(int event) {
             if (shift && !m_sel_active) { m_sel_active = true; m_sel_start_row = m_cursor_row; m_sel_start_track = m_cursor_track; }
             
             int num_fields = 3 + 2; // Note, Sample, Vol, FX1, FX2
-            size_t num_cols = m_pattern.column_count(m_cursor_track);
+            size_t num_cols = m_pattern->column_count(m_cursor_track);
 
             switch (key) {
                 case FL_Up: 
                     m_cursor_row--;
-                    if (m_cursor_row < 0) m_cursor_row = (int)m_pattern.row_count() - 1;
+                    if (m_cursor_row < 0) m_cursor_row = (int)m_pattern->row_count() - 1;
                     break;
                 case FL_Down: 
                     m_cursor_row++;
-                    if (m_cursor_row >= (int)m_pattern.row_count()) m_cursor_row = 0;
+                    if (m_cursor_row >= (int)m_pattern->row_count()) m_cursor_row = 0;
                     break;
                 case FL_Left: 
                     m_cursor_field--;
@@ -329,7 +335,7 @@ int TrackerView::handle(int event) {
                         if (m_cursor_col < 0) {
                             if (m_cursor_track > 0) {
                                 m_cursor_track--;
-                                m_cursor_col = (int)m_pattern.column_count(m_cursor_track) - 1;
+                                m_cursor_col = (int)m_pattern->column_count(m_cursor_track) - 1;
                             } else {
                                 m_cursor_col = 0;
                                 m_cursor_field = 0;
@@ -354,14 +360,14 @@ int TrackerView::handle(int event) {
                     }
                     break;
                 case FL_Page_Up: m_cursor_row = std::max(0, m_cursor_row - 16); break;
-                case FL_Page_Down: m_cursor_row = std::min((int)m_pattern.row_count() - 1, m_cursor_row + 16); break;
+                case FL_Page_Down: m_cursor_row = std::min((int)m_pattern->row_count() - 1, m_cursor_row + 16); break;
                 case FL_Home: m_cursor_row = 0; break;
-                case FL_End: m_cursor_row = (int)m_pattern.row_count() - 1; break;
+                case FL_End: m_cursor_row = (int)m_pattern->row_count() - 1; break;
                 case FL_Escape: m_sel_active = false; break;
                 case FL_BackSpace:
                     delete_current_field();
                     m_cursor_row--;
-                    if (m_cursor_row < 0) m_cursor_row = (int)m_pattern.row_count() - 1;
+                    if (m_cursor_row < 0) m_cursor_row = (int)m_pattern->row_count() - 1;
                     break;
                 case FL_Delete:
                     delete_current_field();
@@ -380,8 +386,8 @@ int TrackerView::handle(int event) {
 void TrackerView::set_current_row(int row) { m_cursor_row = row; redraw(); }
 void TrackerView::insert_note(uint8_t note) {
     if (m_cursor_track < (int)m_engine.track_count()) {
-        m_pattern.event(m_cursor_track, m_cursor_row, m_cursor_col).note = note;
-        m_cursor_row = std::min((int)m_pattern.row_count()-1, m_cursor_row + 1);
+        m_pattern->event(m_cursor_track, m_cursor_row, m_cursor_col).note = note;
+        m_cursor_row = std::min((int)m_pattern->row_count()-1, m_cursor_row + 1);
         redraw();
     }
 }
@@ -390,11 +396,11 @@ void TrackerView::recalculate_size() {
     int char_w = 8;
     int row_h = 18;
     size_t num_tracks = m_engine.track_count();
-    size_t num_rows = m_pattern.row_count();
+    size_t num_rows = m_pattern->row_count();
     
     int total_w = 40; // row numbers
     for (size_t t = 0; t < num_tracks; ++t) {
-        size_t num_cols = m_pattern.column_count(t);
+        size_t num_cols = m_pattern->column_count(t);
         total_w += (int)(num_cols * 10 * char_w + 2 * 4 * char_w + 40 + 10);
     }
     

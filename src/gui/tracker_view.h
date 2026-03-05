@@ -19,12 +19,13 @@ namespace disgrace_ns
         int handle(int event) override;
         void draw_track_header(int track_index, int x, int y, int w, int h);
         void set_current_row(int row);
+        void set_pattern(Pattern& pattern);
         void recalculate_size();
         void ensure_cursor_visible();
 
     private:
         void delete_current_field();
-        Pattern& m_pattern;
+        Pattern* m_pattern;
         Engine&  m_engine;
 
         struct TrackUI {

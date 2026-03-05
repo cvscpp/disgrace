@@ -65,7 +65,7 @@ void ProjectPanel::cb_new(Fl_Widget*, void* data) {
         self->m_engine.new_project();
         for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
             MainWindow* mw = dynamic_cast<MainWindow*>(win);
-            if (mw) mw->update_all_uis();
+            if (mw) mw->request_update();
         }
     }
 }
@@ -77,7 +77,11 @@ void ProjectPanel::cb_load(Fl_Widget*, void* data) {
     fnfc.type(Fl_Native_File_Chooser::BROWSE_FILE);
     fnfc.filter("Disgrace Projects\t*.dg\n");
     if (fnfc.show() == 0) {
-        // self->m_engine.load_project(fnfc.filename());
+        self->m_engine.load_project(fnfc.filename());
+        for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+            MainWindow* mw = dynamic_cast<MainWindow*>(win);
+            if (mw) mw->request_update();
+        }
     }
 }
 
@@ -105,6 +109,14 @@ void ProjectPanel::cb_export(Fl_Widget*, void* data) {
 }
 
 void ProjectPanel::update_track_list() {
+    for (int i = 0; i < m_track_container->children(); ++i) {
+        void* d = m_track_container->child(i)->user_data();
+        if (d) {
+            // We need to be careful as some children might not have this exact type, 
+            // but in this container they all do (std::pair<ProjectPanel*, size_t>*)
+            delete static_cast<std::pair<ProjectPanel*, size_t>*>(d);
+        }
+    }
     m_track_container->clear();
     m_track_container->begin();
 
@@ -167,10 +179,9 @@ void ProjectPanel::update_track_list() {
 void ProjectPanel::cb_add_track(Fl_Widget*, void* data) {
     auto* self = static_cast<ProjectPanel*>(data);
     self->m_engine.add_track();
-    self->update_track_list();
     for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
         MainWindow* mw = dynamic_cast<MainWindow*>(win);
-        if (mw) mw->update_all_uis();
+        if (mw) mw->request_update();
     }
 }
 
@@ -178,13 +189,11 @@ void ProjectPanel::cb_remove_track(Fl_Widget*, void* data) {
     auto* pair = static_cast<std::pair<ProjectPanel*, size_t>*>(data);
     if (fl_ask("Remove track %zu?", pair->second + 1)) {
         pair->first->m_engine.remove_track(pair->second);
-        pair->first->update_track_list();
         for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
             MainWindow* mw = dynamic_cast<MainWindow*>(win);
-            if (mw) mw->update_all_uis();
+            if (mw) mw->request_update();
         }
     }
-    delete pair;
 }
 
 void ProjectPanel::cb_track_name(Fl_Widget* w, void* data) {
@@ -193,7 +202,7 @@ void ProjectPanel::cb_track_name(Fl_Widget* w, void* data) {
     pair->first->m_engine.track(pair->second).set_name(in->value());
     for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
         MainWindow* mw = dynamic_cast<MainWindow*>(win);
-        if (mw) mw->update_all_uis();
+        if (mw) mw->request_update();
     }
 }
 
@@ -206,32 +215,32 @@ void ProjectPanel::cb_track_inst(Fl_Widget* w, void* data) {
     } else {
         pair->first->m_engine.track(pair->second).set_instrument(&pair->first->m_engine.instrument(idx - 1));
     }
+    for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+        MainWindow* mw = dynamic_cast<MainWindow*>(win);
+        if (mw) mw->request_update();
+    }
 }
 
 void ProjectPanel::cb_move_track_up(Fl_Widget*, void* data) {
     auto* pair = static_cast<std::pair<ProjectPanel*, size_t>*>(data);
     if (pair->second > 0) {
         pair->first->m_engine.move_track(pair->second, pair->second - 1);
-        pair->first->update_track_list();
         for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
             MainWindow* mw = dynamic_cast<MainWindow*>(win);
-            if (mw) mw->update_all_uis();
+            if (mw) mw->request_update();
         }
     }
-    delete pair;
 }
 
 void ProjectPanel::cb_move_track_down(Fl_Widget*, void* data) {
     auto* pair = static_cast<std::pair<ProjectPanel*, size_t>*>(data);
     if (pair->second < pair->first->m_engine.track_count() - 1) {
         pair->first->m_engine.move_track(pair->second, pair->second + 1);
-        pair->first->update_track_list();
         for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
             MainWindow* mw = dynamic_cast<MainWindow*>(win);
-            if (mw) mw->update_all_uis();
+            if (mw) mw->request_update();
         }
     }
-    delete pair;
 }
 
 void ProjectPanel::cb_file_select(Fl_Widget*, void*) {}

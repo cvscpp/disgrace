@@ -33,8 +33,10 @@ namespace disgrace_ns
 
         // Static callback for timer
         static void timer_cb(void* data);
+        static void request_update_cb(void* data);
 
         void update_all_uis();
+        void request_update();
 
         // Standard FLTK event handler
         int handle(int event) override;

@@ -42,6 +42,10 @@ MixerPanel::MixerPanel(int x, int y, int w, int h, Engine& engine)
 }
 
 void MixerPanel::update_mixer_ui() {
+    for (int i = 0; i < m_track_group->children(); ++i) {
+        void* d = m_track_group->child(i)->user_data();
+        if (d) delete static_cast<std::pair<MixerPanel*, int>*>(d);
+    }
     m_track_group->clear();
     m_track_group->begin();
     m_track_meters.clear();

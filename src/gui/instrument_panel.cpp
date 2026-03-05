@@ -262,6 +262,10 @@ void InstrumentPanel::update_rec_inputs() {
 }
 
 void InstrumentPanel::update_instrument_list() {
+    for (int i = 0; i < m_inst_container->children(); ++i) {
+        void* d = m_inst_container->child(i)->user_data();
+        if (d) delete static_cast<std::pair<InstrumentPanel*, size_t>*>(d);
+    }
     m_inst_container->clear();
     m_inst_container->begin();
     int row_h = 35;
@@ -307,6 +311,10 @@ void InstrumentPanel::update_editor() {
         m_sampler_editor->show();
         m_sample_play_btn->show();
         m_sample_stop_btn->show();
+        for (int i = 0; i < m_sample_container->children(); ++i) {
+            void* d = m_sample_container->child(i)->user_data();
+            if (d) delete static_cast<std::pair<InstrumentPanel*, size_t>*>(d);
+        }
         m_sample_container->clear();
         m_sample_container->begin();
         SampleInstrument* sampler = static_cast<SampleInstrument*>(&inst);
@@ -372,6 +380,12 @@ void InstrumentPanel::update_editor() {
         }
         m_plugin_controls_container->clear(); m_plugin_controls_container->begin();
         int row_h = 45; int cur_y = m_plugin_controls_container->y(); int start_x = m_plugin_controls_container->x();
+        for (int i = 0; i < m_plugin_controls_container->children(); ++i) {
+            void* d = m_plugin_controls_container->child(i)->user_data();
+            if (d) delete static_cast<std::pair<InstrumentPanel*, size_t>*>(d);
+        }
+        m_plugin_controls_container->clear();
+        m_plugin_controls_container->begin();
         size_t num_params = inst.parameter_count();
         for (size_t i = 0; i < num_params; ++i) {
             auto param = inst.get_parameter(i);
@@ -399,7 +413,7 @@ void InstrumentPanel::cb_new(Fl_Widget*, void* data) {
     self->m_selected_sample = -1;
     for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
         MainWindow* mw = dynamic_cast<MainWindow*>(win);
-        if (mw) mw->update_all_uis();
+        if (mw) mw->request_update();
     }
 }
 
@@ -409,9 +423,8 @@ void InstrumentPanel::cb_inst_select(Fl_Widget*, void* data) {
     pair->first->m_selected_sample = -1;
     for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
         MainWindow* mw = dynamic_cast<MainWindow*>(win);
-        if (mw) mw->update_all_uis();
+        if (mw) mw->request_update();
     }
-    delete pair;
 }
 
 void InstrumentPanel::cb_sample_select(Fl_Widget*, void* data) {
@@ -422,13 +435,12 @@ void InstrumentPanel::cb_sample_select(Fl_Widget*, void* data) {
     auto& inst = self->m_engine.instrument(self->m_selected_instrument);
     if (inst.type() == InstrumentType::Sampler) {
         static_cast<SampleInstrument*>(&inst)->set_selected_sample(pair->second);
-        // Clear voices when switching samples to ensure next play uses new sample
-        // Actually SampleInstrument::create_voice handles this but existing voices 
-        // in m_voices still point to the old sample if they are active.
     }
     
-    self->update_editor();
-    delete pair;
+    for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+        MainWindow* mw = dynamic_cast<MainWindow*>(win);
+        if (mw) mw->request_update();
+    }
 }
 
 void InstrumentPanel::cb_sample_play(Fl_Widget*, void* data) {
@@ -461,7 +473,7 @@ void InstrumentPanel::cb_delete(Fl_Widget*, void* data) {
             self->m_selected_instrument = -1; self->m_selected_sample = -1;
             for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
                 MainWindow* mw = dynamic_cast<MainWindow*>(win);
-                if (mw) mw->update_all_uis();
+                if (mw) mw->request_update();
             }
         }
     }
@@ -472,7 +484,7 @@ void InstrumentPanel::cb_inst_name(Fl_Widget* w, void* data) {
     pair->first->m_engine.instrument(pair->second).set_name(static_cast<Fl_Input*>(w)->value());
     for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
         MainWindow* mw = dynamic_cast<MainWindow*>(win);
-        if (mw) mw->update_all_uis();
+        if (mw) mw->request_update();
     }
 }
 
@@ -483,7 +495,7 @@ void InstrumentPanel::cb_inst_type(Fl_Widget* w, void* data) {
     pair->first->m_selected_sample = -1;
     for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
         MainWindow* mw = dynamic_cast<MainWindow*>(win);
-        if (mw) mw->update_all_uis();
+        if (mw) mw->request_update();
     }
 }
 
@@ -514,27 +526,35 @@ void InstrumentPanel::cb_load_sample(Fl_Widget*, void* data) {
                 sampler->set_sample_name(pair->second, name);
                 sampler->get_sample(pair->second).data = data_ptr;
                 self->m_selected_sample = (int)pair->second;
-                self->update_editor();
+                for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+                    MainWindow* mw = dynamic_cast<MainWindow*>(win);
+                    if (mw) mw->request_update();
+                }
             }
         }
     }
-    delete pair;
 }
 
 void InstrumentPanel::cb_remove_sample(Fl_Widget*, void* data) {
     auto* pair = static_cast<std::pair<InstrumentPanel*, size_t>*>(data);
     static_cast<SampleInstrument*>(&pair->first->m_engine.instrument(pair->first->m_selected_instrument))->remove_sample(pair->second);
-    pair->first->m_selected_sample = -1; pair->first->update_editor();
-    delete pair;
+    pair->first->m_selected_sample = -1; 
+    for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+        MainWindow* mw = dynamic_cast<MainWindow*>(win);
+        if (mw) mw->request_update();
+    }
 }
 
 void InstrumentPanel::cb_move_sample_up(Fl_Widget*, void* data) {
     auto* pair = static_cast<std::pair<InstrumentPanel*, size_t>*>(data);
     if (pair->second > 0) {
         static_cast<SampleInstrument*>(&pair->first->m_engine.instrument(pair->first->m_selected_instrument))->move_sample(pair->second, pair->second - 1);
-        pair->first->m_selected_sample = (int)pair->second - 1; pair->first->update_editor();
+        pair->first->m_selected_sample = (int)pair->second - 1; 
+        for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+            MainWindow* mw = dynamic_cast<MainWindow*>(win);
+            if (mw) mw->request_update();
+        }
     }
-    delete pair;
 }
 
 void InstrumentPanel::cb_move_sample_down(Fl_Widget*, void* data) {
@@ -542,15 +562,22 @@ void InstrumentPanel::cb_move_sample_down(Fl_Widget*, void* data) {
     SampleInstrument* sampler = static_cast<SampleInstrument*>(&pair->first->m_engine.instrument(pair->first->m_selected_instrument));
     if (pair->second < sampler->sample_count() - 1) {
         sampler->move_sample(pair->second, pair->second + 1);
-        pair->first->m_selected_sample = (int)pair->second + 1; pair->first->update_editor();
+        pair->first->m_selected_sample = (int)pair->second + 1; 
+        for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+            MainWindow* mw = dynamic_cast<MainWindow*>(win);
+            if (mw) mw->request_update();
+        }
     }
-    delete pair;
 }
 
 void InstrumentPanel::cb_save_sample(Fl_Widget*, void*) {}
 void InstrumentPanel::cb_sample_name(Fl_Widget* w, void* data) {
     auto* pair = static_cast<std::pair<InstrumentPanel*, size_t>*>(data);
     static_cast<SampleInstrument*>(&pair->first->m_engine.instrument(pair->first->m_selected_instrument))->set_sample_name(pair->second, static_cast<Fl_Input*>(w)->value());
+    for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+        MainWindow* mw = dynamic_cast<MainWindow*>(win);
+        if (mw) mw->request_update();
+    }
 }
 void InstrumentPanel::cb_record_sample(Fl_Widget*, void*) {}
 void InstrumentPanel::cb_mono_toggle(Fl_Widget*, void* data) { static_cast<InstrumentPanel*>(data)->update_rec_inputs(); }

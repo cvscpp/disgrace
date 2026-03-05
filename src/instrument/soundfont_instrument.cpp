@@ -55,6 +55,8 @@ namespace disgrace_ns
         m_sfont_id = fluid_synth_sfload(m_fluid_synth, path.c_str(), 1);
         if (m_sfont_id == -1) return false;
 
+        m_path = path;
+
         fluid_sfont_t* sfont = fluid_synth_get_sfont_by_id(m_fluid_synth, m_sfont_id);
         if (sfont) {
             fluid_sfont_iteration_start(sfont);

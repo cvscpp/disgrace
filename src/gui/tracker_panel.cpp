@@ -1,6 +1,7 @@
 #include "tracker_panel.h"
 #include "tracker_view.h"
 #include "detached_window.h"
+#include "main_window.h"
 #include "../core/engine.h"
 #include <FL/Fl_Box.H>
 #include <utility> // For std::pair
@@ -82,6 +83,10 @@ void TrackerPanel::update() {
 }
 
 void TrackerPanel::update_pattern_list_browser() {
+    for (int i = 0; i < m_pattern_list_container->children(); ++i) {
+        void* d = m_pattern_list_container->child(i)->user_data();
+        if (d) delete static_cast<std::pair<TrackerPanel*, size_t>*>(d);
+    }
     m_pattern_list_container->clear();
     m_pattern_list_container->begin();
     const auto& order = m_engine.order_list();
@@ -94,8 +99,19 @@ void TrackerPanel::update_pattern_list_browser() {
         
         char pos_str[16];
         snprintf(pos_str, 16, "%02zu:", i);
-        Fl_Box* b = new Fl_Box(start_x, cur_y, 30, row_h, strdup(pos_str));
+        Fl_Button* b = new Fl_Button(start_x, cur_y, 30, row_h, strdup(pos_str));
+        b->box(FL_FLAT_BOX);
         b->labelsize(12);
+        b->callback([](Fl_Widget*, void* d){
+            auto* p = static_cast<std::pair<TrackerPanel*, size_t>*>(d);
+            auto& eng = p->first->m_engine;
+            auto ord = eng.order_list();
+            if (p->second < ord.size()) {
+                eng.set_active_pattern(ord[p->second]);
+                p->first->m_tracker->set_pattern(eng.pattern());
+            }
+            delete p;
+        }, new std::pair<TrackerPanel*, size_t>(this, i));
         
         char pat_str[16];
         snprintf(pat_str, 16, "%02u", order[i]);
@@ -123,7 +139,10 @@ void TrackerPanel::grab_focus() {
 void TrackerPanel::cb_add_pattern(Fl_Widget*, void* data) {
     TrackerPanel* self = static_cast<TrackerPanel*>(data);
     self->m_engine.add_pattern_to_order();
-    self->update_pattern_list_browser();
+    for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+        MainWindow* mw = dynamic_cast<MainWindow*>(win);
+        if (mw) mw->request_update();
+    }
 }
 
 void TrackerPanel::cb_remove_pattern(Fl_Widget*, void* data) {
@@ -131,7 +150,10 @@ void TrackerPanel::cb_remove_pattern(Fl_Widget*, void* data) {
     const auto& order = self->m_engine.order_list();
     if (!order.empty()) {
         self->m_engine.remove_pattern_from_order(order.size() - 1);
-        self->update_pattern_list_browser();
+        for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+            MainWindow* mw = dynamic_cast<MainWindow*>(win);
+            if (mw) mw->request_update();
+        }
     }
 }
 
@@ -140,7 +162,10 @@ void TrackerPanel::cb_copy_pattern(Fl_Widget*, void* data) {
     const auto& order = self->m_engine.order_list();
     if (!order.empty()) {
         self->m_engine.copy_pattern_in_order(order.size() - 1);
-        self->update_pattern_list_browser();
+        for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+            MainWindow* mw = dynamic_cast<MainWindow*>(win);
+            if (mw) mw->request_update();
+        }
     }
 }
 
@@ -155,9 +180,11 @@ void TrackerPanel::cb_inc_pattern(Fl_Widget*, void* data) {
              order[pos] = self->m_engine.pattern_count() - 1;
         }
         self->m_engine.set_order(order);
-        self->update_pattern_list_browser();
+        for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+            MainWindow* mw = dynamic_cast<MainWindow*>(win);
+            if (mw) mw->request_update();
+        }
     }
-    delete pair;
 }
 
 void TrackerPanel::cb_dec_pattern(Fl_Widget*, void* data) {
@@ -169,10 +196,12 @@ void TrackerPanel::cb_dec_pattern(Fl_Widget*, void* data) {
         if (order[pos] > 0) {
             order[pos]--;
             self->m_engine.set_order(order);
-            self->update_pattern_list_browser();
+            for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+                MainWindow* mw = dynamic_cast<MainWindow*>(win);
+                if (mw) mw->request_update();
+            }
         }
     }
-    delete pair;
 }
 
 } // namespace disgrace_ns

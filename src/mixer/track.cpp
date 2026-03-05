@@ -55,6 +55,11 @@ disgrace_ns::Instrument* disgrace_ns::Track::instrument()
     return m_instrument;
 }
 
+const disgrace_ns::Instrument* disgrace_ns::Track::instrument() const
+{
+    return m_instrument;
+}
+
 void disgrace_ns::Track::set_name(const std::string& name)
 {
     m_name = name.substr(0, 32);

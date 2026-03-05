@@ -27,6 +27,7 @@ namespace disgrace_ns
 
         bool load_soundfont(const std::string& path);
         const std::vector<SoundFontPreset>& presets() const { return m_presets; }
+        const std::string& path() const { return m_path; }
         void set_preset(int index);
         int current_preset() const { return m_selected_preset; }
 
@@ -40,6 +41,7 @@ namespace disgrace_ns
         std::vector<SoundFontPreset> m_presets;
         int m_selected_preset = -1;
         float m_volume = 1.0f;
+        std::string m_path;
     };
 
 } // namespace disgrace_ns

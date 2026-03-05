@@ -47,6 +47,7 @@ public:
 
     void set_instrument(disgrace_ns::Instrument* inst);
     disgrace_ns::Instrument* instrument();
+    const disgrace_ns::Instrument* instrument() const;
 
     void set_name(const std::string& name);
     const std::string& name() const;

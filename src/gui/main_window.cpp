@@ -44,6 +44,7 @@ namespace disgrace_ns
         if (tabs->value() == self->m_tracker_tab && self->m_tracker_panel) {
             self->m_tracker_panel->grab_focus();
         }
+        self->update_all_uis();
     }, this);
     
     init_project_tab(w, h);
@@ -75,6 +76,16 @@ void disgrace_ns::MainWindow::update_all_uis() {
         m_instrument_panel->update_instrument_list();
         m_instrument_panel->update_editor();
     }
+}
+
+void disgrace_ns::MainWindow::request_update() {
+    Fl::remove_timeout(request_update_cb, this);
+    Fl::add_timeout(0.05, request_update_cb, this);
+}
+
+void disgrace_ns::MainWindow::request_update_cb(void* data) {
+    auto* self = static_cast<disgrace_ns::MainWindow*>(data);
+    self->update_all_uis();
 }
 
 void disgrace_ns::MainWindow::timer_cb(void* data)

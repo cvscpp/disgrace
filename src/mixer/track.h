@@ -70,8 +70,9 @@ public:
     void set_mute(bool m);
     bool muted() const;
 
-    float meter_level() const;
-    bool solo() const; // Add this
+    float meter_level_l() const;
+    float meter_level_r() const;
+    bool solo() const;
     void set_solo(bool s); // Add this
 
     float note_to_frequency(uint8_t note); // Added declaration
@@ -86,8 +87,9 @@ private:
 
     disgrace_ns::Instrument* m_instrument = nullptr;
     disgrace_ns::DSPChain    m_chain;
-    ::std::atomic<float> m_meter {0.0f}; // Added m_meter
-    float m_current_freq = 0.0f; // Added
+    ::std::atomic<float> m_meter_l {0.0f};
+    ::std::atomic<float> m_meter_r {0.0f};
+    float m_current_freq = 0.0f;
     void retrigger_note(); // Added
 };
 

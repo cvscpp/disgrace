@@ -29,7 +29,8 @@ MixerPanel::MixerPanel(int x, int y, int w, int h, Engine& engine)
     m_master_gain->value(1.0);
     m_master_gain->callback(cb_master_gain, this);
 
-    m_master_meter = new VUMeter(w - 40, h - 30, 30, 25);
+    m_master_meter_l = new VUMeter(w - 45, h - 30, 15, 25);
+    m_master_meter_r = new VUMeter(w - 25, h - 30, 15, 25);
     m_spectral_view = new SpectralView(w - 200, h - 140, 190, 100, m_engine);
 
     Fl_Box* mixer_spacer = new Fl_Box(0, 0, w, h);
@@ -63,12 +64,17 @@ void MixerPanel::update_mixer_ui() {
       vol->value(m_engine.track(i).volume());
       vol->callback(cb_track_volume, new ::std::pair<MixerPanel*,int>(this, (int)i));
 
-      VUMeter* meter = new VUMeter(45 + x_offset, 25, 15, 150);
-      m_track_meters.push_back(meter);
+      VUMeter* meter_l = new VUMeter(45 + x_offset, 25, 8, 150);
+      VUMeter* meter_r = new VUMeter(55 + x_offset, 25, 8, 150);
+      m_track_meters.push_back({meter_l, meter_r});
 
-      Fl_Check_Button* mute = new Fl_Check_Button(20 + x_offset, 180, 60, 20, "M");
+      Fl_Check_Button* mute = new Fl_Check_Button(20 + x_offset, 180, 35, 20, "M");
       mute->value(m_engine.track(i).muted());
       mute->callback(cb_track_mute, new ::std::pair<MixerPanel*,int>(this, (int)i));
+
+      Fl_Check_Button* solo = new Fl_Check_Button(60 + x_offset, 180, 35, 20, "S");
+      solo->value(m_engine.track(i).solo());
+      solo->callback(cb_track_solo, new ::std::pair<MixerPanel*,int>(this, (int)i));
     }
 
     m_track_group->end();
@@ -77,15 +83,16 @@ void MixerPanel::update_mixer_ui() {
 }
 
 void MixerPanel::update_meters() {
-    if (m_master_meter) {
-        m_master_meter->level(m_engine.master_meter_l());
-    }
+    if (m_master_meter_l) m_master_meter_l->level(m_engine.master_meter_l());
+    if (m_master_meter_r) m_master_meter_r->level(m_engine.master_meter_r());
+
     if (m_spectral_view) {
         m_spectral_view->update();
     }
 
     for (size_t i = 0; i < m_track_meters.size() && i < m_engine.track_count(); ++i) {
-        m_track_meters[i]->level(m_engine.track(i).meter_level());
+        m_track_meters[i].first->level(m_engine.track(i).meter_level_l());
+        m_track_meters[i].second->level(m_engine.track(i).meter_level_r());
     }
 }
 
@@ -107,6 +114,13 @@ void MixerPanel::cb_track_mute(Fl_Widget* w, void* data) {
     MixerPanel* self = pair->first;
     bool m = static_cast<Fl_Check_Button*>(w)->value();
     self->m_engine.track(pair->second).set_mute(m);
+}
+
+void MixerPanel::cb_track_solo(Fl_Widget* w, void* data) {
+    auto* pair = static_cast<::std::pair<MixerPanel*,int>*>(data);
+    MixerPanel* self = pair->first;
+    bool s = static_cast<Fl_Check_Button*>(w)->value();
+    self->m_engine.track(pair->second).set_solo(s);
 }
 
 void MixerPanel::cb_detach(Fl_Widget*, void* data) {

@@ -6,7 +6,7 @@ namespace disgrace_ns
 {
 
 disgrace_ns::Track::Track()
-    : m_meter(0.0f), m_current_freq(440.0f), m_name("New Track")
+    : m_meter_l(0.0f), m_meter_r(0.0f), m_current_freq(440.0f), m_name("New Track")
 {
 }
 
@@ -21,7 +21,8 @@ disgrace_ns::Track::Track(Track&& other) noexcept
       m_name(std::move(other.m_name)),
       m_instrument(other.m_instrument),
       m_chain(std::move(other.m_chain)),
-      m_meter(other.m_meter.load()),
+      m_meter_l(other.m_meter_l.load()),
+      m_meter_r(other.m_meter_r.load()),
       m_current_freq(other.m_current_freq)
 {
 }
@@ -39,7 +40,8 @@ Track& disgrace_ns::Track::operator=(Track&& other) noexcept
         m_name = std::move(other.m_name);
         m_instrument = other.m_instrument;
         m_chain = std::move(other.m_chain);
-        m_meter.store(other.m_meter.load());
+        m_meter_l.store(other.m_meter_l.load());
+        m_meter_r.store(other.m_meter_r.load());
         m_current_freq = other.m_current_freq;
     }
     return *this;
@@ -95,24 +97,26 @@ void disgrace_ns::Track::process(float* out_l,
         out_r[i] = r * right_gain;
     }
 
-    float peak = 0.f;
+    float peak_l = 0.f;
+    float peak_r = 0.f;
 
     for (size_t i = 0; i < nframes; ++i)
     {
-        float v = ::std::fabs(out_l[i]);
-        if (v > peak) peak = v;
+        float vl = ::std::fabs(out_l[i]);
+        if (vl > peak_l) peak_l = vl;
 
-        v = ::std::fabs(out_r[i]);
-        if (v > peak) peak = v;
+        float vr = ::std::fabs(out_r[i]);
+        if (vr > peak_r) peak_r = vr;
     }
 
     // simple smoothing
-    float prev = m_meter.load();
-    float smoothed =
-    0.8f * prev + 0.2f * peak;
+    float prev_l = m_meter_l.load();
+    float smoothed_l = 0.8f * prev_l + 0.2f * peak_l;
+    m_meter_l.store(smoothed_l);
 
-    m_meter.store(smoothed);
-
+    float prev_r = m_meter_r.load();
+    float smoothed_r = 0.8f * prev_r + 0.2f * peak_r;
+    m_meter_r.store(smoothed_r);
 }
 
 float disgrace_ns::Track::note_to_frequency(uint8_t note) // Added namespace and class prefix
@@ -261,9 +265,14 @@ void disgrace_ns::Track::retrigger_note()
     }
 }
 
-float disgrace_ns::Track::meter_level() const
+float disgrace_ns::Track::meter_level_l() const
 {
-    return m_meter.load();
+    return m_meter_l.load();
+}
+
+float disgrace_ns::Track::meter_level_r() const
+{
+    return m_meter_r.load();
 }
 
 bool disgrace_ns::Track::solo() const

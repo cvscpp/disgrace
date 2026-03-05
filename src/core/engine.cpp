@@ -280,11 +280,27 @@ void Engine::process_block(float* l, float* r, size_t nframes) {
 
 void Engine::render_block(float* out_l, float* out_r, size_t frames) {
     for (size_t i = 0; i < frames; ++i) { out_l[i] = 0.f; out_r[i] = 0.f; }
+    
+    bool any_solo = false;
+    for (size_t t = 0; t < m_tracks.size(); ++t) {
+        if (m_tracks[t].solo()) { any_solo = true; break; }
+    }
+
     for (size_t t = 0; t < m_tracks.size(); ++t) {
         m_tracks[t].process(m_track_l[t], m_track_r[t], frames);
-        for (size_t i = 0; i < frames; ++i) {
-            out_l[i] += m_track_l[t][i];
-            out_r[i] += m_track_r[t][i];
+        
+        bool should_play = true;
+        if (any_solo) {
+            if (!m_tracks[t].solo()) should_play = false;
+        } else {
+            if (m_tracks[t].muted()) should_play = false;
+        }
+
+        if (should_play) {
+            for (size_t i = 0; i < frames; ++i) {
+                out_l[i] += m_track_l[t][i];
+                out_r[i] += m_track_r[t][i];
+            }
         }
     }
 }

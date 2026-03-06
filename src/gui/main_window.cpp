@@ -52,6 +52,7 @@ namespace disgrace_ns
     init_instrument_tab(w, h);
     init_mixer_tab(w, h);
     init_settings_tab(w, h);
+    init_help_tab(w, h);
 
     m_tabs->end();
 

@@ -53,6 +53,7 @@ namespace disgrace_ns
         Fl_Group* m_mixer_tab;
         Fl_Group* m_instrument_tab;
         Fl_Group* m_settings_tab;
+        Fl_Group* m_help_tab;
         Fl_Check_Button* m_loop_btn;
 
         TrackerPanel* m_tracker_panel;
@@ -67,6 +68,7 @@ namespace disgrace_ns
         void init_instrument_tab(int w, int h);
         void init_mixer_tab(int w, int h);
         void init_settings_tab(int w, int h);
+        void init_help_tab(int w, int h);
     };
 
 } // namespace disgrace_ns

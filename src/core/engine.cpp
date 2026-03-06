@@ -151,7 +151,10 @@ void Engine::auto_seek() {
 }
 
 void Engine::preview_note(size_t t, uint8_t note) {
-    if (t < m_tracks.size()) m_tracks[t].note_on(note, 100);
+    if (t < m_tracks.size()) {
+        if (note == 254) m_tracks[t].note_off();
+        else m_tracks[t].note_on(note, 100);
+    }
 }
 
 void Engine::stop_preview(size_t t) {
@@ -179,7 +182,9 @@ void Engine::process_tick()
         size_t num_cols = pat.column_count(t);
         for (size_t c = 0; c < num_cols; ++c) {
             TrackEvent& ev = pat.event(t, row, c);
-            if (ev.note != 255) {
+            if (ev.note == 254) {
+                m_tracks[t].note_off();
+            } else if (ev.note != 255) {
                 m_tracks[t].note_on(ev.note, ev.volume == 255 ? 100 : ev.volume); 
             }
             if (c == 0) handle_effect_row_start(t, ev);

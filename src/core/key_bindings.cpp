@@ -49,6 +49,23 @@ void KeyBindings::set_defaults() {
     add_default(Action::NoteA,  'n');
     add_default(Action::NoteAs, 'j');
     add_default(Action::NoteB,  'm');
+
+    // 2nd octave (Upper row)
+    add_default(Action::NoteOff, '^');
+    add_default(Action::NoteOff, '`'); // Common on QWERTY
+    add_default(Action::NoteC2,  'q');
+    add_default(Action::NoteCs2, '2');
+    add_default(Action::NoteD2,  'w');
+    add_default(Action::NoteDs2, '3');
+    add_default(Action::NoteE2,  'e');
+    add_default(Action::NoteF2,  'r');
+    add_default(Action::NoteFs2, '5');
+    add_default(Action::NoteG2,  't');
+    add_default(Action::NoteGs2, '6');
+    add_default(Action::NoteA2,  'y');
+    add_default(Action::NoteAs2, '7');
+    add_default(Action::NoteB2,  'u');
+    add_default(Action::NoteC3,  'i');
 }
 
 Action KeyBindings::get_action(int key, int modifiers) const {
@@ -108,6 +125,20 @@ std::string KeyBindings::get_action_name(Action action) const {
         case Action::NoteA: return "Note A";
         case Action::NoteAs: return "Note A#";
         case Action::NoteB: return "Note B";
+        case Action::NoteOff: return "Note Off";
+        case Action::NoteC2: return "Note C (2nd Octave)";
+        case Action::NoteCs2: return "Note C# (2nd Octave)";
+        case Action::NoteD2: return "Note D (2nd Octave)";
+        case Action::NoteDs2: return "Note D# (2nd Octave)";
+        case Action::NoteE2: return "Note E (2nd Octave)";
+        case Action::NoteF2: return "Note F (2nd Octave)";
+        case Action::NoteFs2: return "Note F# (2nd Octave)";
+        case Action::NoteG2: return "Note G (2nd Octave)";
+        case Action::NoteGs2: return "Note G# (2nd Octave)";
+        case Action::NoteA2: return "Note A (2nd Octave)";
+        case Action::NoteAs2: return "Note A# (2nd Octave)";
+        case Action::NoteB2: return "Note B (2nd Octave)";
+        case Action::NoteC3: return "Note C (3rd Octave)";
     }
     return "Unknown";
 }

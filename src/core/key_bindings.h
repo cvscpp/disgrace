@@ -24,6 +24,7 @@ enum class Action {
     MoveDown,
     MoveLeft,
     MoveRight,
+    NoteOff,
     NoteC,
     NoteCs,
     NoteD,
@@ -35,7 +36,20 @@ enum class Action {
     NoteGs,
     NoteA,
     NoteAs,
-    NoteB
+    NoteB,
+    NoteC2,
+    NoteCs2,
+    NoteD2,
+    NoteDs2,
+    NoteE2,
+    NoteF2,
+    NoteFs2,
+    NoteG2,
+    NoteGs2,
+    NoteA2,
+    NoteAs2,
+    NoteB2,
+    NoteC3
 };
 
 struct KeyCombo {

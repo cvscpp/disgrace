@@ -142,6 +142,7 @@ void TrackerView::draw() {
                 }
                 fl_color(ev.note == 255 ? 80 : 255, ev.note == 255 ? 80 : 255, ev.note == 255 ? 80 : 255);
                 if (ev.note == 255) fl_draw("---", col_x, ry + 14);
+                else if (ev.note == 254) fl_draw("===", col_x, ry + 14);
                 else {
                     const char* notes[] = {"C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-"};
                     char buf[8]; snprintf(buf, 8, "%s%d", notes[ev.note % 12], ev.note / 12);
@@ -282,7 +283,9 @@ int TrackerView::handle(int event) {
         case FL_KEYUP: {
              Action action = m_engine.m_key_bindings.get_action(Fl::event_key(), Fl::event_state() & (FL_CTRL | FL_SHIFT | FL_ALT | FL_META));
              auto is_note_action = [](Action a) -> bool {
-                return (int)a >= (int)Action::NoteC && (int)a <= (int)Action::NoteB;
+                return ((int)a >= (int)Action::NoteC && (int)a <= (int)Action::NoteB) ||
+                       ((int)a >= (int)Action::NoteC2 && (int)a <= (int)Action::NoteB2) ||
+                       (a == Action::NoteC3) || (a == Action::NoteOff);
              };
              if (is_note_action(action)) {
                  m_engine.stop_preview(m_cursor_track);
@@ -324,18 +327,25 @@ int TrackerView::handle(int event) {
                     case Action::NoteFs: return 6; case Action::NoteG: return 7;
                     case Action::NoteGs: return 8; case Action::NoteA: return 9;
                     case Action::NoteAs: return 10; case Action::NoteB: return 11;
+                    case Action::NoteC2: return 12; case Action::NoteCs2: return 13;
+                    case Action::NoteD2: return 14; case Action::NoteDs2: return 15;
+                    case Action::NoteE2: return 16; case Action::NoteF2: return 17;
+                    case Action::NoteFs2: return 18; case Action::NoteG2: return 19;
+                    case Action::NoteGs2: return 20; case Action::NoteA2: return 21;
+                    case Action::NoteAs2: return 22; case Action::NoteB2: return 23;
+                    case Action::NoteC3: return 24;
+                    case Action::NoteOff: return 254;
                     default: return -1;
                 }
             };
 
             int semitone = action_to_note(action);
             if (semitone >= 0 && m_cursor_field == 0) {
-                int final_note = semitone + (m_engine.base_octave() * 12);
+                int final_note = (semitone == 254) ? 254 : (semitone + (m_engine.base_octave() * 12));
                 if (m_engine.m_record_enabled) {
                     insert_note(final_note);
-                } else {
-                    m_engine.preview_note(m_cursor_track, final_note);
                 }
+                m_engine.preview_note(m_cursor_track, final_note);
                 ensure_cursor_visible();
                 return 1;
             }

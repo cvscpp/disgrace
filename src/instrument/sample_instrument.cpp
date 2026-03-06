@@ -10,18 +10,29 @@ namespace disgrace_ns
     {
     }
 
-    void disgrace_ns::SampleInstrument::note_on(uint8_t note, uint8_t velocity, size_t offset_samples)
+    void disgrace_ns::SampleInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_index, size_t offset_samples)
     {
         if (m_samples.empty()) return;
+
+        // Cut previous note on SAME column
+        for (auto& v : m_voices) {
+            if (v && v->active() && v->column() == column_index) {
+                v->stop();
+            }
+        }
         
         float freq = 440.0f * powf(2.0f, (int(note) - 69) / 12.0f);
-        disgrace_ns::Voice* v = allocate_voice();
+        disgrace_ns::Voice* v = allocate_voice(column_index);
         if (v) v->start(note, velocity, freq, offset_samples);
     }
 
-    void disgrace_ns::SampleInstrument::note_off()
+    void disgrace_ns::SampleInstrument::note_off(size_t column_index)
     {
-        for (auto& v : m_voices) if (v && v->active()) v->stop();
+        for (auto& v : m_voices) {
+            if (v && v->active() && v->column() == column_index) {
+                v->stop();
+            }
+        }
     }
 
     void disgrace_ns::SampleInstrument::panic()

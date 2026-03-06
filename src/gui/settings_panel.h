@@ -42,6 +42,7 @@ private:
     Fl_Choice* m_gui_font_size;
     Fl_Button* m_waveform_color_btn;
 
+    Fl_Choice* m_kbd_layout;
     Fl_Choice* m_action_choice;
     Fl_Button* m_assign_btn;
     Fl_Box* m_current_binding_box;
@@ -62,6 +63,7 @@ private:
     static void cb_gui_btn_h(Fl_Widget*, void*);
     static void cb_gui_font_size(Fl_Widget*, void*);
     static void cb_waveform_color(Fl_Widget*, void*);
+    static void cb_kbd_layout(Fl_Widget*, void*);
     static void cb_assign_key(Fl_Widget*, void*);
 };
 

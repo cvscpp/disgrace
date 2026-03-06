@@ -6,6 +6,25 @@
 namespace disgrace_ns {
 
 KeyBindings::KeyBindings() {
+    detect_layout();
+    set_defaults();
+}
+
+KeyboardLayout KeyBindings::detect_layout() {
+    // Simple detection based on environment or platform
+    // For now we assume QWERTY unless told otherwise or maybe check locale
+    const char* lang = getenv("LANG");
+    if (lang && (strstr(lang, "de_DE") || strstr(lang, "de_AT") || strstr(lang, "de_CH"))) {
+        m_layout = KeyboardLayout::QWERTZ;
+    } else {
+        m_layout = KeyboardLayout::QWERTY;
+    }
+    return m_layout;
+}
+
+void KeyBindings::set_layout(KeyboardLayout layout) {
+    m_layout = layout;
+    if (m_layout == KeyboardLayout::Auto) detect_layout();
     set_defaults();
 }
 
@@ -37,7 +56,8 @@ void KeyBindings::set_defaults() {
     add_default(Action::MoveRight, FL_Right);
 
     // Notes
-    add_default(Action::NoteC,  'z');
+    bool is_qwertz = (m_layout == KeyboardLayout::QWERTZ);
+    add_default(Action::NoteC,  is_qwertz ? 'y' : 'z');
     add_default(Action::NoteCs, 's');
     add_default(Action::NoteD,  'x');
     add_default(Action::NoteDs, 'd');
@@ -62,7 +82,7 @@ void KeyBindings::set_defaults() {
     add_default(Action::NoteFs2, '5');
     add_default(Action::NoteG2,  't');
     add_default(Action::NoteGs2, '6');
-    add_default(Action::NoteA2,  'y');
+    add_default(Action::NoteA2,  is_qwertz ? 'z' : 'y');
     add_default(Action::NoteAs2, '7');
     add_default(Action::NoteB2,  'u');
     add_default(Action::NoteC3,  'i');

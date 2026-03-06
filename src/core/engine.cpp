@@ -120,53 +120,50 @@ void Engine::auto_seek() {
     size_t target_row = m_current_row;
 
     for (size_t t = 0; t < m_tracks.size() && t < pat.track_count(); ++t) {
-        // Find most recent note on this track, starting from current row and going backwards
-        int found_row = -1;
-        uint8_t found_note = 255;
-        uint8_t found_vol = 255;
+        // Find most recent note on this track for each column
+        size_t num_cols = pat.column_count(t);
+        for (size_t c = 0; c < num_cols; ++c) {
+            int found_row = -1;
+            uint8_t found_note = 255;
+            uint8_t found_vol = 255;
 
-        for (int r = (int)target_row - 1; r >= 0; --r) {
-            // Check all note columns on this track
-            size_t num_cols = pat.column_count(t);
-            bool found_in_row = false;
-            for (size_t c = 0; c < num_cols; ++c) {
+            for (int r = (int)target_row - 1; r >= 0; --r) {
                 const auto& ev = pat.event(t, (size_t)r, c);
+                if (ev.note == 254) break; // Note off cuts the search
                 if (ev.note != 255) {
                     found_row = r;
                     found_note = ev.note;
                     found_vol = ev.volume;
-                    found_in_row = true;
                     break; 
                 }
             }
-            if (found_in_row) break;
-        }
 
-        if (found_row != -1 && found_note != 255) {
-            size_t row_diff = target_row - (size_t)found_row;
-            size_t offset_samples = row_diff * m_timing.samples_per_row();
-            m_tracks[t].note_on(found_note, found_vol == 255 ? 100 : found_vol, offset_samples);
+            if (found_row != -1 && found_note != 255 && found_note != 254) {
+                size_t row_diff = target_row - (size_t)found_row;
+                size_t offset_samples = row_diff * m_timing.samples_per_row();
+                m_tracks[t].note_on(found_note, found_vol == 255 ? 100 : found_vol, c, offset_samples);
+            }
         }
     }
 }
 
-void Engine::preview_note(size_t t, uint8_t note) {
+void Engine::preview_note(size_t t, uint8_t note, size_t column) {
     if (t < m_tracks.size()) {
-        if (note == 254) m_tracks[t].note_off();
-        else m_tracks[t].note_on(note, 100);
+        if (note == 254) m_tracks[t].note_off(column);
+        else m_tracks[t].note_on(note, 100, column);
     }
 }
 
-void Engine::stop_preview(size_t t) {
-    if (t < m_tracks.size()) m_tracks[t].note_off();
+void Engine::stop_preview(size_t t, size_t column) {
+    if (t < m_tracks.size()) m_tracks[t].note_off(column);
 }
 
-void Engine::record_note(uint8_t note)
+void Engine::record_note(uint8_t note, size_t column)
 {
     size_t row = current_row();
     Pattern& current_pattern = pattern();
     if (m_record_track < current_pattern.track_count()) {
-        current_pattern.event(m_record_track, row, 0).note = note;
+        current_pattern.event(m_record_track, row, column).note = note;
     }
 }
 
@@ -183,9 +180,9 @@ void Engine::process_tick()
         for (size_t c = 0; c < num_cols; ++c) {
             TrackEvent& ev = pat.event(t, row, c);
             if (ev.note == 254) {
-                m_tracks[t].note_off();
+                m_tracks[t].note_off(c);
             } else if (ev.note != 255) {
-                m_tracks[t].note_on(ev.note, ev.volume == 255 ? 100 : ev.volume); 
+                m_tracks[t].note_on(ev.note, ev.volume == 255 ? 100 : ev.volume, c); 
             }
             if (c == 0) handle_effect_row_start(t, ev);
         }

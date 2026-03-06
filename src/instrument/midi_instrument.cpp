@@ -3,9 +3,15 @@
 
 namespace disgrace_ns {
 
-    void MidiInstrument::note_on(uint8_t note, uint8_t velocity, size_t)
+    void MidiInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_index, size_t)
  {
     if (!m_engine) return;
+    
+    // Stop last note on same column
+    note_off(column_index);
+
+    m_last_note[column_index % 16] = note;
+
     MidiMessage msg;
     msg.status = 0x90 | (m_channel & 0x0F);
     msg.data1 = note & 0x7F;
@@ -13,11 +19,12 @@ namespace disgrace_ns {
     m_engine->m_midi_queue.push(msg);
 }
 
-void MidiInstrument::note_off() {
+void MidiInstrument::note_off(size_t column_index) {
     if (!m_engine) return;
+
     MidiMessage msg;
     msg.status = 0x80 | (m_channel & 0x0F);
-    msg.data1 = 0; // Standard NoteOff often uses 0, but we should ideally track last note
+    msg.data1 = m_last_note[column_index % 16] & 0x7F;
     msg.data2 = 0;
     m_engine->m_midi_queue.push(msg);
 }

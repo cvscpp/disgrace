@@ -173,7 +173,15 @@ void SettingsPanel::init_kbd_grp(int x, int y, int w, int h) {
     Fl_Box* title = new Fl_Box(x + 20, y + 40, 200, 25, "Keyboard Configuration");
     title->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
 
-    m_action_choice = new Fl_Choice(x + 120, y + 70, 200, 25, "Select Action:");
+    m_kbd_layout = new Fl_Choice(x + 120, y + 70, 100, 25, "Layout:");
+    m_kbd_layout->add("Auto");
+    m_kbd_layout->add("QWERTY");
+    m_kbd_layout->add("QWERTZ");
+    m_kbd_layout->value((int)m_engine.m_key_bindings.get_layout());
+    m_kbd_layout->callback(cb_kbd_layout, this);
+    m_kbd_layout->align(FL_ALIGN_LEFT);
+
+    m_action_choice = new Fl_Choice(x + 120, y + 100, 200, 25, "Select Action:");
     m_action_choice->align(FL_ALIGN_LEFT);
     
     // Add all actions to choice
@@ -183,7 +191,7 @@ void SettingsPanel::init_kbd_grp(int x, int y, int w, int h) {
         Action::Clear, Action::MoveUp, Action::MoveDown, Action::MoveLeft, Action::MoveRight,
         Action::NoteC, Action::NoteCs, Action::NoteD, Action::NoteDs, Action::NoteE,
         Action::NoteF, Action::NoteFs, Action::NoteG, Action::NoteGs, Action::NoteA,
-        Action::NoteAs, Action::NoteB
+        Action::NoteAs, Action::NoteB, Action::NoteOff
     };
 
     for (auto action : actions) {
@@ -194,10 +202,10 @@ void SettingsPanel::init_kbd_grp(int x, int y, int w, int h) {
         static_cast<SettingsPanel*>(data)->update_kbd_list();
     }, this);
 
-    m_current_binding_box = new Fl_Box(x + 20, y + 100, 300, 25, "Current Binding: ...");
+    m_current_binding_box = new Fl_Box(x + 20, y + 130, 300, 25, "Current Binding: ...");
     m_current_binding_box->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
 
-    m_assign_btn = new Fl_Button(x + 20, y + 130, 150, 25, "Assign New Key...");
+    m_assign_btn = new Fl_Button(x + 20, y + 160, 150, 25, "Assign New Key...");
     m_assign_btn->callback(cb_assign_key, this);
 
     m_kbd_grp->end();
@@ -301,6 +309,13 @@ void SettingsPanel::cb_waveform_color(Fl_Widget*, void* data) {
             if (mw) mw->update_all_uis();
         }
     }
+}
+
+void SettingsPanel::cb_kbd_layout(Fl_Widget* w, void* data) {
+    auto* self = static_cast<SettingsPanel*>(data);
+    auto* choice = static_cast<Fl_Choice*>(w);
+    self->m_engine.m_key_bindings.set_layout((KeyboardLayout)choice->value());
+    self->update_kbd_list();
 }
 
 // Modal window to capture a key press

@@ -26,6 +26,12 @@ namespace disgrace_ns
                                                 size_t frames) = 0;
 
                                                 virtual bool active() const = 0;
+
+        void set_column(size_t col) { m_column = col; }
+        size_t column() const { return m_column; }
+
+    protected:
+        size_t m_column = 0;
     };
 
 } // namespace disgrace_ns

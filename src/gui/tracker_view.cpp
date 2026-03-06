@@ -288,7 +288,7 @@ int TrackerView::handle(int event) {
                        (a == Action::NoteC3) || (a == Action::NoteOff);
              };
              if (is_note_action(action)) {
-                 m_engine.stop_preview(m_cursor_track);
+                 m_engine.stop_preview(m_cursor_track, m_cursor_col);
                  return 1;
              }
              return 0;
@@ -345,7 +345,7 @@ int TrackerView::handle(int event) {
                 if (m_engine.m_record_enabled) {
                     insert_note(final_note);
                 }
-                m_engine.preview_note(m_cursor_track, final_note);
+                m_engine.preview_note(m_cursor_track, final_note, m_cursor_col);
                 ensure_cursor_visible();
                 return 1;
             }

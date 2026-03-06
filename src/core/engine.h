@@ -99,8 +99,8 @@ public:
     bool   is_playing() const;
     void set_active_pattern(size_t index);
     size_t active_pattern() const;
-    void preview_note(size_t track, uint8_t note);
-    void stop_preview(size_t track);
+    void preview_note(size_t track, uint8_t note, size_t column = 0);
+    void stop_preview(size_t track, size_t column = 0);
 
     disgrace_ns::Pattern& pattern();
 
@@ -129,7 +129,7 @@ public:
 
     void enable_record(bool e);
     void set_record_track(size_t t);
-    void record_note(uint8_t note);
+    void record_note(uint8_t note, size_t column = 0);
     void set_current_instrument(size_t index);
     void toggle_metronome();
     void set_metronome_enabled(bool enabled);

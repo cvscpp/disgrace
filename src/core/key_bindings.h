@@ -52,6 +52,12 @@ enum class Action {
     NoteC3
 };
 
+enum class KeyboardLayout {
+    Auto,
+    QWERTY,
+    QWERTZ
+};
+
 struct KeyCombo {
     int key;
     int modifiers; // FL_CTRL, FL_SHIFT, etc.
@@ -67,6 +73,10 @@ public:
     KeyBindings();
 
     void set_defaults();
+    void set_layout(KeyboardLayout layout);
+    KeyboardLayout get_layout() const { return m_layout; }
+    KeyboardLayout detect_layout();
+
     Action get_action(int key, int modifiers) const;
     std::string get_action_name(Action action) const;
     std::string get_key_name(Action action) const;
@@ -75,6 +85,7 @@ public:
 private:
     std::map<Action, KeyCombo> m_action_to_key;
     std::map<KeyCombo, Action> m_key_to_action;
+    KeyboardLayout m_layout = KeyboardLayout::Auto;
 };
 
 } // namespace disgrace_ns

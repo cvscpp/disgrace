@@ -5,23 +5,31 @@
 namespace disgrace_ns
 {
 
-    disgrace_ns::Voice* disgrace_ns::Instrument::allocate_voice()
+    disgrace_ns::Voice* disgrace_ns::Instrument::allocate_voice(size_t column_index)
     {
         // find inactive voice
         for (auto& v : m_voices)
         {
             if (!v) {
                 v = create_voice();
-                if (v) return v.get();
+                if (v) {
+                    v->set_column(column_index);
+                    return v.get();
+                }
                 continue;
             }
 
-            if (!v->active())
+            if (!v->active()) {
+                v->set_column(column_index);
                 return v.get();
+            }
         }
 
         // voice stealing: steal oldest (voice 0)
-        if (m_voices[0]) return m_voices[0].get();
+        if (m_voices[0]) {
+            m_voices[0]->set_column(column_index);
+            return m_voices[0].get();
+        }
         return nullptr;
     }
 

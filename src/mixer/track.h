@@ -58,8 +58,8 @@ public:
     float pan    = 0.0f;  // -1 left, +1 right
     uint8_t last_volume = 127;
 
-    void note_on(uint8_t note, uint8_t velocity, size_t offset_samples = 0);
-    void note_off();
+    void note_on(uint8_t note, uint8_t velocity, size_t column_index = 0, size_t offset_samples = 0);
+    void note_off(size_t column_index = 0);
     void panic();
 
     size_t total_latency() const; // Added const

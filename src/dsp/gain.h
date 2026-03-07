@@ -37,6 +37,18 @@ public:
         if (j.contains("gain")) gain = j["gain"];
         if (j.contains("bypassed")) m_bypassed = j["bypassed"];
     }
+
+    std::vector<std::string> get_presets() override {
+        return {"Unity", "Silent", "Boost (+6dB)", "Boost (+12dB)", "Attenuate (-6dB)"};
+    }
+
+    void load_preset(const std::string& name) override {
+        if (name == "Unity") gain = 1.0f;
+        else if (name == "Silent") gain = 0.0f;
+        else if (name == "Boost (+6dB)") gain = 2.0f;
+        else if (name == "Boost (+12dB)") gain = 4.0f;
+        else if (name == "Attenuate (-6dB)") gain = 0.5f;
+    }
 };
 
 } // namespace disgrace_ns

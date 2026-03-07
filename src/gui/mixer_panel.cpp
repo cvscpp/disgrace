@@ -10,8 +10,23 @@
 #include <FL/Fl_Native_File_Chooser.H>
 #include "../dsp/gain.h"
 #include "../dsp/delay.h"
+#include "../dsp/reverb.h"
+#include "../dsp/limiter.h"
+#include "../dsp/exciter.h"
+#include "../dsp/phaser.h"
+#include "../dsp/flanger.h"
+#include "../dsp/echo.h"
+#include "../dsp/compressor.h"
+#include "../dsp/graphical_eq.h"
+#include "../dsp/cabinet.h"
+#include "../dsp/distortion.h"
+#include "../dsp/chorus.h"
+#include "../dsp/stereo_expander.h"
+#include "../dsp/ring_modulator.h"
+#include "../dsp/gate.h"
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 
 namespace disgrace_ns {
 
@@ -56,8 +71,15 @@ MixerPanel::MixerPanel(int x, int y, int w, int h, Engine& engine)
     new Fl_Box(cur_x, cur_y, 120, 20, "Available Effects");
     m_avail_fx_browser = new Fl_Browser(cur_x, cur_y + 20, 120, h / 2 - 60);
     m_avail_fx_browser->type(FL_HOLD_BROWSER);
-    m_avail_fx_browser->add("Gain");
-    m_avail_fx_browser->add("Delay");
+    
+    std::vector<std::string> fx_list = {
+        "Gain", "Delay", "Reverb", "Limiter", "Exciter", 
+        "Phaser", "Flanger", "Echo", "Compressor", 
+        "Graphical EQ", "Cabinet", "Distortion",
+        "Chorus", "Stereo Expander", "Ring Modulator", "Gate"
+    };
+    std::sort(fx_list.begin(), fx_list.end());
+    for (const auto& fx : fx_list) m_avail_fx_browser->add(fx.c_str());
     
     Fl_Button* add_fx_btn = new Fl_Button(cur_x, y + h - 35, 120, std_h, "Add Effect");
     add_fx_btn->callback(cb_add_fx, this);
@@ -340,17 +362,21 @@ void MixerPanel::update_effect_editor() {
         if (dsp) {
             Fl_Scroll* param_scroll = new Fl_Scroll(m_fx_params_group->x(), m_fx_params_group->y(), m_fx_params_group->w(), m_fx_params_group->h());
             param_scroll->type(Fl_Scroll::VERTICAL);
+            
             Fl_Pack* param_pack = new Fl_Pack(param_scroll->x(), param_scroll->y(), param_scroll->w() - 25, 1);
             param_pack->type(Fl_Pack::VERTICAL);
             param_pack->spacing(spacing * 2);
             param_pack->begin();
+
+            int slider_w = param_pack->w() - 150;
+
             Fl_Box* header = new Fl_Box(0, 0, param_pack->w(), std_h, strdup(("Editing: " + dsp->name()).c_str()));
             header->labelfont(FL_BOLD); header->labelsize(font_sz + 2); header->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+            
             Fl_Group* pre_row = new Fl_Group(0, 0, param_pack->w(), std_h);
             pre_row->begin();
-            new Fl_Box(pre_row->x(), pre_row->y(), 60, std_h, "Preset:");
-            Fl_Choice* presets = new Fl_Choice(pre_row->x() + 65, pre_row->y(), 150, std_h);
-            presets->labelsize(font_sz);
+            Fl_Choice* presets = new Fl_Choice(pre_row->x(), pre_row->y(), 150, std_h, "Preset");
+            presets->labelsize(font_sz); presets->align(FL_ALIGN_RIGHT);
             for (const auto& p : dsp->get_presets()) presets->add(strdup(p.c_str()));
             presets->value(0); presets->callback(cb_fx_preset_select, new ::std::pair<MixerPanel*,int>(this, m_selected_fx_slot));
             Fl_Button* psave = new Fl_Button(pre_row->x() + 220, pre_row->y(), 60, std_h, "Save");
@@ -358,17 +384,168 @@ void MixerPanel::update_effect_editor() {
             Fl_Button* pload = new Fl_Button(pre_row->x() + 285, pre_row->y(), 60, std_h, "Load");
             pload->labelsize(font_sz); pload->callback(cb_fx_preset_load, new ::std::pair<MixerPanel*,int>(this, m_selected_fx_slot));
             pre_row->end();
+
             if (auto* g = dynamic_cast<GainDSP*>(dsp)) {
-                Fl_Value_Slider* s = new Fl_Value_Slider(0, 0, param_pack->w(), std_h, "Gain");
-                s->labelsize(font_sz); s->type(FL_HOR_NICE_SLIDER); s->range(0, 2); s->value(g->gain);
+                Fl_Value_Slider* s = new Fl_Value_Slider(0, 0, slider_w, std_h, "Gain");
+                s->labelsize(font_sz); s->type(FL_HOR_NICE_SLIDER); s->range(0, 2); s->value(g->gain); s->align(FL_ALIGN_RIGHT);
                 s->callback([](Fl_Widget* w, void* d){ ((GainDSP*)d)->gain = (float)((Fl_Value_Slider*)w)->value(); }, g);
             } else if (auto* d = dynamic_cast<DelayDSP*>(dsp)) {
-                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, param_pack->w(), std_h, "Feedback");
-                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 0.99); s1->value(d->feedback);
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Feedback");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 0.99); s1->value(d->feedback); s1->align(FL_ALIGN_RIGHT);
                 s1->callback([](Fl_Widget* w, void* v){ ((DelayDSP*)v)->feedback = (float)((Fl_Value_Slider*)w)->value(); }, d);
-                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, param_pack->w(), std_h, "Mix");
-                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(0, 1); s2->value(d->mix);
+                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Mix");
+                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(0, 1); s2->value(d->mix); s2->align(FL_ALIGN_RIGHT);
                 s2->callback([](Fl_Widget* w, void* v){ ((DelayDSP*)v)->mix = (float)((Fl_Value_Slider*)w)->value(); }, d);
+            } else if (auto* rev = dynamic_cast<ReverbDSP*>(dsp)) {
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Room Size");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 1); s1->value(rev->room_size); s1->align(FL_ALIGN_RIGHT);
+                s1->callback([](Fl_Widget* w, void* v){ ((ReverbDSP*)v)->room_size = (float)((Fl_Value_Slider*)w)->value(); }, rev);
+                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Damp");
+                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(0, 1); s2->value(rev->damp); s2->align(FL_ALIGN_RIGHT);
+                s2->callback([](Fl_Widget* w, void* v){ ((ReverbDSP*)v)->damp = (float)((Fl_Value_Slider*)w)->value(); }, rev);
+                Fl_Value_Slider* s3 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Mix");
+                s3->labelsize(font_sz); s3->type(FL_HOR_NICE_SLIDER); s3->range(0, 1); s3->value(rev->mix); s3->align(FL_ALIGN_RIGHT);
+                s3->callback([](Fl_Widget* w, void* v){ ((ReverbDSP*)v)->mix = (float)((Fl_Value_Slider*)w)->value(); }, rev);
+            } else if (auto* lim = dynamic_cast<LimiterDSP*>(dsp)) {
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Ceiling");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 1); s1->value(lim->ceiling); s1->align(FL_ALIGN_RIGHT);
+                s1->callback([](Fl_Widget* w, void* v){ ((LimiterDSP*)v)->ceiling = (float)((Fl_Value_Slider*)w)->value(); }, lim);
+                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Threshold");
+                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(0, 1); s2->value(lim->threshold); s2->align(FL_ALIGN_RIGHT);
+                s2->callback([](Fl_Widget* w, void* v){ ((LimiterDSP*)v)->threshold = (float)((Fl_Value_Slider*)w)->value(); }, lim);
+            } else if (auto* exc = dynamic_cast<ExciterDSP*>(dsp)) {
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Amount");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 1); s1->value(exc->amount); s1->align(FL_ALIGN_RIGHT);
+                s1->callback([](Fl_Widget* w, void* v){ ((ExciterDSP*)v)->amount = (float)((Fl_Value_Slider*)w)->value(); }, exc);
+                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Freq");
+                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(0, 1); s2->value(exc->freq); s2->align(FL_ALIGN_RIGHT);
+                s2->callback([](Fl_Widget* w, void* v){ ((ExciterDSP*)v)->freq = (float)((Fl_Value_Slider*)w)->value(); }, exc);
+            } else if (auto* pha = dynamic_cast<PhaserDSP*>(dsp)) {
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Rate");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 1); s1->value(pha->rate); s1->align(FL_ALIGN_RIGHT);
+                s1->callback([](Fl_Widget* w, void* v){ ((PhaserDSP*)v)->rate = (float)((Fl_Value_Slider*)w)->value(); }, pha);
+                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Depth");
+                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(0, 1); s2->value(pha->depth); s2->align(FL_ALIGN_RIGHT);
+                s2->callback([](Fl_Widget* w, void* v){ ((PhaserDSP*)v)->depth = (float)((Fl_Value_Slider*)w)->value(); }, pha);
+                Fl_Value_Slider* s3 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Feedback");
+                s3->labelsize(font_sz); s3->type(FL_HOR_NICE_SLIDER); s3->range(0, 1); s3->value(pha->feedback); s3->align(FL_ALIGN_RIGHT);
+                s3->callback([](Fl_Widget* w, void* v){ ((PhaserDSP*)v)->feedback = (float)((Fl_Value_Slider*)w)->value(); }, pha);
+                Fl_Value_Slider* s4 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Mix");
+                s4->labelsize(font_sz); s4->type(FL_HOR_NICE_SLIDER); s4->range(0, 1); s4->value(pha->mix); s4->align(FL_ALIGN_RIGHT);
+                s4->callback([](Fl_Widget* w, void* v){ ((PhaserDSP*)v)->mix = (float)((Fl_Value_Slider*)w)->value(); }, pha);
+            } else if (auto* fla = dynamic_cast<FlangerDSP*>(dsp)) {
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Rate");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 1); s1->value(fla->rate); s1->align(FL_ALIGN_RIGHT);
+                s1->callback([](Fl_Widget* w, void* v){ ((FlangerDSP*)v)->rate = (float)((Fl_Value_Slider*)w)->value(); }, fla);
+                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Depth");
+                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(0, 1); s2->value(fla->depth); s2->align(FL_ALIGN_RIGHT);
+                s2->callback([](Fl_Widget* w, void* v){ ((FlangerDSP*)v)->depth = (float)((Fl_Value_Slider*)w)->value(); }, fla);
+                Fl_Value_Slider* s3 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Feedback");
+                s3->labelsize(font_sz); s3->type(FL_HOR_NICE_SLIDER); s3->range(0, 1); s3->value(fla->feedback); s3->align(FL_ALIGN_RIGHT);
+                s3->callback([](Fl_Widget* w, void* v){ ((FlangerDSP*)v)->feedback = (float)((Fl_Value_Slider*)w)->value(); }, fla);
+                Fl_Value_Slider* s4 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Mix");
+                s4->labelsize(font_sz); s4->type(FL_HOR_NICE_SLIDER); s4->range(0, 1); s4->value(fla->mix); s4->align(FL_ALIGN_RIGHT);
+                s4->callback([](Fl_Widget* w, void* v){ ((FlangerDSP*)v)->mix = (float)((Fl_Value_Slider*)w)->value(); }, fla);
+            } else if (auto* ech = dynamic_cast<EchoDSP*>(dsp)) {
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Time");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 1); s1->value(ech->time); s1->align(FL_ALIGN_RIGHT);
+                s1->callback([](Fl_Widget* w, void* v){ ((EchoDSP*)v)->time = (float)((Fl_Value_Slider*)w)->value(); }, ech);
+                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Feedback");
+                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(0, 1); s2->value(ech->feedback); s2->align(FL_ALIGN_RIGHT);
+                s2->callback([](Fl_Widget* w, void* v){ ((EchoDSP*)v)->feedback = (float)((Fl_Value_Slider*)w)->value(); }, ech);
+                Fl_Value_Slider* s3 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Damp");
+                s3->labelsize(font_sz); s3->type(FL_HOR_NICE_SLIDER); s3->range(0, 1); s3->value(ech->damp); s3->align(FL_ALIGN_RIGHT);
+                s3->callback([](Fl_Widget* w, void* v){ ((EchoDSP*)v)->damp = (float)((Fl_Value_Slider*)w)->value(); }, ech);
+                Fl_Value_Slider* s4 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Mix");
+                s4->labelsize(font_sz); s4->type(FL_HOR_NICE_SLIDER); s4->range(0, 1); s4->value(ech->mix); s4->align(FL_ALIGN_RIGHT);
+                s4->callback([](Fl_Widget* w, void* v){ ((EchoDSP*)v)->mix = (float)((Fl_Value_Slider*)w)->value(); }, ech);
+            } else if (auto* cmp = dynamic_cast<CompressorDSP*>(dsp)) {
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Threshold");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 1); s1->value(cmp->threshold); s1->align(FL_ALIGN_RIGHT);
+                s1->callback([](Fl_Widget* w, void* v){ ((CompressorDSP*)v)->threshold = (float)((Fl_Value_Slider*)w)->value(); }, cmp);
+                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Ratio");
+                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(1, 20); s2->value(cmp->ratio); s2->align(FL_ALIGN_RIGHT);
+                s2->callback([](Fl_Widget* w, void* v){ ((CompressorDSP*)v)->ratio = (float)((Fl_Value_Slider*)w)->value(); }, cmp);
+                Fl_Value_Slider* s3 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Attack (s)");
+                s3->labelsize(font_sz); s3->type(FL_HOR_NICE_SLIDER); s3->range(0.001, 0.5); s3->value(cmp->attack); s3->align(FL_ALIGN_RIGHT);
+                s3->callback([](Fl_Widget* w, void* v){ ((CompressorDSP*)v)->attack = (float)((Fl_Value_Slider*)w)->value(); }, cmp);
+                Fl_Value_Slider* s4 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Release (s)");
+                s4->labelsize(font_sz); s4->type(FL_HOR_NICE_SLIDER); s4->range(0.01, 2.0); s4->value(cmp->release); s4->align(FL_ALIGN_RIGHT);
+                s4->callback([](Fl_Widget* w, void* v){ ((CompressorDSP*)v)->release = (float)((Fl_Value_Slider*)w)->value(); }, cmp);
+                Fl_Value_Slider* s5 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Makeup");
+                s5->labelsize(font_sz); s5->type(FL_HOR_NICE_SLIDER); s5->range(0, 2); s5->value(cmp->makeup); s5->align(FL_ALIGN_RIGHT);
+                s5->callback([](Fl_Widget* w, void* v){ ((CompressorDSP*)v)->makeup = (float)((Fl_Value_Slider*)w)->value(); }, cmp);
+            } else if (auto* geq = dynamic_cast<GraphicalEQDSP*>(dsp)) {
+                Fl_Group* eq_grp = new Fl_Group(0, 0, param_pack->w(), 150);
+                eq_grp->begin();
+                int band_w = (param_pack->w() - 40) / 12;
+                for (int b = 0; b < 12; ++b) {
+                    Fl_Slider* s = new Fl_Slider(10 + b * band_w, eq_grp->y(), band_w - 5, 120);
+                    s->type(FL_VERTICAL); s->range(12, -12); s->value(geq->get_band_gain(b));
+                    struct EQData { GraphicalEQDSP* dsp; int band; };
+                    s->callback([](Fl_Widget* w, void* d){ auto* ed = (EQData*)d; ed->dsp->set_band_gain(ed->band, (float)((Fl_Slider*)w)->value()); }, new EQData{geq, b});
+                    Fl_Box* lbl = new Fl_Box(10 + b * band_w, eq_grp->y() + 120, band_w - 5, 20);
+                    float f = geq->get_band_freq(b);
+                    if (f >= 1000) lbl->copy_label((std::to_string((int)(f/1000)) + "k").c_str()); else lbl->copy_label(std::to_string((int)f).c_str());
+                    lbl->labelsize(9);
+                }
+                eq_grp->end();
+            } else if (auto* cab = dynamic_cast<CabinetDSP*>(dsp)) {
+                Fl_Group* c_row = new Fl_Group(0, 0, param_pack->w(), std_h);
+                c_row->begin();
+                Fl_Choice* ctype = new Fl_Choice(c_row->x(), c_row->y(), 200, std_h, "Type");
+                ctype->labelsize(font_sz); ctype->align(FL_ALIGN_RIGHT);
+                for(const auto& name : CabinetDSP::get_type_names()) ctype->add(strdup(name.c_str()));
+                ctype->value((int)cab->type);
+                ctype->callback([](Fl_Widget* w, void* v){
+                    ((CabinetDSP*)v)->type = (CabinetType)((Fl_Choice*)w)->value();
+                    // Trigger a state refresh if needed, but the internal DSP is updated on next process or set_state
+                }, cab);
+                c_row->end();
+            } else if (auto* gate = dynamic_cast<GateDSP*>(dsp)) {
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Threshold");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 1); s1->value(gate->threshold); s1->align(FL_ALIGN_RIGHT);
+                s1->callback([](Fl_Widget* w, void* v){ ((GateDSP*)v)->threshold = (float)((Fl_Value_Slider*)w)->value(); }, gate);
+                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Range");
+                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(0, 1); s2->value(gate->range); s2->align(FL_ALIGN_RIGHT);
+                s2->callback([](Fl_Widget* w, void* v){ ((GateDSP*)v)->range = (float)((Fl_Value_Slider*)w)->value(); }, gate);
+                Fl_Value_Slider* s3 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Attack (s)");
+                s3->labelsize(font_sz); s3->type(FL_HOR_NICE_SLIDER); s3->range(0.001, 0.5); s3->value(gate->attack); s3->align(FL_ALIGN_RIGHT);
+                s3->callback([](Fl_Widget* w, void* v){ ((GateDSP*)v)->attack = (float)((Fl_Value_Slider*)w)->value(); }, gate);
+                Fl_Value_Slider* s4 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Release (s)");
+                s4->labelsize(font_sz); s4->type(FL_HOR_NICE_SLIDER); s4->range(0.01, 2.0); s4->value(gate->release); s4->align(FL_ALIGN_RIGHT);
+                s4->callback([](Fl_Widget* w, void* v){ ((GateDSP*)v)->release = (float)((Fl_Value_Slider*)w)->value(); }, gate);
+            } else if (auto* dis = dynamic_cast<DistortionDSP*>(dsp)) {
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Drive");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 1); s1->value(dis->drive); s1->align(FL_ALIGN_RIGHT);
+                s1->callback([](Fl_Widget* w, void* v){ ((DistortionDSP*)v)->drive = (float)((Fl_Value_Slider*)w)->value(); }, dis);
+                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Mix");
+                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(0, 1); s2->value(dis->mix); s2->align(FL_ALIGN_RIGHT);
+                s2->callback([](Fl_Widget* w, void* v){ ((DistortionDSP*)v)->mix = (float)((Fl_Value_Slider*)w)->value(); }, dis);
+            } else if (auto* cho = dynamic_cast<ChorusDSP*>(dsp)) {
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Rate");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 1); s1->value(cho->rate); s1->align(FL_ALIGN_RIGHT);
+                s1->callback([](Fl_Widget* w, void* v){ ((ChorusDSP*)v)->rate = (float)((Fl_Value_Slider*)w)->value(); }, cho);
+                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Depth");
+                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(0, 1); s2->value(cho->depth); s2->align(FL_ALIGN_RIGHT);
+                s2->callback([](Fl_Widget* w, void* v){ ((ChorusDSP*)v)->depth = (float)((Fl_Value_Slider*)w)->value(); }, cho);
+                Fl_Value_Slider* s3 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Feedback");
+                s3->labelsize(font_sz); s3->type(FL_HOR_NICE_SLIDER); s3->range(0, 1); s3->value(cho->feedback); s3->align(FL_ALIGN_RIGHT);
+                s3->callback([](Fl_Widget* w, void* v){ ((ChorusDSP*)v)->feedback = (float)((Fl_Value_Slider*)w)->value(); }, cho);
+                Fl_Value_Slider* s4 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Mix");
+                s4->labelsize(font_sz); s4->type(FL_HOR_NICE_SLIDER); s4->range(0, 1); s4->value(cho->mix); s4->align(FL_ALIGN_RIGHT);
+                s4->callback([](Fl_Widget* w, void* v){ ((ChorusDSP*)v)->mix = (float)((Fl_Value_Slider*)w)->value(); }, cho);
+            } else if (auto* exp = dynamic_cast<StereoExpanderDSP*>(dsp)) {
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Width");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 2); s1->value(exp->width); s1->align(FL_ALIGN_RIGHT);
+                s1->callback([](Fl_Widget* w, void* v){ ((StereoExpanderDSP*)v)->width = (float)((Fl_Value_Slider*)w)->value(); }, exp);
+            } else if (auto* rmo = dynamic_cast<RingModulatorDSP*>(dsp)) {
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Freq");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 1); s1->value(rmo->freq); s1->align(FL_ALIGN_RIGHT);
+                s1->callback([](Fl_Widget* w, void* v){ ((RingModulatorDSP*)v)->freq = (float)((Fl_Value_Slider*)w)->value(); }, rmo);
+                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Mix");
+                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(0, 1); s2->value(rmo->mix); s2->align(FL_ALIGN_RIGHT);
+                s2->callback([](Fl_Widget* w, void* v){ ((RingModulatorDSP*)v)->mix = (float)((Fl_Value_Slider*)w)->value(); }, rmo);
             }
             param_pack->end(); param_scroll->end();
         }
@@ -376,7 +553,8 @@ void MixerPanel::update_effect_editor() {
         Fl_Box* msg = new Fl_Box(m_fx_params_group->x(), m_fx_params_group->y(), m_fx_params_group->w(), m_fx_params_group->h(), "Select an effect to edit parameters");
         msg->labelsize(font_sz);
     }
-    m_fx_params_group->end(); m_fx_params_group->redraw();
+    m_fx_params_group->end();
+    m_fx_params_group->redraw();
 }
 
 void MixerPanel::cb_track_select(Fl_Widget* w, void* data) {
@@ -409,6 +587,20 @@ void MixerPanel::cb_add_fx(Fl_Widget* w, void* data) {
         if (!get_fx_at(i)) {
             if (fx_name == "Gain") set_fx_at(i, std::make_unique<GainDSP>());
             else if (fx_name == "Delay") set_fx_at(i, std::make_unique<DelayDSP>());
+            else if (fx_name == "Reverb") set_fx_at(i, std::make_unique<ReverbDSP>());
+            else if (fx_name == "Limiter") set_fx_at(i, std::make_unique<LimiterDSP>());
+            else if (fx_name == "Exciter") set_fx_at(i, std::make_unique<ExciterDSP>());
+            else if (fx_name == "Phaser") set_fx_at(i, std::make_unique<PhaserDSP>());
+            else if (fx_name == "Flanger") set_fx_at(i, std::make_unique<FlangerDSP>());
+            else if (fx_name == "Echo") set_fx_at(i, std::make_unique<EchoDSP>());
+            else if (fx_name == "Compressor") set_fx_at(i, std::make_unique<CompressorDSP>());
+            else if (fx_name == "Graphical EQ") set_fx_at(i, std::make_unique<GraphicalEQDSP>());
+            else if (fx_name == "Cabinet") set_fx_at(i, std::make_unique<CabinetDSP>());
+            else if (fx_name == "Distortion") set_fx_at(i, std::make_unique<DistortionDSP>());
+            else if (fx_name == "Chorus") set_fx_at(i, std::make_unique<ChorusDSP>());
+            else if (fx_name == "Stereo Expander") set_fx_at(i, std::make_unique<StereoExpanderDSP>());
+            else if (fx_name == "Ring Modulator") set_fx_at(i, std::make_unique<RingModulatorDSP>());
+            else if (fx_name == "Gate") set_fx_at(i, std::make_unique<GateDSP>());
             self->m_selected_fx_slot = (int)i;
             break;
         }

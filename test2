@@ -1,0 +1,719 @@
+{
+  "patterns": [
+    {
+      "rows": 64,
+      "tracks": [
+        {
+          "cols": 1,
+          "data": [
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 55,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 55,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 53,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 59,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 59,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 57,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 53,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 48,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 48,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 51,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 49,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 51,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 49,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 51,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 49,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 51,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 50,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 55,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 59,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 57,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 59,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 57,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 57,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 55,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 57,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 53,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 48,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 54,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 56,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 58,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 59,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 57,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 57,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 55,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 53,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 54,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 48,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 56,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 58,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 59,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 57,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 57,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 59,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 55,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 53,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 54,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 48,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ],
+            [
+              {
+                "effect1": 0,
+                "effect2": 0,
+                "note": 255,
+                "param1": 0,
+                "param2": 0,
+                "sample_idx": 0,
+                "volume": 255
+              }
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "tempo": 125.0
+}

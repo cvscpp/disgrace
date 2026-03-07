@@ -1,6 +1,20 @@
 #include "dsp_chain.h"
 #include "gain.h"
 #include "delay.h"
+#include "reverb.h"
+#include "limiter.h"
+#include "exciter.h"
+#include "phaser.h"
+#include "flanger.h"
+#include "echo.h"
+#include "compressor.h"
+#include "graphical_eq.h"
+#include "cabinet.h"
+#include "distortion.h"
+#include "chorus.h"
+#include "stereo_expander.h"
+#include "ring_modulator.h"
+#include "gate.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 
@@ -10,6 +24,20 @@ namespace disgrace_ns
 static std::unique_ptr<DSP> create_dsp(const std::string& type) {
     if (type == "Gain") return std::make_unique<GainDSP>();
     if (type == "Delay") return std::make_unique<DelayDSP>();
+    if (type == "Reverb") return std::make_unique<ReverbDSP>();
+    if (type == "Limiter") return std::make_unique<LimiterDSP>();
+    if (type == "Exciter") return std::make_unique<ExciterDSP>();
+    if (type == "Phaser") return std::make_unique<PhaserDSP>();
+    if (type == "Flanger") return std::make_unique<FlangerDSP>();
+    if (type == "Echo") return std::make_unique<EchoDSP>();
+    if (type == "Compressor") return std::make_unique<CompressorDSP>();
+    if (type == "GraphicalEQ" || type == "Graphical EQ") return std::make_unique<GraphicalEQDSP>();
+    if (type == "Cabinet") return std::make_unique<CabinetDSP>();
+    if (type == "Distortion") return std::make_unique<DistortionDSP>();
+    if (type == "Chorus") return std::make_unique<ChorusDSP>();
+    if (type == "StereoExpander" || type == "Stereo Expander") return std::make_unique<StereoExpanderDSP>();
+    if (type == "RingModulator" || type == "Ring Modulator") return std::make_unique<RingModulatorDSP>();
+    if (type == "Gate") return std::make_unique<GateDSP>();
     return nullptr;
 }
 

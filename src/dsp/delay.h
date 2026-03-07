@@ -52,6 +52,17 @@ public:
         if (j.contains("bypassed")) m_bypassed = j["bypassed"];
     }
 
+    std::vector<std::string> get_presets() override {
+        return {"Default", "Slapback", "Long Eco", "Feedback Beast"};
+    }
+
+    void load_preset(const std::string& name) override {
+        if (name == "Default") { feedback = 0.4f; mix = 0.3f; }
+        else if (name == "Slapback") { feedback = 0.1f; mix = 0.5f; m_pos = (m_pos + MAX_DELAY - 2000) % MAX_DELAY; }
+        else if (name == "Long Eco") { feedback = 0.6f; mix = 0.4f; }
+        else if (name == "Feedback Beast") { feedback = 0.95f; mix = 0.5f; }
+    }
+
 private:
     ::std::array<float, MAX_DELAY> m_buffer_l{};
     ::std::array<float, MAX_DELAY> m_buffer_r{};

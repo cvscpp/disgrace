@@ -226,7 +226,7 @@ void Engine::handle_effect_row_start(size_t t, const TrackEvent& ev)
     process_fx(ev.effect2, ev.param2);
 }
 
-void Engine::process_audio(float* out_l, float* out_r, size_t nframes)
+void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float* out_l, float* out_r, size_t nframes)
 {
     if (m_metronome_enabled && transport().state() != TransportState::Stopped)
         m_metronome.process(m_mix_l, m_mix_r, nframes, m_samples_until_next_beat, m_timing.samples_per_beat());
@@ -258,16 +258,16 @@ void Engine::process_audio(float* out_l, float* out_r, size_t nframes)
 
     if (!transport().is_playing()) {
         // Just render a static block (no sequencer ticks)
-        render_block(out_l, out_r, nframes);
+        render_block(out_l, out_r, nframes, in_bufs);
         m_master.process(out_l, out_r, nframes);
         for (size_t i = 0; i < nframes; ++i) m_spectral_rb.push((out_l[i] + out_r[i]) * 0.5f);
         return;
     }
-    process_block(out_l, out_r, nframes);
+    process_block(out_l, out_r, nframes, in_bufs);
     for (size_t i = 0; i < nframes; ++i) m_spectral_rb.push((out_l[i] + out_r[i]) * 0.5f);
 }
 
-void Engine::process_block(float* l, float* r, size_t nframes) {
+void Engine::process_block(float* l, float* r, size_t nframes, const float* const* in_bufs) {
     size_t processed = 0;
     while (processed < nframes) {
         if (m_samples_until_next_tick == 0) {
@@ -275,13 +275,25 @@ void Engine::process_block(float* l, float* r, size_t nframes) {
             m_samples_until_next_tick = m_timing.samples_per_tick();
         }
         size_t block = std::min(m_samples_until_next_tick, nframes - processed);
-        render_block(l + processed, r + processed, block);
+        
+        // Correcting in_bufs pointer for sub-blocks if necessary, 
+        // but here they are just arrays of pointers to buffers that cover the whole nframes.
+        // We need to offset the pointers themselves if we want to pass them to render_block.
+        // Or we pass the original in_bufs and the current offset.
+        
+        // For simplicity, let's create a temporary array of offset pointers.
+        const float* offset_in_bufs[64]; // Assuming max 64 inputs
+        for(uint32_t i = 0; i < m_num_ins && i < 64; ++i) {
+            offset_in_bufs[i] = in_bufs[i] + processed;
+        }
+
+        render_block(l + processed, r + processed, block, offset_in_bufs);
         processed += block; m_samples_until_next_tick -= block;
     }
     m_master.process(l, r, nframes);
 }
 
-void Engine::render_block(float* out_l, float* out_r, size_t frames) {
+void Engine::render_block(float* out_l, float* out_r, size_t frames, const float* const* in_bufs) {
     for (size_t i = 0; i < frames; ++i) { out_l[i] = 0.f; out_r[i] = 0.f; }
     
     // Clear bus buffers
@@ -296,7 +308,7 @@ void Engine::render_block(float* out_l, float* out_r, size_t frames) {
     }
 
     for (size_t t = 0; t < m_tracks.size(); ++t) {
-        m_tracks[t].process(m_track_l[t], m_track_r[t], frames);
+        m_tracks[t].process(m_track_l[t], m_track_r[t], frames, in_bufs);
         
         bool should_play = true;
         if (any_solo) {

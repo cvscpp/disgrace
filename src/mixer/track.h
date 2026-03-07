@@ -43,7 +43,8 @@ public:
 
     void process(float* out_l,
                  float* out_r,
-                 size_t nframes);
+                 size_t nframes,
+                 const float* const* in_bufs = nullptr);
 
     void set_instrument(disgrace_ns::Instrument* inst);
     disgrace_ns::Instrument* instrument();
@@ -81,19 +82,46 @@ public:
     void set_output_bus(int bus_idx);
     int output_bus() const;
 
-    float note_to_frequency(uint8_t note); // Added declaration
-    void process_tick(uint32_t engine_current_tick); // Updated declaration
+    float note_to_frequency(uint8_t note);
+    void process_tick(uint32_t engine_current_tick);
 
+    // DSP Chain management
+    void set_effect(size_t index, ::std::unique_ptr<disgrace_ns::DSP> dsp);
+    void enable_effect(size_t index, bool en);
+    void move_effect_up(size_t index);
+    void move_effect_down(size_t index);
+    void remove_effect(size_t index);
+    disgrace_ns::DSP* get_effect(size_t index) const;
+    bool is_effect_enabled(size_t index) const;
+
+    void save_effect_chain(const std::string& path);
+    void load_effect_chain(const std::string& path);
+
+    // Audio Input for MIDI instruments / external hardware
+    void set_audio_input(int channel_l, int channel_r);
+    void get_audio_input(int& channel_l, int& channel_r) const;
+    void set_input_delay(float ms, uint32_t sample_rate);
+    float input_delay() const;
 
 private:
     float m_volume = 1.f;
     bool  m_mute   = false;
-    bool  m_solo   = false; // Add this
+    bool  m_solo   = false;
     int   m_output_bus = -1; // -1 = Master
     std::string m_name;
 
     disgrace_ns::Instrument* m_instrument = nullptr;
     disgrace_ns::DSPChain    m_chain;
+    
+    // Audio Input & Delay Compensation
+    int m_audio_input_l = -1;
+    int m_audio_input_r = -1;
+    float m_input_delay_ms = 0.0f;
+    size_t m_input_delay_samples = 0;
+    std::vector<float> m_delay_buf_l;
+    std::vector<float> m_delay_buf_r;
+    size_t m_delay_ptr = 0;
+
     ::std::atomic<float> m_meter_l {0.0f};
     ::std::atomic<float> m_meter_r {0.0f};
     float m_current_freq = 0.0f;

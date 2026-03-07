@@ -141,14 +141,25 @@ int JackBackend::process(jack_nframes_t nframes)
         }
     }
 
-    // Process MIDI outputs (clear for now)
+    // Process MIDI outputs
     for (auto* port : m_midi_output_ports) {
         void* midi_buf = jack_port_get_buffer(port, nframes);
-        if (midi_buf) jack_midi_clear_buffer(midi_buf);
+        if (!midi_buf) continue;
+        jack_midi_clear_buffer(midi_buf);
+
+        MidiMessage msg;
+        while (m_engine->m_midi_out_queue.pop(msg)) {
+            unsigned char* buf = jack_midi_event_reserve(midi_buf, 0, 3);
+            if (buf) {
+                buf[0] = msg.status;
+                buf[1] = msg.data1;
+                buf[2] = msg.data2;
+            }
+        }
     }
 
     if (out_bufs.size() >= 2 && out_bufs[0] && out_bufs[1]) {
-        m_engine->process_audio(out_bufs[0], out_bufs[1], nframes);
+        m_engine->process_audio(in_bufs.data(), (uint32_t)in_bufs.size(), out_bufs[0], out_bufs[1], nframes);
     }
 
     return 0;

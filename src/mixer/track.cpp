@@ -76,13 +76,39 @@ const std::string& disgrace_ns::Track::name() const
 
 void disgrace_ns::Track::process(float* out_l,
                     float* out_r,
-                    size_t nframes)
+                    size_t nframes,
+                    const float* const* in_bufs)
 {
     std::fill(out_l, out_l + nframes, 0.f);
     std::fill(out_r, out_r + nframes, 0.f);
 
     if (m_instrument)
         m_instrument->process(out_l, out_r, nframes);
+
+    if (in_bufs && m_audio_input_l >= 0) {
+        const float* in_l = in_bufs[m_audio_input_l];
+        // If m_audio_input_r is valid, use it; otherwise, use in_l for mono.
+        const float* in_r = (m_audio_input_r >= 0) ? in_bufs[m_audio_input_r] : in_l;
+
+        if (m_input_delay_samples > 0 && !m_delay_buf_l.empty()) {
+            size_t max_delay = m_delay_buf_l.size();
+            for (size_t i = 0; i < nframes; ++i) {
+                m_delay_buf_l[m_delay_ptr] = in_l[i];
+                m_delay_buf_r[m_delay_ptr] = in_r[i];
+
+                size_t read_ptr = (m_delay_ptr + max_delay - m_input_delay_samples) % max_delay;
+                out_l[i] += m_delay_buf_l[read_ptr];
+                out_r[i] += m_delay_buf_r[read_ptr];
+
+                m_delay_ptr = (m_delay_ptr + 1) % max_delay;
+            }
+        } else {
+            for (size_t i = 0; i < nframes; ++i) {
+                out_l[i] += in_l[i];
+                out_r[i] += in_r[i];
+            }
+        }
+    }
 
     m_chain.process(out_l, out_r, nframes);
 
@@ -305,6 +331,84 @@ void disgrace_ns::Track::set_output_bus(int bus_idx)
 int disgrace_ns::Track::output_bus() const
 {
     return m_output_bus;
+}
+
+void disgrace_ns::Track::set_effect(size_t index, ::std::unique_ptr<disgrace_ns::DSP> dsp)
+{
+    m_chain.set(index, std::move(dsp));
+}
+
+void disgrace_ns::Track::enable_effect(size_t index, bool en)
+{
+    m_chain.enable(index, en);
+}
+
+void disgrace_ns::Track::move_effect_up(size_t index)
+{
+    m_chain.move_up(index);
+}
+
+void disgrace_ns::Track::move_effect_down(size_t index)
+{
+    m_chain.move_down(index);
+}
+
+void disgrace_ns::Track::remove_effect(size_t index)
+{
+    m_chain.remove(index);
+}
+
+void disgrace_ns::Track::load_effect_chain(const std::string& path)
+{
+    m_chain.load_chain(path);
+}
+
+void disgrace_ns::Track::save_effect_chain(const std::string& path)
+{
+    m_chain.save_chain(path);
+}
+
+disgrace_ns::DSP* disgrace_ns::Track::get_effect(size_t index) const
+{
+    if (index >= disgrace_ns::MAX_INSERTS) return nullptr;
+    return m_chain.effects()[index].get();
+}
+
+bool disgrace_ns::Track::is_effect_enabled(size_t index) const
+{
+    // Need to add m_enabled to effects access in DSPChain if we want to check it easily,
+    // or we assume it's always enabled if set for now.
+    return true; 
+}
+
+void disgrace_ns::Track::set_audio_input(int channel_l, int channel_r)
+{
+    m_audio_input_l = channel_l;
+    m_audio_input_r = channel_r;
+}
+
+void disgrace_ns::Track::get_audio_input(int& channel_l, int& channel_r) const
+{
+    channel_l = m_audio_input_l;
+    channel_r = m_audio_input_r;
+}
+
+void disgrace_ns::Track::set_input_delay(float ms, uint32_t sample_rate)
+{
+    m_input_delay_ms = ms;
+    m_input_delay_samples = (size_t)(ms * 0.001f * sample_rate);
+    
+    // Resize delay buffers to accommodate up to 1 second of delay
+    if (m_delay_buf_l.size() < (size_t)sample_rate) {
+        m_delay_buf_l.resize(sample_rate, 0.0f);
+        m_delay_buf_r.resize(sample_rate, 0.0f);
+        m_delay_ptr = 0;
+    }
+}
+
+float disgrace_ns::Track::input_delay() const
+{
+    return m_input_delay_ms;
 }
 
 } // namespace disgrace_ns

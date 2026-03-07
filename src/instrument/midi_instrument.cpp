@@ -16,7 +16,7 @@ namespace disgrace_ns {
     msg.status = 0x90 | (m_channel & 0x0F);
     msg.data1 = note & 0x7F;
     msg.data2 = velocity & 0x7F;
-    m_engine->m_midi_queue.push(msg);
+    m_engine->m_midi_out_queue.push(msg);
 }
 
 void MidiInstrument::note_off(size_t column_index) {
@@ -26,7 +26,7 @@ void MidiInstrument::note_off(size_t column_index) {
     msg.status = 0x80 | (m_channel & 0x0F);
     msg.data1 = m_last_note[column_index % 16] & 0x7F;
     msg.data2 = 0;
-    m_engine->m_midi_queue.push(msg);
+    m_engine->m_midi_out_queue.push(msg);
 }
 
 void MidiInstrument::panic() {
@@ -35,7 +35,7 @@ void MidiInstrument::panic() {
     msg.status = 0xB0 | (m_channel & 0x0F);
     msg.data1 = 123; // All Notes Off
     msg.data2 = 0;
-    m_engine->m_midi_queue.push(msg);
+    m_engine->m_midi_out_queue.push(msg);
 }
 
 void MidiInstrument::set_volume(float vol) {
@@ -44,7 +44,7 @@ void MidiInstrument::set_volume(float vol) {
     msg.status = 0xB0 | (m_channel & 0x0F);
     msg.data1 = 7; // Main Volume CC
     msg.data2 = static_cast<uint8_t>(vol * 127.0f) & 0x7F;
-    m_engine->m_midi_queue.push(msg);
+    m_engine->m_midi_out_queue.push(msg);
 }
 
 void MidiInstrument::set_pitch(float freq) {
@@ -70,7 +70,7 @@ void MidiInstrument::set_program(int prog) {
     msg.status = 0xC0 | (m_channel & 0x0F);
     msg.data1 = m_program & 0x7F;
     msg.data2 = 0;
-    m_engine->m_midi_queue.push(msg);
+    m_engine->m_midi_out_queue.push(msg);
 }
 
 } // namespace disgrace_ns

@@ -8,17 +8,6 @@
 namespace disgrace_ns
 {
 
-enum class CabinetType {
-    Cab_1x12,
-    Cab_2x12,
-    Cab_4x12,
-    Cab_8x12,
-    Cab_4x10,
-    Cab_1x15,
-    Cab_2x15,
-    Cab_1x15_4x10
-};
-
 class CabinetDSP : public disgrace_ns::DSP
 {
 public:
@@ -89,22 +78,22 @@ public:
     };
 
     CabinetDSP() {
-        m_filters.resize(4);
+        m_filters.resize(3);
         update_filters();
     }
 
-    CabinetType type = CabinetType::Cab_4x12;
+    float low_cut = 80.0f;
+    float high_cut = 5000.0f;
+    float peak_freq = 2000.0f;
+    float peak_gain = 3.0f;
 
     std::string name() const override { return "Cabinet"; }
     std::string type_name() const override { return "Cabinet"; }
 
-    static std::vector<std::string> get_type_names() {
-        return { "1 x 12\"", "2 x 12\"", "4 x 12\"", "8 x 12\"", "4 x 10\"", "1 x 15\"", "2 x 15\"", "1 x 15\" + 4 x 10\"" };
-    }
-
     void process(float* l, float* r, size_t nframes) override
     {
         if (m_bypassed) return;
+        update_filters(); // Update in real-time or on parameter change
         for (size_t i = 0; i < nframes; ++i)
         {
             float out_l = l[i];
@@ -120,7 +109,10 @@ public:
 
     std::string get_state() override {
         nlohmann::json j;
-        j["type"] = (int)type;
+        j["low_cut"] = low_cut;
+        j["high_cut"] = high_cut;
+        j["peak_freq"] = peak_freq;
+        j["peak_gain"] = peak_gain;
         j["bypassed"] = m_bypassed;
         return j.dump();
     }
@@ -128,82 +120,37 @@ public:
     void set_state(const std::string& state) override {
         try {
             auto j = nlohmann::json::parse(state);
-            if (j.contains("type")) type = (CabinetType)j["type"];
+            if (j.contains("low_cut")) low_cut = j["low_cut"];
+            if (j.contains("high_cut")) high_cut = j["high_cut"];
+            if (j.contains("peak_freq")) peak_freq = j["peak_freq"];
+            if (j.contains("peak_gain")) peak_gain = j["peak_gain"];
             if (j.contains("bypassed")) m_bypassed = j["bypassed"];
             update_filters();
         } catch(...) {}
     }
 
     std::vector<std::string> get_presets() override {
-        return get_type_names();
+        return { "1 x 12\"", "2 x 12\"", "4 x 12\"", "8 x 12\"", "4 x 10\"", "1 x 15\"", "2 x 15\"", "1 x 15\" + 4 x 10\"" };
     }
 
     void load_preset(const std::string& name) override {
-        auto names = get_type_names();
-        for(size_t i=0; i<names.size(); ++i) {
-            if (names[i] == name) {
-                type = (CabinetType)i;
-                update_filters();
-                break;
-            }
-        }
+        if (name == "1 x 12\"") { low_cut = 100; high_cut = 5000; peak_freq = 2500; peak_gain = 3; }
+        else if (name == "2 x 12\"") { low_cut = 90; high_cut = 6000; peak_freq = 3000; peak_gain = 2; }
+        else if (name == "4 x 12\"") { low_cut = 80; high_cut = 5000; peak_freq = 2000; peak_gain = 4; }
+        else if (name == "8 x 12\"") { low_cut = 70; high_cut = 4500; peak_freq = 1500; peak_gain = 5; }
+        else if (name == "4 x 10\"") { low_cut = 120; high_cut = 7000; peak_freq = 3500; peak_gain = 3; }
+        else if (name == "1 x 15\"") { low_cut = 50; high_cut = 3500; peak_freq = 1000; peak_gain = 2; }
+        else if (name == "2 x 15\"") { low_cut = 40; high_cut = 3000; peak_freq = 800; peak_gain = 3; }
+        else if (name == "1 x 15\" + 4 x 10\"") { low_cut = 45; high_cut = 6500; peak_freq = 3000; peak_gain = 2; }
+        update_filters();
     }
 
 private:
     void update_filters() {
         float sr = 44100.0f;
-        for(auto& f : m_filters) f.reset();
-
-        switch(type) {
-            case CabinetType::Cab_1x12:
-                m_filters[0].set_hpf(100.0f, 0.707f, sr);
-                m_filters[1].set_lpf(5000.0f, 0.707f, sr);
-                m_filters[2].set_peaking(2500.0f, 1.0f, 3.0f, sr);
-                m_filters[3].set_peaking(400.0f, 1.0f, -2.0f, sr);
-                break;
-            case CabinetType::Cab_2x12:
-                m_filters[0].set_hpf(90.0f, 0.707f, sr);
-                m_filters[1].set_lpf(6000.0f, 0.707f, sr);
-                m_filters[2].set_peaking(3000.0f, 1.0f, 2.0f, sr);
-                m_filters[3].set_peaking(500.0f, 1.0f, 1.0f, sr);
-                break;
-            case CabinetType::Cab_4x12:
-                m_filters[0].set_hpf(80.0f, 0.707f, sr);
-                m_filters[1].set_lpf(5000.0f, 0.707f, sr);
-                m_filters[2].set_peaking(2000.0f, 0.707f, 4.0f, sr);
-                m_filters[3].set_peaking(100.0f, 1.0f, 3.0f, sr);
-                break;
-            case CabinetType::Cab_8x12:
-                m_filters[0].set_hpf(70.0f, 0.707f, sr);
-                m_filters[1].set_lpf(4500.0f, 0.707f, sr);
-                m_filters[2].set_peaking(1500.0f, 0.5f, 5.0f, sr);
-                m_filters[3].set_peaking(150.0f, 0.707f, 4.0f, sr);
-                break;
-            case CabinetType::Cab_4x10:
-                m_filters[0].set_hpf(120.0f, 0.707f, sr);
-                m_filters[1].set_lpf(7000.0f, 0.707f, sr);
-                m_filters[2].set_peaking(3500.0f, 1.2f, 3.0f, sr);
-                m_filters[3].set_peaking(800.0f, 1.0f, -3.0f, sr);
-                break;
-            case CabinetType::Cab_1x15:
-                m_filters[0].set_hpf(50.0f, 0.707f, sr);
-                m_filters[1].set_lpf(3500.0f, 0.707f, sr);
-                m_filters[2].set_peaking(1000.0f, 0.707f, 2.0f, sr);
-                m_filters[3].set_peaking(200.0f, 1.0f, 4.0f, sr);
-                break;
-            case CabinetType::Cab_2x15:
-                m_filters[0].set_hpf(40.0f, 0.707f, sr);
-                m_filters[1].set_lpf(3000.0f, 0.707f, sr);
-                m_filters[2].set_peaking(800.0f, 0.5f, 3.0f, sr);
-                m_filters[3].set_peaking(150.0f, 0.707f, 5.0f, sr);
-                break;
-            case CabinetType::Cab_1x15_4x10:
-                m_filters[0].set_hpf(45.0f, 0.707f, sr);
-                m_filters[1].set_lpf(6500.0f, 0.707f, sr);
-                m_filters[2].set_peaking(3000.0f, 1.0f, 2.0f, sr);
-                m_filters[3].set_peaking(100.0f, 0.707f, 4.0f, sr);
-                break;
-        }
+        m_filters[0].set_hpf(low_cut, 0.707f, sr);
+        m_filters[1].set_lpf(high_cut, 0.707f, sr);
+        m_filters[2].set_peaking(peak_freq, 0.707f, peak_gain, sr);
     }
     std::vector<Biquad> m_filters;
 };

@@ -491,17 +491,18 @@ void MixerPanel::update_effect_editor() {
                 }
                 eq_grp->end();
             } else if (auto* cab = dynamic_cast<CabinetDSP*>(dsp)) {
-                Fl_Group* c_row = new Fl_Group(0, 0, param_pack->w(), std_h);
-                c_row->begin();
-                Fl_Choice* ctype = new Fl_Choice(c_row->x(), c_row->y(), 200, std_h, "Type");
-                ctype->labelsize(font_sz); ctype->align(FL_ALIGN_RIGHT);
-                for(const auto& name : CabinetDSP::get_type_names()) ctype->add(strdup(name.c_str()));
-                ctype->value((int)cab->type);
-                ctype->callback([](Fl_Widget* w, void* v){
-                    ((CabinetDSP*)v)->type = (CabinetType)((Fl_Choice*)w)->value();
-                    // Trigger a state refresh if needed, but the internal DSP is updated on next process or set_state
-                }, cab);
-                c_row->end();
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Low Cut");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(20, 500); s1->value(cab->low_cut); s1->align(FL_ALIGN_RIGHT);
+                s1->callback([](Fl_Widget* w, void* v){ ((CabinetDSP*)v)->low_cut = (float)((Fl_Value_Slider*)w)->value(); }, cab);
+                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "High Cut");
+                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(1000, 15000); s2->value(cab->high_cut); s2->align(FL_ALIGN_RIGHT);
+                s2->callback([](Fl_Widget* w, void* v){ ((CabinetDSP*)v)->high_cut = (float)((Fl_Value_Slider*)w)->value(); }, cab);
+                Fl_Value_Slider* s3 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Peak Freq");
+                s3->labelsize(font_sz); s3->type(FL_HOR_NICE_SLIDER); s3->range(500, 8000); s3->value(cab->peak_freq); s3->align(FL_ALIGN_RIGHT);
+                s3->callback([](Fl_Widget* w, void* v){ ((CabinetDSP*)v)->peak_freq = (float)((Fl_Value_Slider*)w)->value(); }, cab);
+                Fl_Value_Slider* s4 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Peak Gain");
+                s4->labelsize(font_sz); s4->type(FL_HOR_NICE_SLIDER); s4->range(-12, 12); s4->value(cab->peak_gain); s4->align(FL_ALIGN_RIGHT);
+                s4->callback([](Fl_Widget* w, void* v){ ((CabinetDSP*)v)->peak_gain = (float)((Fl_Value_Slider*)w)->value(); }, cab);
             } else if (auto* gate = dynamic_cast<GateDSP*>(dsp)) {
                 Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Threshold");
                 s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0, 1); s1->value(gate->threshold); s1->align(FL_ALIGN_RIGHT);

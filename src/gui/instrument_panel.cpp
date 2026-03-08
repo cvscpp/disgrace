@@ -84,12 +84,8 @@ InstrumentPanel::InstrumentPanel(int x, int y, int w, int h, Engine& engine)
     m_sampler_list_grp->box(FL_ENGRAVED_FRAME);
     m_sampler_list_grp->align(FL_ALIGN_TOP_LEFT);
     m_sampler_list_grp->begin();
-    m_add_sample_btn = new Fl_Button(x + left_w + margin, y + margin, (middle_w - 3 * margin) / 3, 25, "+");
+    m_add_sample_btn = new Fl_Button(x + left_w + margin, y + margin, middle_w - 2 * margin, 25, "Add Sample");
     m_add_sample_btn->callback(cb_add_sample, this);
-    m_sample_play_btn = new Fl_Button(x + left_w + 2 * margin + (middle_w - 3 * margin) / 3, y + margin, (middle_w - 3 * margin) / 3, 25, "@>");
-    m_sample_play_btn->callback(cb_sample_play, this);
-    m_sample_stop_btn = new Fl_Button(x + left_w + 3 * margin + 2 * (middle_w - 3 * margin) / 3, y + margin, (middle_w - 3 * margin) / 3, 25, "@||");
-    m_sample_stop_btn->callback(cb_sample_stop, this);
     
     m_sample_scroll = new Fl_Scroll(x + left_w + margin, y + margin + 35, middle_w - 2 * margin, h - margin*2 - 35);
     m_sample_scroll->type(Fl_Scroll::VERTICAL);
@@ -104,16 +100,24 @@ InstrumentPanel::InstrumentPanel(int x, int y, int w, int h, Engine& engine)
     m_sampler_rec_grp->align(FL_ALIGN_TOP_LEFT);
     m_sampler_rec_grp->begin();
     int rec_y = margin;
-    m_rec_btn = new Fl_Button(split_x + margin, y + rec_y, 80, 25, "Record");
+    m_sample_play_btn = new Fl_Button(split_x + margin, y + rec_y, 30, 25, "@>");
+    m_sample_play_btn->callback(cb_sample_play, this);
+    m_sample_stop_btn = new Fl_Button(split_x + margin + 32, y + rec_y, 30, 25, "@||");
+    m_sample_stop_btn->callback(cb_sample_stop, this);
+    m_rec_btn = new Fl_Light_Button(split_x + margin + 64, y + rec_y, 80, 25, "Record");
     m_rec_btn->callback(cb_record_sample, this);
     m_rec_btn->labelcolor(FL_RED);
-    m_rec_input_ch = new Fl_Choice(split_x + margin + 85, y + rec_y, 120, 25);
+    m_rec_mode_ch = new Fl_Choice(split_x + margin + 149, y + rec_y, 80, 25);
+    m_rec_mode_ch->add("Free|Synced");
+    m_rec_mode_ch->value(0);
+    m_rec_input_ch = new Fl_Choice(split_x + margin + 234, y + rec_y, 120, 25);
     rec_y += 25 + margin;
     m_mono_btn = new Fl_Check_Button(split_x + margin, y + rec_y, 80, 25, "Mono");
     m_mono_btn->callback(cb_mono_toggle, this);
     m_sample_fmt_ch = new Fl_Choice(split_x + margin + 100, y + rec_y, 150, 25, "Format:");
-    m_sample_fmt_ch->add("Stereo -> Mono (L)|Stereo -> Mono (R)|Stereo -> Mono (Mix)|Mono -> Stereo");
+    m_sample_fmt_ch->add("Stereo|Stereo -> Mono (L)|Stereo -> Mono (R)|Stereo -> Mono (Mix)|Mono -> Stereo");
     m_sample_fmt_ch->callback(cb_sample_fmt, this);
+    m_sample_fmt_ch->value(0); // Stereo as default
     rec_y += 25 + margin;
     m_waveform_view = new WaveformView(split_x + margin, y + rec_y, w - split_x - 2 * margin, 400);
     rec_y += 400 + margin;
@@ -579,7 +583,38 @@ void InstrumentPanel::cb_sample_name(Fl_Widget* w, void* data) {
         if (mw) mw->request_update();
     }
 }
-void InstrumentPanel::cb_record_sample(Fl_Widget*, void*) {}
+void InstrumentPanel::cb_record_sample(Fl_Widget* w, void* data) {
+    auto* self = static_cast<InstrumentPanel*>(data);
+    auto* btn = static_cast<Fl_Light_Button*>(w);
+    
+    if (btn->value()) {
+        // Start recording
+        uint32_t channel = (uint32_t)self->m_rec_input_ch->value();
+        bool mono = self->m_mono_btn->value();
+        Engine::SampleRecordMode mode = (Engine::SampleRecordMode)self->m_rec_mode_ch->value();
+        
+        // In JACK, stereo inputs are often consecutive
+        if (!mono) channel *= 2; 
+
+        self->m_engine.start_recording_sample(mode, channel, mono);
+    } else {
+        // Stop recording
+        self->m_engine.stop_recording_sample();
+        
+        // Add recorded sample to the current instrument
+        if (self->m_selected_instrument >= 0) {
+            auto& inst = self->m_engine.instrument(self->m_selected_instrument);
+            if (inst.type() == InstrumentType::Sampler) {
+                auto* sampler = static_cast<SampleInstrument*>(&inst);
+                if (self->m_engine.m_recording_sample_data && !self->m_engine.m_recording_sample_data->left.empty()) {
+                    sampler->add_sample("Recorded Sample", self->m_engine.m_recording_sample_data);
+                    self->m_selected_sample = (int)sampler->sample_count() - 1;
+                    self->update_editor();
+                }
+            }
+        }
+    }
+}
 void InstrumentPanel::cb_mono_toggle(Fl_Widget*, void* data) { static_cast<InstrumentPanel*>(data)->update_rec_inputs(); }
 void InstrumentPanel::cb_zoom_in(Fl_Widget*, void* data) { static_cast<InstrumentPanel*>(data)->m_waveform_view->zoom_in(); }
 void InstrumentPanel::cb_zoom_out(Fl_Widget*, void* data) { static_cast<InstrumentPanel*>(data)->m_waveform_view->zoom_out(); }

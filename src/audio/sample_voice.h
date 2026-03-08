@@ -22,6 +22,7 @@ namespace disgrace_ns
 
                    void set_pitch(float freq) override;
                    void set_volume(float vol) override;
+                   void set_sample(disgrace_ns::SampleData* data) { m_sample = data; }
 
                    void process(float* out_l,
                                 float* out_r,

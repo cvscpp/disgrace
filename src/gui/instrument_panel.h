@@ -64,7 +64,8 @@ private:
     Fl_Button* m_add_sample_btn;
     Fl_Button* m_sample_play_btn;
     Fl_Button* m_sample_stop_btn;
-    Fl_Button* m_rec_btn;
+    Fl_Light_Button* m_rec_btn;
+    Fl_Choice* m_rec_mode_ch;
     Fl_Check_Button* m_mono_btn;
     Fl_Choice* m_rec_input_ch;
     WaveformView* m_waveform_view;

@@ -122,6 +122,17 @@ public:
     disgrace_ns::BlockClipboard& clipboard();
     disgrace_ns::SampleClipboard& sample_clipboard() { return m_sample_clipboard; }
 
+    enum class SampleRecordMode { Free, Synced };
+    ::std::atomic<bool> m_is_recording_sample{false};
+    ::std::atomic<SampleRecordMode> m_recording_sample_mode{SampleRecordMode::Free};
+    ::std::atomic<bool> m_recording_synced_active{false};
+    ::std::shared_ptr<SampleData> m_recording_sample_data;
+    uint32_t m_recording_input_channel = 0;
+    bool m_recording_is_mono = false;
+
+    void start_recording_sample(SampleRecordMode mode, uint32_t channel, bool mono);
+    void stop_recording_sample();
+
     disgrace_ns::MidiQueue<disgrace_ns::MidiMessage, 1024> m_midi_queue;
     disgrace_ns::MidiQueue<disgrace_ns::MidiMessage, 1024> m_midi_out_queue;
     disgrace_ns::MidiInput m_midi;

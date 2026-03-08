@@ -170,40 +170,52 @@ void Engine::record_note(uint8_t note, size_t column)
 
 void Engine::process_tick() 
 { 
-    size_t row = m_current_row;
     size_t pat_idx = m_active_pattern.load();
     if (pat_idx >= m_patterns.size()) return;
-    
     Pattern& pat = m_patterns[pat_idx];
-    
-    for (size_t t = 0; t < m_tracks.size() && t < pat.track_count(); ++t) {
-        size_t num_cols = pat.column_count(t);
-        for (size_t c = 0; c < num_cols; ++c) {
-            TrackEvent& ev = pat.event(t, row, c);
-            if (ev.note == 254) {
-                m_tracks[t].note_off(c);
-            } else if (ev.note != 255) {
-                m_tracks[t].note_on(ev.note, ev.volume == 255 ? 100 : ev.volume, c); 
+
+    // Note processing only on tick 0
+    if (m_current_tick == 0) {
+        size_t row = m_current_row;
+        for (size_t t = 0; t < m_tracks.size() && t < pat.track_count(); ++t) {
+            size_t num_cols = pat.column_count(t);
+            for (size_t c = 0; c < num_cols; ++c) {
+                TrackEvent& ev = pat.event(t, row, c);
+                if (ev.note == 254) {
+                    m_tracks[t].note_off(c);
+                } else if (ev.note != 255) {
+                    m_tracks[t].note_on(ev.note, ev.volume == 255 ? 100 : ev.volume, c); 
+                }
+                if (c == 0) handle_effect_row_start(t, ev);
             }
-            if (c == 0) handle_effect_row_start(t, ev);
         }
     }
-    m_current_row++;
-    if (m_current_row >= pat.row_count()) {
-        m_current_row = 0;
-        if (!transport().m_loop_pattern.load()) {
-            // Song mode or range loop
-            size_t next_order_pos = m_order_pos.load() + 1;
-            size_t end_pos = m_order_end.load();
-            if (end_pos == 0 && !m_order.empty()) end_pos = m_order.size() - 1;
 
-            if (next_order_pos > end_pos) {
-                next_order_pos = m_order_start.load();
-            }
-            
-            if (next_order_pos < m_order.size()) {
-                m_order_pos.store(next_order_pos);
-                set_active_pattern(m_order[next_order_pos]);
+    // Tick-level effect processing (e.g., volume slides)
+    for (size_t t = 0; t < m_tracks.size(); ++t) {
+        m_tracks[t].process_tick(m_current_tick);
+    }
+
+    m_current_tick++;
+    if (m_current_tick >= m_timing.speed()) {
+        m_current_tick = 0;
+        m_current_row++;
+        if (m_current_row >= pat.row_count()) {
+            m_current_row = 0;
+            if (!transport().m_loop_pattern.load()) {
+                // Song mode or range loop
+                size_t next_order_pos = m_order_pos.load() + 1;
+                size_t end_pos = m_order_end.load();
+                if (end_pos == 0 && !m_order.empty()) end_pos = m_order.size() - 1;
+
+                if (next_order_pos > end_pos) {
+                    next_order_pos = m_order_start.load();
+                }
+                
+                if (next_order_pos < m_order.size()) {
+                    m_order_pos.store(next_order_pos);
+                    set_active_pattern(m_order[next_order_pos]);
+                }
             }
         }
     }
@@ -294,6 +306,45 @@ void Engine::process_block(float* l, float* r, size_t nframes, const float* cons
 }
 
 void Engine::render_block(float* out_l, float* out_r, size_t frames, const float* const* in_bufs) {
+    // --- Recording ---
+    if (m_is_recording_sample.load()) {
+        bool should_record = false;
+        if (m_recording_sample_mode.load() == SampleRecordMode::Free) {
+            should_record = true;
+        } else {
+            // Synced mode
+            if (m_current_row == 0 && m_samples_until_next_tick == m_timing.samples_per_tick()) {
+                m_recording_synced_active.store(true);
+            }
+            if (m_recording_synced_active.load()) {
+                should_record = true;
+            }
+        }
+
+        if (should_record && in_bufs && m_recording_sample_data) {
+            uint32_t ch = m_recording_input_channel;
+            if (m_recording_is_mono) {
+                if (ch < m_num_ins) {
+                    for (size_t i = 0; i < frames; ++i) {
+                        m_recording_sample_data->left.push_back(in_bufs[ch][i]);
+                    }
+                }
+            } else {
+                if (ch < m_num_ins - 1) {
+                    for (size_t i = 0; i < frames; ++i) {
+                        m_recording_sample_data->left.push_back(in_bufs[ch][i]);
+                        m_recording_sample_data->right.push_back(in_bufs[ch+1][i]);
+                    }
+                } else if (ch < m_num_ins) {
+                     for (size_t i = 0; i < frames; ++i) {
+                        m_recording_sample_data->left.push_back(in_bufs[ch][i]);
+                        m_recording_sample_data->right.push_back(in_bufs[ch][i]); // Mono to stereo if only one channel
+                    }
+                }
+            }
+        }
+    }
+
     for (size_t i = 0; i < frames; ++i) { out_l[i] = 0.f; out_r[i] = 0.f; }
     
     // Clear bus buffers
@@ -486,5 +537,22 @@ bool Engine::render_to_wav(const std::string& path) { return false; } // Stub
 inline float Engine::soft_clip(float x) { const float limit = 0.95f; if (x > limit) return limit; if (x < -limit) return -limit; return x; }
 UndoStack& Engine::undo_stack() { return m_undo; }
 BlockClipboard& Engine::clipboard() { return m_clipboard; }
+
+void Engine::start_recording_sample(SampleRecordMode mode, uint32_t channel, bool mono) {
+    m_recording_sample_mode.store(mode);
+    m_recording_input_channel = channel;
+    m_recording_is_mono = mono;
+    m_recording_sample_data = std::make_shared<SampleData>();
+    m_recording_sample_data->sample_rate = (int)m_sample_rate;
+    m_recording_synced_active.store(false);
+    m_is_recording_sample.store(true);
+}
+
+void Engine::stop_recording_sample() {
+    m_is_recording_sample.store(false);
+    m_recording_synced_active.store(false);
+    // m_recording_sample_data is now ready. 
+    // It's up to the caller to use it from the shared_ptr.
+}
 
 } // namespace disgrace_ns

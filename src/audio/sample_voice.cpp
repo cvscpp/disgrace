@@ -68,7 +68,7 @@ namespace disgrace_ns
                               float* out_r,
                               size_t frames)
     {
-        if (!m_env.active())
+        if (!m_env.active() || !m_sample)
         {
             m_active = false;
             return;

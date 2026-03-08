@@ -11,6 +11,7 @@ namespace disgrace_ns
     };
 
     enum class SampleFormatAction {
+        Stereo,
         StereoToMonoL,
         StereoToMonoR,
         StereoToMonoMix,

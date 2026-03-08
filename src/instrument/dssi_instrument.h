@@ -3,6 +3,9 @@
 #include <dssi.h>
 #include <dlfcn.h>
 #include <vector>
+// Note: DSSI run_synth explicitly uses snd_seq_event_t from ALSA.
+// On FreeBSD, this is provided by the alsa-lib port.
+#include <alsa/asoundlib.h>
 
 namespace disgrace_ns {
 
@@ -24,6 +27,8 @@ public:
     Parameter get_parameter(size_t index) const override;
     void set_parameter(size_t index, float value) override;
 
+    void load_program(unsigned long bank, unsigned long program);
+
 protected:
     std::unique_ptr<Voice> create_voice() override { return nullptr; }
 
@@ -37,6 +42,7 @@ private:
     std::vector<int>   m_control_indices;
     int m_audio_out_l = -1;
     int m_audio_out_r = -1;
+    std::vector<snd_seq_event_t> m_pending_events;
 };
 
 } // namespace disgrace_ns

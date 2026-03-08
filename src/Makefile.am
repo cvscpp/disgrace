@@ -63,7 +63,8 @@ disgrace_CXXFLAGS = \
     $(NLOHMANN_JSON_CFLAGS) \
     $(FFTW3_CFLAGS) \
     $(LIBARCHIVE_CFLAGS) \
-    $(FLUIDSYNTH_CFLAGS)
+    $(FLUIDSYNTH_CFLAGS) \
+    $(ALSA_CFLAGS)
 
 disgrace_LDADD = \
     $(JACK_LIBS) \
@@ -73,4 +74,5 @@ disgrace_LDADD = \
     $(SNDTOUCH_LIBS) \
     $(FFTW3_LIBS) \
     $(LIBARCHIVE_LIBS) \
-    $(FLUIDSYNTH_LIBS)
+    $(FLUIDSYNTH_LIBS) \
+    $(ALSA_LIBS)

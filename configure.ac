@@ -60,6 +60,9 @@ PKG_CHECK_MODULES([FFTW3], [fftw3])
 # libarchive
 PKG_CHECK_MODULES([LIBARCHIVE], [libarchive])
 
+# ALSA
+PKG_CHECK_MODULES([ALSA], [alsa])
+
 # FluidSynth
 PKG_CHECK_MODULES([FLUIDSYNTH], [fluidsynth])
 

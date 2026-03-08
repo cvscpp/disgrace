@@ -26,9 +26,18 @@ public:
     void update_effect_editor();
 
 private:
+    void clear_callback_data();
+    template<typename T>
+    T* reg_cb(T* data) {
+        m_callback_data.push_back(static_cast<void*>(data));
+        return data;
+    }
+
     Engine& m_engine;
-    int m_selected_track = 0;
+    int m_selected_track = -1;
     int m_selected_fx_slot = -1;
+
+    std::vector<void*> m_callback_data;
 
     Fl_Tile* m_tile;
     Fl_Group* m_upper_pane;

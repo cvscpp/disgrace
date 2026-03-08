@@ -33,6 +33,9 @@ namespace disgrace_ns {
 MixerPanel::MixerPanel(int x, int y, int w, int h, Engine& engine)
     : Fl_Group(x, y, w, h), m_engine(engine) {
     
+    m_selected_track = -1; // Default to Master
+    m_selected_fx_slot = -1;
+    
     begin();
 
     m_tile = new Fl_Tile(x, y, w, h);
@@ -121,7 +124,7 @@ MixerPanel::MixerPanel(int x, int y, int w, int h, Engine& engine)
     m_master_meter_r = new VUMeter(x + w - 25, y + h/2 - 35, 15, 25);
 
     Fl_Button* master_sel = new Fl_Button(x + w - 330, y + h/2 - 35, 75, 25, "SEL");
-    master_sel->callback(cb_track_select, new ::std::pair<MixerPanel*,int>(this, -1));
+    master_sel->callback(cb_track_select, reg_cb(new ::std::pair<MixerPanel*,int>(this, -1)));
     if (m_selected_track == -1) master_sel->color(FL_YELLOW);
 
     m_upper_pane->end();
@@ -136,11 +139,16 @@ MixerPanel::MixerPanel(int x, int y, int w, int h, Engine& engine)
     update_effect_editor();
 }
 
-void MixerPanel::update_mixer_ui() {
-    for (int i = 0; i < m_track_group->children(); ++i) {
-        void* d = m_track_group->child(i)->user_data();
-        if (d) delete static_cast<std::pair<MixerPanel*, int>*>(d);
+void MixerPanel::clear_callback_data() {
+    for (void* p : m_callback_data) {
+        delete static_cast<std::pair<MixerPanel*, int>*>(p);
     }
+    m_callback_data.clear();
+}
+
+void MixerPanel::update_mixer_ui() {
+    clear_callback_data();
+
     m_track_group->clear();
     m_track_group->begin();
     m_track_meters.clear();
@@ -164,7 +172,7 @@ void MixerPanel::update_mixer_ui() {
       vol->type(FL_VERTICAL);
       vol->bounds(1, 0); 
       vol->value(m_engine.track(i).volume());
-      vol->callback(cb_track_volume, new ::std::pair<MixerPanel*,int>(this, (int)i));
+      vol->callback(cb_track_volume, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
 
       VUMeter* meter_l = new VUMeter(45 + x_offset, cur_y, 8, 150);
       VUMeter* meter_r = new VUMeter(55 + x_offset, cur_y, 8, 150);
@@ -175,24 +183,24 @@ void MixerPanel::update_mixer_ui() {
       pan_slider->type(FL_HOR_SLIDER);
       pan_slider->range(-1.0, 1.0);
       pan_slider->value(m_engine.track(i).get_pan());
-      pan_slider->callback(cb_track_pan, new ::std::pair<MixerPanel*,int>(this, (int)i));
+      pan_slider->callback(cb_track_pan, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
       cur_y += 15 + 5;
 
       Fl_Check_Button* mute = new Fl_Check_Button(20 + x_offset, cur_y, 35, std_h, "M");
       mute->labelsize(font_sz);
       mute->value(m_engine.track(i).muted());
-      mute->callback(cb_track_mute, new ::std::pair<MixerPanel*,int>(this, (int)i));
+      mute->callback(cb_track_mute, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
 
       Fl_Check_Button* solo = new Fl_Check_Button(60 + x_offset, cur_y, 35, std_h, "S");
       solo->labelsize(font_sz);
       solo->value(m_engine.track(i).solo());
-      solo->callback(cb_track_solo, new ::std::pair<MixerPanel*,int>(this, (int)i));
+      solo->callback(cb_track_solo, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
       cur_y += std_h + 5;
 
       Fl_Button* sel = new Fl_Button(20 + x_offset, cur_y, 75, std_h, "SEL");
       sel->labelsize(font_sz);
       if ((int)i == m_selected_track) sel->color(FL_YELLOW);
-      sel->callback(cb_track_select, new ::std::pair<MixerPanel*,int>(this, (int)i));
+      sel->callback(cb_track_select, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
       cur_y += std_h + 5;
 
       // Audio Input for MIDI instruments
@@ -218,13 +226,13 @@ void MixerPanel::update_mixer_ui() {
         else if (cr == -1) input_choice->value(cl + 1);
         else if (cr == cl + 1) input_choice->value((int)(num_ins + 1 + cl / 2));
         
-        input_choice->callback(cb_track_input, new ::std::pair<MixerPanel*,int>(this, (int)i));
+        input_choice->callback(cb_track_input, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
         cur_y += std_h + 5;
 
         Fl_Value_Input* delay_input = new Fl_Value_Input(20 + x_offset + 30, cur_y, 45, std_h, "Dly");
         delay_input->labelsize(font_sz - 2);
         delay_input->value(m_engine.track(i).input_delay());
-        delay_input->callback(cb_track_delay, new ::std::pair<MixerPanel*,int>(this, (int)i));
+        delay_input->callback(cb_track_delay, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
       }
 
       x_offset += 100;
@@ -245,7 +253,7 @@ void MixerPanel::update_mixer_ui() {
         vol->type(FL_VERTICAL);
         vol->bounds(1, 0); 
         vol->value(m_engine.bus(i).volume());
-        vol->callback(cb_bus_volume, new ::std::pair<MixerPanel*,int>(this, (int)i));
+        vol->callback(cb_bus_volume, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
 
         VUMeter* meter_l = new VUMeter(45 + x_offset, cur_y, 8, 150);
         VUMeter* meter_r = new VUMeter(55 + x_offset, cur_y, 8, 150);
@@ -256,13 +264,13 @@ void MixerPanel::update_mixer_ui() {
         pan_slider->type(FL_HOR_SLIDER);
         pan_slider->range(-1.0, 1.0);
         pan_slider->value(m_engine.bus(i).pan());
-        pan_slider->callback(cb_bus_pan, new ::std::pair<MixerPanel*,int>(this, (int)i));
+        pan_slider->callback(cb_bus_pan, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
         cur_y += 15 + 5;
 
         Fl_Check_Button* mute = new Fl_Check_Button(20 + x_offset, cur_y, 35, std_h, "M");
         mute->labelsize(font_sz);
         mute->value(m_engine.bus(i).muted());
-        mute->callback(cb_bus_mute, new ::std::pair<MixerPanel*,int>(this, (int)i));
+        mute->callback(cb_bus_mute, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
         
         x_offset += 100;
       }
@@ -293,16 +301,22 @@ void MixerPanel::update_meters() {
 }
 
 void MixerPanel::update_effect_editor() {
-    for (int i = 0; i < m_fx_chain_group->children(); ++i) {
-        void* d = m_fx_chain_group->child(i)->user_data();
-        if (d) delete static_cast<::std::pair<MixerPanel*,int>*>(d);
-    }
-    m_fx_chain_group->clear();
+    // Note: We don't call clear_callback_data() here because it's called 
+    // in update_mixer_ui, and they are often called sequentially.
+    // However, if we only update the effect editor (e.g. adding an effect),
+    // we might need to clear.
+    // Actually, update_mixer_ui rebuilds the whole track list.
+    // Let's just NOT clear here and let FLTK handle the widget deletion,
+    // but we need to avoid double-deletion of the pairs.
+    // A better way: ONLY clear in update_mixer_ui if we are rebuilding everything.
+    // But effect editor rebuilds its own set of widgets.
     
-    for (int i = 0; i < m_fx_params_group->children(); ++i) {
-        void* d = m_fx_params_group->child(i)->user_data();
-        if (d) delete static_cast<::std::pair<MixerPanel*,int>*>(d);
-    }
+    // Safety: just clear and rebuild. This is the most robust way.
+    // To avoid deleting the track pairs, we might need two lists, 
+    // but let's just rebuild everything for now.
+    update_mixer_ui(); 
+
+    m_fx_chain_group->clear();
     m_fx_params_group->clear();
 
     if (m_selected_track < -1 || m_selected_track >= (int)m_engine.track_count()) return;
@@ -334,7 +348,7 @@ void MixerPanel::update_effect_editor() {
             row->begin();
             Fl_Check_Button* bypass = new Fl_Check_Button(row->x(), row->y(), 25, std_h);
             bypass->value(!dsp->is_bypassed());
-            bypass->callback(cb_fx_bypass, new ::std::pair<MixerPanel*,int>(this, (int)i));
+            bypass->callback(cb_fx_bypass, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
             Fl_Button* sel_btn = new Fl_Button(row->x() + 28, row->y(), 100, std_h, strdup(dsp->name().c_str()));
             sel_btn->labelsize(font_sz);
             if ((int)i == m_selected_fx_slot) sel_btn->color(FL_YELLOW);
@@ -342,14 +356,14 @@ void MixerPanel::update_effect_editor() {
                 auto* p = static_cast<::std::pair<MixerPanel*,int>*>(d);
                 p->first->m_selected_fx_slot = p->second;
                 p->first->update_effect_editor();
-            }, new ::std::pair<MixerPanel*,int>(this, (int)i));
+            }, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
             int bx = row->x() + 132, bw = 30;
             Fl_Button* up = new Fl_Button(bx, row->y(), bw, std_h, "@8");
-            up->callback(cb_fx_up, new ::std::pair<MixerPanel*,int>(this, (int)i));
+            up->callback(cb_fx_up, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
             Fl_Button* dn = new Fl_Button(bx + bw + 2, row->y(), bw, std_h, "@2");
-            dn->callback(cb_fx_down, new ::std::pair<MixerPanel*,int>(this, (int)i));
+            dn->callback(cb_fx_down, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
             Fl_Button* rm = new Fl_Button(bx + 2*(bw + 2), row->y(), bw, std_h, "X");
-            rm->callback(cb_fx_remove, new ::std::pair<MixerPanel*,int>(this, (int)i));
+            rm->callback(cb_fx_remove, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
             row->end();
         }
     }
@@ -378,11 +392,11 @@ void MixerPanel::update_effect_editor() {
             Fl_Choice* presets = new Fl_Choice(pre_row->x(), pre_row->y(), 150, std_h, "Preset");
             presets->labelsize(font_sz); presets->align(FL_ALIGN_RIGHT);
             for (const auto& p : dsp->get_presets()) presets->add(strdup(p.c_str()));
-            presets->value(0); presets->callback(cb_fx_preset_select, new ::std::pair<MixerPanel*,int>(this, m_selected_fx_slot));
+            presets->value(0); presets->callback(cb_fx_preset_select, reg_cb(new ::std::pair<MixerPanel*,int>(this, m_selected_fx_slot)));
             Fl_Button* psave = new Fl_Button(pre_row->x() + 220, pre_row->y(), 60, std_h, "Save");
-            psave->labelsize(font_sz); psave->callback(cb_fx_preset_save, new ::std::pair<MixerPanel*,int>(this, m_selected_fx_slot));
+            psave->labelsize(font_sz); psave->callback(cb_fx_preset_save, reg_cb(new ::std::pair<MixerPanel*,int>(this, m_selected_fx_slot)));
             Fl_Button* pload = new Fl_Button(pre_row->x() + 285, pre_row->y(), 60, std_h, "Load");
-            pload->labelsize(font_sz); pload->callback(cb_fx_preset_load, new ::std::pair<MixerPanel*,int>(this, m_selected_fx_slot));
+            pload->labelsize(font_sz); pload->callback(cb_fx_preset_load, reg_cb(new ::std::pair<MixerPanel*,int>(this, m_selected_fx_slot)));
             pre_row->end();
 
             if (auto* g = dynamic_cast<GainDSP*>(dsp)) {
@@ -483,7 +497,7 @@ void MixerPanel::update_effect_editor() {
                     Fl_Slider* s = new Fl_Slider(10 + b * band_w, eq_grp->y(), band_w - 5, 120);
                     s->type(FL_VERTICAL); s->range(12, -12); s->value(geq->get_band_gain(b));
                     struct EQData { GraphicalEQDSP* dsp; int band; };
-                    s->callback([](Fl_Widget* w, void* d){ auto* ed = (EQData*)d; ed->dsp->set_band_gain(ed->band, (float)((Fl_Slider*)w)->value()); }, new EQData{geq, b});
+                    s->callback([](Fl_Widget* w, void* d){ auto* ed = (EQData*)d; ed->dsp->set_band_gain(ed->band, (float)((Fl_Slider*)w)->value()); }, reg_cb(new EQData{geq, b}));
                     Fl_Box* lbl = new Fl_Box(10 + b * band_w, eq_grp->y() + 120, band_w - 5, 20);
                     float f = geq->get_band_freq(b);
                     if (f >= 1000) lbl->copy_label((std::to_string((int)(f/1000)) + "k").c_str()); else lbl->copy_label(std::to_string((int)f).c_str());
@@ -560,10 +574,14 @@ void MixerPanel::update_effect_editor() {
 
 void MixerPanel::cb_track_select(Fl_Widget* w, void* data) {
     auto* pair = static_cast<::std::pair<MixerPanel*,int>*>(data);
-    pair->first->m_selected_track = pair->second;
-    pair->first->m_selected_fx_slot = -1;
-    pair->first->update_mixer_ui();
-    pair->first->update_effect_editor();
+    MixerPanel* self = pair->first;
+    int track_idx = pair->second;
+    
+    self->m_selected_track = track_idx;
+    self->m_selected_fx_slot = -1;
+    
+    self->update_mixer_ui();
+    self->update_effect_editor();
 }
 
 void MixerPanel::cb_add_fx(Fl_Widget* w, void* data) {
@@ -638,8 +656,12 @@ void MixerPanel::cb_fx_bypass(Fl_Widget* w, void* data) {
 
 void MixerPanel::cb_fx_preset_select(Fl_Widget* w, void* data) {
     auto* pair = static_cast<::std::pair<MixerPanel*,int>*>(data);
+    Fl_Choice* choice = static_cast<Fl_Choice*>(w);
+    int idx = choice->value();
+    if (idx < 0) return;
+    
     DSP* dsp = (pair->first->m_selected_track == -1) ? pair->first->m_engine.m_master.get_effect(pair->second) : pair->first->m_engine.track(pair->first->m_selected_track).get_effect(pair->second);
-    if (dsp) dsp->load_preset(static_cast<Fl_Choice*>(w)->text());
+    if (dsp) dsp->load_preset(choice->text(idx));
     pair->first->update_effect_editor();
 }
 

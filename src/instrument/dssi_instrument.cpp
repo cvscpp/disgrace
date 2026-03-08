@@ -40,19 +40,36 @@ bool DSSIInstrument::load_plugin(const std::string& path, int index) {
     }
 
     m_descriptor = df(index); 
-    if (!m_descriptor) return false;
+    if (!m_descriptor) {
+        dlclose(m_lib_handle);
+        m_lib_handle = nullptr;
+        m_audio_out_l = -1;
+        m_audio_out_r = -1;
+        return false;
+    }
 
     const LADSPA_Descriptor* ladspa = m_descriptor->LADSPA_Plugin;
     m_instance = ladspa->instantiate(ladspa, (unsigned long)m_sample_rate);
-    if (!m_instance) return false;
+    if (!m_instance) {
+        dlclose(m_lib_handle);
+        m_lib_handle = nullptr;
+        m_audio_out_l = -1;
+        m_audio_out_r = -1;
+        return false;
+    }
 
     set_plugin_name(ladspa->Name);
+    m_audio_out_l = -1;
+    m_audio_out_r = -1;
 
-    // Discover control ports
+    // Discover ports
     m_port_values.resize(ladspa->PortCount, 0.0f);
     for (unsigned long i = 0; i < ladspa->PortCount; ++i) {
         LADSPA_PortDescriptor d = ladspa->PortDescriptors[i];
-        if (LADSPA_IS_PORT_CONTROL(d) && LADSPA_IS_PORT_INPUT(d)) {
+        if (LADSPA_IS_PORT_AUDIO(d) && LADSPA_IS_PORT_OUTPUT(d)) {
+            if (m_audio_out_l == -1) m_audio_out_l = (int)i;
+            else if (m_audio_out_r == -1) m_audio_out_r = (int)i;
+        } else if (LADSPA_IS_PORT_CONTROL(d) && LADSPA_IS_PORT_INPUT(d)) {
             m_control_indices.push_back((int)i);
             
             // Set default value if hint provided
@@ -71,9 +88,6 @@ bool DSSIInstrument::load_plugin(const std::string& path, int index) {
             }
             m_port_values[i] = val;
             ladspa->connect_port(m_instance, i, &m_port_values[i]);
-        } else if (LADSPA_IS_PORT_AUDIO(d) && LADSPA_IS_PORT_OUTPUT(d)) {
-            if (m_audio_out_l == -1) m_audio_out_l = (int)i;
-            else if (m_audio_out_r == -1) m_audio_out_r = (int)i;
         }
     }
 
@@ -110,36 +124,72 @@ void DSSIInstrument::set_parameter(size_t index, float value) {
     m_port_values[port_idx] = value;
 }
 
-    void DSSIInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_index, size_t)
- {
-    // DSSI specific note on handling would go here (MIDI or OSC)
-}
-
-void DSSIInstrument::note_off(size_t column_index) {}
-void DSSIInstrument::panic() {}
-void DSSIInstrument::set_volume(float vol) {}
-void DSSIInstrument::set_pitch(float freq) {}
-
-void DSSIInstrument::process(float* l, float* r, size_t nframes) {
-    if (!m_instance || !m_descriptor) {
-        for(size_t i=0; i<nframes; ++i) { l[i]=0; r[i]=0; }
-        return;
-    }
-
-    const LADSPA_Descriptor* ladspa = m_descriptor->LADSPA_Plugin;
-    
-    // Connect audio outputs
-    if (m_audio_out_l != -1) ladspa->connect_port(m_instance, (unsigned long)m_audio_out_l, l);
-    if (m_audio_out_r != -1) ladspa->connect_port(m_instance, (unsigned long)m_audio_out_r, r);
-    else if (m_audio_out_l != -1) {
-        // Mono plugin: copy L to R after processing
-    }
-
-    ladspa->run(m_instance, (unsigned long)nframes);
-
-    if (m_audio_out_l != -1 && m_audio_out_r == -1) {
-        for (size_t i = 0; i < nframes; ++i) r[i] = l[i];
+void DSSIInstrument::load_program(unsigned long bank, unsigned long program) {
+    if (m_instance && m_descriptor && m_descriptor->select_program) {
+        m_descriptor->select_program(m_instance, bank, program);
     }
 }
+
+    void DSSIInstrument::note_on(uint8_t note, uint8_t velocity, size_t, size_t)
+    {
+        if (!m_descriptor) return;
+        snd_seq_event_t ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.type = SND_SEQ_EVENT_NOTEON;
+        ev.data.note.channel = 0;
+        ev.data.note.note = note;
+        ev.data.note.velocity = velocity;
+        m_pending_events.push_back(ev);
+    }
+
+    void DSSIInstrument::note_off(size_t)
+    {
+        if (!m_descriptor) return;
+        snd_seq_event_t ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.type = SND_SEQ_EVENT_NOTEOFF;
+        ev.data.note.channel = 0;
+        ev.data.note.note = 0; // All notes off if needed, but usually specific
+        m_pending_events.push_back(ev);
+    }
+
+    void DSSIInstrument::panic()
+    {
+        if (!m_descriptor) return;
+        snd_seq_event_t ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.type = SND_SEQ_EVENT_CONTROLLER;
+        ev.data.control.channel = 0;
+        ev.data.control.param = 123; // All notes off
+        ev.data.control.value = 0;
+        m_pending_events.push_back(ev);
+    }
+
+    void DSSIInstrument::set_volume(float vol) {}
+    void DSSIInstrument::set_pitch(float freq) {}
+
+    void DSSIInstrument::process(float* l, float* r, size_t nframes) {
+        if (!m_instance || !m_descriptor) {
+            for(size_t i=0; i<nframes; ++i) { l[i]=0; r[i]=0; }
+            return;
+        }
+
+        const LADSPA_Descriptor* ladspa = m_descriptor->LADSPA_Plugin;
+        
+        // Connect audio outputs
+        if (m_audio_out_l != -1) ladspa->connect_port(m_instance, (unsigned long)m_audio_out_l, l);
+        if (m_audio_out_r != -1) ladspa->connect_port(m_instance, (unsigned long)m_audio_out_r, r);
+
+        if (m_descriptor->run_synth) {
+            m_descriptor->run_synth(m_instance, (unsigned long)nframes, m_pending_events.data(), (unsigned long)m_pending_events.size());
+        } else {
+            ladspa->run(m_instance, (unsigned long)nframes);
+        }
+        m_pending_events.clear();
+
+        if (m_audio_out_l != -1 && m_audio_out_r == -1) {
+            for (size_t i = 0; i < nframes; ++i) r[i] = l[i];
+        }
+    }
 
 } // namespace disgrace_ns

@@ -728,8 +728,16 @@ void InstrumentPanel::cb_zyn_bank(Fl_Widget*, void* data) {
 
 void InstrumentPanel::cb_zyn_preset(Fl_Widget* w, void* data) {
     InstrumentPanel* self = static_cast<InstrumentPanel*>(data);
-    int pidx = self->m_zyn_preset_browser->value(); if (pidx <= 0) return;
-    fl_message("Loading ZynAddSubFX preset: %s (Stub)", self->m_zyn_preset_browser->text(pidx));
+    int bidx = self->m_zyn_bank_ch->value();
+    int pidx = self->m_zyn_preset_browser->value(); 
+    if (bidx < 0 || pidx <= 0) return;
+
+    if (self->m_selected_instrument >= 0) {
+        auto& inst = self->m_engine.instrument(self->m_selected_instrument);
+        if (inst.type() == InstrumentType::Plugin) {
+            static_cast<DSSIInstrument*>(&inst)->load_program((unsigned long)bidx, (unsigned long)(pidx - 1));
+        }
+    }
 }
 
 void InstrumentPanel::cb_zyn_prev(Fl_Widget*, void* data) {

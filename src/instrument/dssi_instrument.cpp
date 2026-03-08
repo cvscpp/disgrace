@@ -23,6 +23,8 @@ bool DSSIInstrument::load_plugin(const std::string& path, int index) {
         m_instance = nullptr;
         m_control_indices.clear();
         m_port_values.clear();
+        m_audio_out_l = -1;
+        m_audio_out_r = -1;
     }
 
     m_lib_handle = dlopen(path.c_str(), RTLD_NOW);
@@ -69,6 +71,9 @@ bool DSSIInstrument::load_plugin(const std::string& path, int index) {
             }
             m_port_values[i] = val;
             ladspa->connect_port(m_instance, i, &m_port_values[i]);
+        } else if (LADSPA_IS_PORT_AUDIO(d) && LADSPA_IS_PORT_OUTPUT(d)) {
+            if (m_audio_out_l == -1) m_audio_out_l = (int)i;
+            else if (m_audio_out_r == -1) m_audio_out_r = (int)i;
         }
     }
 
@@ -120,7 +125,21 @@ void DSSIInstrument::process(float* l, float* r, size_t nframes) {
         for(size_t i=0; i<nframes; ++i) { l[i]=0; r[i]=0; }
         return;
     }
-    m_descriptor->LADSPA_Plugin->run(m_instance, (unsigned long)nframes);
+
+    const LADSPA_Descriptor* ladspa = m_descriptor->LADSPA_Plugin;
+    
+    // Connect audio outputs
+    if (m_audio_out_l != -1) ladspa->connect_port(m_instance, (unsigned long)m_audio_out_l, l);
+    if (m_audio_out_r != -1) ladspa->connect_port(m_instance, (unsigned long)m_audio_out_r, r);
+    else if (m_audio_out_l != -1) {
+        // Mono plugin: copy L to R after processing
+    }
+
+    ladspa->run(m_instance, (unsigned long)nframes);
+
+    if (m_audio_out_l != -1 && m_audio_out_r == -1) {
+        for (size_t i = 0; i < nframes; ++i) r[i] = l[i];
+    }
 }
 
 } // namespace disgrace_ns

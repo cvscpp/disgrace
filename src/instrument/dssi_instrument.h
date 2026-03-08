@@ -35,6 +35,8 @@ private:
 
     std::vector<float> m_port_values;
     std::vector<int>   m_control_indices;
+    int m_audio_out_l = -1;
+    int m_audio_out_r = -1;
 };
 
 } // namespace disgrace_ns

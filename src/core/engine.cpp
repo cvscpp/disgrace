@@ -48,7 +48,7 @@ void Engine::new_project() {
     add_instrument();
     
     m_patterns.clear();
-    m_patterns.emplace_back(64, 0); // Start with 0 tracks in pattern too
+    m_patterns.push_back(std::make_unique<Pattern>(64, 0));
     
     m_order.clear();
     m_order.push_back(0);
@@ -117,11 +117,10 @@ void Engine::auto_seek() {
     size_t pat_idx = m_active_pattern.load();
     if (pat_idx >= m_patterns.size()) return;
     
-    Pattern& pat = m_patterns[pat_idx];
+    Pattern& pat = *m_patterns[pat_idx];
     size_t target_row = m_current_row;
 
     for (size_t t = 0; t < m_tracks.size() && t < pat.track_count(); ++t) {
-        // Find most recent note on this track for each column
         size_t num_cols = pat.column_count(t);
         for (size_t c = 0; c < num_cols; ++c) {
             int found_row = -1;
@@ -130,7 +129,7 @@ void Engine::auto_seek() {
 
             for (int r = (int)target_row - 1; r >= 0; --r) {
                 const auto& ev = pat.event(t, (size_t)r, c);
-                if (ev.note == 254) break; // Note off cuts the search
+                if (ev.note == 254) break; 
                 if (ev.note != 255) {
                     found_row = r;
                     found_note = ev.note;
@@ -172,9 +171,8 @@ void Engine::process_tick()
 { 
     size_t pat_idx = m_active_pattern.load();
     if (pat_idx >= m_patterns.size()) return;
-    Pattern& pat = m_patterns[pat_idx];
+    Pattern& pat = *m_patterns[pat_idx];
 
-    // Note processing only on tick 0
     if (m_current_tick == 0) {
         size_t row = m_current_row;
         for (size_t t = 0; t < m_tracks.size() && t < pat.track_count(); ++t) {
@@ -191,7 +189,6 @@ void Engine::process_tick()
         }
     }
 
-    // Tick-level effect processing (e.g., volume slides)
     for (size_t t = 0; t < m_tracks.size(); ++t) {
         m_tracks[t].process_tick(m_current_tick);
     }
@@ -203,7 +200,6 @@ void Engine::process_tick()
         if (m_current_row >= pat.row_count()) {
             m_current_row = 0;
             if (!transport().m_loop_pattern.load()) {
-                // Song mode or range loop
                 size_t next_order_pos = m_order_pos.load() + 1;
                 size_t end_pos = m_order_end.load();
                 if (end_pos == 0 && !m_order.empty()) end_pos = m_order.size() - 1;
@@ -265,11 +261,20 @@ void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float*
                 auto_seek();
                 m_playing.store(true);
                 break;
+            case EngineCommandType::ResizePattern:
+                if (cmd.index < m_patterns.size()) {
+                    m_patterns[cmd.index]->resize_rows(cmd.value);
+                    if (m_active_pattern.load() == cmd.index) {
+                        if (m_current_row >= m_patterns[cmd.index]->row_count()) {
+                            m_current_row = 0;
+                        }
+                    }
+                }
+                break;
         }
     }
 
     if (!transport().is_playing()) {
-        // Just render a static block (no sequencer ticks)
         render_block(out_l, out_r, nframes, in_bufs);
         m_master.process(out_l, out_r, nframes);
         for (size_t i = 0; i < nframes; ++i) m_spectral_rb.push((out_l[i] + out_r[i]) * 0.5f);
@@ -288,31 +293,23 @@ void Engine::process_block(float* l, float* r, size_t nframes, const float* cons
         }
         size_t block = std::min(m_samples_until_next_tick, nframes - processed);
         
-        // Correcting in_bufs pointer for sub-blocks if necessary, 
-        // but here they are just arrays of pointers to buffers that cover the whole nframes.
-        // We need to offset the pointers themselves if we want to pass them to render_block.
-        // Or we pass the original in_bufs and the current offset.
-        
-        // For simplicity, let's create a temporary array of offset pointers.
-        const float* offset_in_bufs[64]; // Assuming max 64 inputs
+        const float* offset_in_bufs[64];
         for(uint32_t i = 0; i < m_num_ins && i < 64; ++i) {
-            offset_in_bufs[i] = in_bufs[i] + processed;
+            offset_in_bufs[i] = in_bufs ? in_bufs[i] + processed : nullptr;
         }
 
-        render_block(l + processed, r + processed, block, offset_in_bufs);
+        render_block(l + processed, r + processed, block, in_bufs ? offset_in_bufs : nullptr);
         processed += block; m_samples_until_next_tick -= block;
     }
     m_master.process(l, r, nframes);
 }
 
 void Engine::render_block(float* out_l, float* out_r, size_t frames, const float* const* in_bufs) {
-    // --- Recording ---
     if (m_is_recording_sample.load()) {
         bool should_record = false;
         if (m_recording_sample_mode.load() == SampleRecordMode::Free) {
             should_record = true;
         } else {
-            // Synced mode
             if (m_current_row == 0 && m_samples_until_next_tick == m_timing.samples_per_tick()) {
                 m_recording_synced_active.store(true);
             }
@@ -338,7 +335,7 @@ void Engine::render_block(float* out_l, float* out_r, size_t frames, const float
                 } else if (ch < m_num_ins) {
                      for (size_t i = 0; i < frames; ++i) {
                         m_recording_sample_data->left.push_back(in_bufs[ch][i]);
-                        m_recording_sample_data->right.push_back(in_bufs[ch][i]); // Mono to stereo if only one channel
+                        m_recording_sample_data->right.push_back(in_bufs[ch][i]);
                     }
                 }
             }
@@ -347,7 +344,6 @@ void Engine::render_block(float* out_l, float* out_r, size_t frames, const float
 
     for (size_t i = 0; i < frames; ++i) { out_l[i] = 0.f; out_r[i] = 0.f; }
     
-    // Clear bus buffers
     for (size_t b = 0; b < m_buses.size() && b < MAX_BUSES_INTERNAL; ++b) {
         std::fill(m_bus_l[b], m_bus_l[b] + frames, 0.f);
         std::fill(m_bus_r[b], m_bus_r[b] + frames, 0.f);
@@ -384,13 +380,11 @@ void Engine::render_block(float* out_l, float* out_r, size_t frames, const float
         }
     }
 
-    // Process buses
     for (size_t b = 0; b < m_buses.size() && b < MAX_BUSES_INTERNAL; ++b) {
         m_buses[b].process(m_bus_l[b], m_bus_r[b], frames);
         
         int out_idx = m_buses[b].output_bus();
         if (out_idx >= 0 && (size_t)out_idx < m_buses.size() && (size_t)out_idx < MAX_BUSES_INTERNAL) {
-            // Forward routing only to prevent feedback loops
             if ((size_t)out_idx > b) {
                 for (size_t i = 0; i < frames; ++i) {
                     m_bus_l[out_idx][i] += m_bus_l[b][i];
@@ -437,7 +431,7 @@ void Engine::set_instrument_type(size_t index, InstrumentType type) {
 void Engine::add_track() { 
     m_tracks.emplace_back(); 
     for (auto& pat : m_patterns) {
-        pat.resize_tracks(m_tracks.size());
+        pat->resize_tracks(m_tracks.size());
     }
 }
 void Engine::remove_track(size_t index) { if (index < m_tracks.size()) m_tracks.erase(m_tracks.begin() + index); }
@@ -470,27 +464,34 @@ int Engine::get_instrument_index(const Instrument* inst) const {
 size_t Engine::current_row() const { return m_current_row; }
 void Engine::set_active_pattern(size_t index) { if (index < m_patterns.size()) m_active_pattern.store(index); }
 size_t Engine::active_pattern() const { return m_active_pattern.load(); }
-Pattern& Engine::pattern() { return m_patterns[m_active_pattern.load()]; }
-Pattern& Engine::pattern(size_t index) { return m_patterns[index]; }
-const Pattern& Engine::pattern(size_t index) const { return m_patterns[index]; }
+Pattern& Engine::pattern() { return *m_patterns[m_active_pattern.load()]; }
+Pattern& Engine::pattern(size_t index) { return *m_patterns[index]; }
+const Pattern& Engine::pattern(size_t index) const { return *m_patterns[index]; }
 size_t Engine::pattern_count() const { return m_patterns.size(); }
 
 size_t Engine::create_pattern() {
     size_t rows = 64;
-    if (!m_patterns.empty()) rows = m_patterns[0].row_count();
-    m_patterns.emplace_back(rows, m_tracks.size());
-    // Ensure column counts match current tracks
-    Pattern& p = m_patterns.back();
+    if (!m_patterns.empty()) rows = m_patterns[0]->row_count();
+    m_patterns.push_back(std::make_unique<Pattern>(rows, m_tracks.size()));
+    Pattern& p = *m_patterns.back();
     for (size_t i = 0; i < m_tracks.size(); ++i) {
-        p.set_column_count(i, 1); // Default to 1 column
+        p.set_column_count(i, 1);
     }
     return m_patterns.size() - 1;
 }
 
 size_t Engine::copy_pattern(size_t index) {
     if (index >= m_patterns.size()) return create_pattern();
-    m_patterns.push_back(m_patterns[index]);
+    m_patterns.push_back(std::make_unique<Pattern>(*m_patterns[index]));
     return m_patterns.size() - 1;
+}
+
+void Engine::resize_pattern(size_t index, size_t new_rows) {
+    EngineCommand cmd;
+    cmd.type = EngineCommandType::ResizePattern;
+    cmd.index = index;
+    cmd.value = new_rows;
+    m_cmd_queue.push(cmd);
 }
 
 std::vector<uint8_t> Engine::order_list() const {
@@ -532,7 +533,7 @@ float Engine::master_meter_l() const { return m_master.meter_l(); }
 float Engine::master_meter_r() const { return m_master.meter_r(); }
 Transport& Engine::transport() { return *m_transport; }
 const Transport& Engine::transport() const { return *m_transport; }
-size_t Engine::total_song_samples() const { size_t total = 0; for (const auto& p : m_patterns) total += p.row_count(); return total * m_timing.samples_per_row(); }
+size_t Engine::total_song_samples() const { size_t total = 0; for (const auto& p : m_patterns) total += p->row_count(); return total * m_timing.samples_per_row(); }
 bool Engine::render_to_wav(const std::string& path) { return false; } // Stub
 inline float Engine::soft_clip(float x) { const float limit = 0.95f; if (x > limit) return limit; if (x < -limit) return -limit; return x; }
 UndoStack& Engine::undo_stack() { return m_undo; }
@@ -551,8 +552,6 @@ void Engine::start_recording_sample(SampleRecordMode mode, uint32_t channel, boo
 void Engine::stop_recording_sample() {
     m_is_recording_sample.store(false);
     m_recording_synced_active.store(false);
-    // m_recording_sample_data is now ready. 
-    // It's up to the caller to use it from the shared_ptr.
 }
 
 } // namespace disgrace_ns

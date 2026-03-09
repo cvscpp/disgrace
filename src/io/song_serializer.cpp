@@ -34,7 +34,6 @@ namespace disgrace_ns
         j["lpb"]   = engine.lpb();
         j["order"] = engine.order_list();
 
-        // Save instruments
         j["instruments"] = json::array();
         for (size_t i = 0; i < engine.instrument_count(); ++i) {
             const Instrument& inst = engine.instrument(i);
@@ -50,12 +49,13 @@ namespace disgrace_ns
                     std::string sample_filename = "inst_" + std::to_string(i) + "_s" + std::to_string(s) + ".wav";
                     fs::path sample_path = samples_dir / sample_filename;
                     
-                    AudioFile::save_wav(sample_path.string(), sample.data->left, sample.data->right, sample.data->sample_rate);
-                    
-                    json js;
-                    js["name"] = sample.name;
-                    js["file"] = "samples/" + sample_filename;
-                    jsamples.push_back(js);
+                    if (sample.data) {
+                        AudioFile::save_wav(sample_path.string(), sample.data->left, sample.data->right, sample.data->sample_rate);
+                        json js;
+                        js["name"] = sample.name;
+                        js["file"] = "samples/" + sample_filename;
+                        jsamples.push_back(js);
+                    }
                 }
                 jinst["samples"] = jsamples;
             } else if (inst.type() == InstrumentType::SoundFont) {
@@ -77,7 +77,6 @@ namespace disgrace_ns
             j["instruments"].push_back(jinst);
         }
 
-        // Save tracks and their assigned instruments
         j["tracks"] = json::array();
         for (size_t t = 0; t < engine.track_count(); ++t) {
             json jt;
@@ -89,7 +88,6 @@ namespace disgrace_ns
             j["tracks"].push_back(jt);
         }
 
-        // Save buses
         j["buses"] = json::array();
         for (size_t b = 0; b < engine.bus_count(); ++b) {
             json jb;
@@ -100,42 +98,11 @@ namespace disgrace_ns
             j["buses"].push_back(jb);
         }
 
-        // Save patterns
         j["patterns"] = json::array();
         for (size_t p = 0; p < engine.pattern_count(); ++p)
         {
             const Pattern& pat = engine.pattern(p);
-            json jp;
-            jp["rows"] = pat.row_count();
-            jp["tracks"] = json::array();
-
-            for (size_t t = 0; t < pat.track_count(); ++t)
-            {
-                json jtrack;
-                jtrack["cols"] = pat.column_count(t);
-                json jdata = json::array();
-
-                for (size_t r = 0; r < pat.row_count(); ++r)
-                {
-                    json jrow = json::array();
-                    for (size_t c = 0; c < pat.column_count(t); ++c) {
-                        const TrackEvent& ev = pat.event(t, r, c);
-                        json jev;
-                        jev["note"]       = ev.note;
-                        jev["sample"]     = ev.sample_idx;
-                        jev["volume"]     = ev.volume;
-                        jev["fx1"]        = ev.effect1;
-                        jev["p1"]         = ev.param1;
-                        jev["fx2"]        = ev.effect2;
-                        jev["p2"]         = ev.param2;
-                        jrow.push_back(jev);
-                    }
-                    jdata.push_back(jrow);
-                }
-                jtrack["data"] = jdata;
-                jp["tracks"].push_back(jtrack);
-            }
-            j["patterns"].push_back(jp);
+            j["patterns"].push_back(pat.to_json());
         }
 
         ::std::ofstream file(base_path / "song.json");
@@ -153,13 +120,12 @@ namespace disgrace_ns
         json j;
         file >> j;
 
-        engine.new_project(); // Clear current state
+        engine.new_project(); 
 
         engine.set_tempo(j["tempo"]);
         engine.set_lpb(j["lpb"]);
         engine.set_order(j["order"].get<::std::vector<uint8_t>>());
 
-        // Load instruments
         if (j.contains("instruments")) {
             engine.m_instruments.clear();
             for (auto& ji : j["instruments"]) {
@@ -191,8 +157,8 @@ namespace disgrace_ns
             }
         }
 
-        // Load buses
         if (j.contains("buses")) {
+            engine.m_buses.clear();
             for (auto& jb : j["buses"]) {
                 engine.add_bus();
                 MixerBus& bus = engine.bus(engine.bus_count() - 1);
@@ -203,8 +169,8 @@ namespace disgrace_ns
             }
         }
 
-        // Load tracks
         if (j.contains("tracks")) {
+            engine.m_tracks.clear();
             for (auto& jt : j["tracks"]) {
                 engine.add_track();
                 Track& track = engine.track(engine.track_count() - 1);
@@ -224,8 +190,8 @@ namespace disgrace_ns
         for (size_t p = 0; p < patterns.size(); ++p)
         {
             size_t rows = patterns[p]["rows"];
-            engine.m_patterns.emplace_back(rows, engine.track_count());
-            Pattern& pat = engine.m_patterns.back();
+            engine.m_patterns.push_back(std::make_unique<Pattern>(rows, engine.track_count()));
+            Pattern& pat = *engine.m_patterns.back();
 
             auto& jtracks = patterns[p]["tracks"];
             for (size_t t = 0; t < jtracks.size() && t < pat.track_count(); ++t)

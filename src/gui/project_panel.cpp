@@ -83,7 +83,7 @@ void ProjectPanel::cb_load(Fl_Widget*, void* data) {
         self->m_engine.load_project(fnfc.filename());
         for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
             MainWindow* mw = dynamic_cast<MainWindow*>(win);
-            if (mw) mw->request_update();
+            if (mw) mw->update_all_uis(); // Immediate, synchronous update
         }
     }
 }

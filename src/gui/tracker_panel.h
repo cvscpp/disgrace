@@ -27,16 +27,20 @@ private:
     Fl_Button* m_add_pattern_btn;
     Fl_Button* m_remove_pattern_btn;
     Fl_Button* m_copy_pattern_btn;
+    Fl_Button* m_dec_pattern_btn;
+    Fl_Button* m_inc_pattern_btn;
     Fl_Scroll* m_pattern_scroll;
     Fl_Group* m_pattern_list_container;
     Fl_Button* m_detach_btn;
     DetachedWindow* m_detached_window = nullptr;
+    int m_selected_order_idx = 0;
 
     static void cb_add_pattern(Fl_Widget*, void*);
     static void cb_remove_pattern(Fl_Widget*, void*);
     static void cb_copy_pattern(Fl_Widget*, void*);
     static void cb_inc_pattern(Fl_Widget*, void*);
     static void cb_dec_pattern(Fl_Widget*, void*);
+    static void cb_pattern_length(Fl_Widget*, void*);
     static void cb_detach(Fl_Widget*, void*);
 };
 

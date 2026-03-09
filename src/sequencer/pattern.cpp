@@ -30,7 +30,7 @@ nlohmann::json Pattern::to_json() const
         for (size_t row_idx = 0; row_idx < m_row_count; ++row_idx) {
             nlohmann::json columns_json = nlohmann::json::array();
             for (size_t col_idx = 0; col_idx < m_tracks[track_idx].columns; ++col_idx) {
-                columns_json.push_back(m_tracks[track_idx].rows[row_idx][col_idx]);
+                columns_json.push_back(m_tracks[track_idx].data[row_idx * MAX_COLS + col_idx]);
             }
             rows_json.push_back(columns_json);
         }

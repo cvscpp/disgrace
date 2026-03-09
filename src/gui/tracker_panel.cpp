@@ -4,6 +4,9 @@
 #include "main_window.h"
 #include "../core/engine.h"
 #include <FL/Fl_Box.H>
+#include <FL/Fl_Int_Input.H>
+#include <cstdlib>
+#include <cstdint>
 #include <utility> // For std::pair
 
 namespace disgrace_ns {
@@ -31,8 +34,16 @@ TrackerPanel::TrackerPanel(int x, int y, int w, int h, Engine& engine)
     m_copy_pattern_btn->labelsize(10);
     m_copy_pattern_btn->callback(cb_copy_pattern, this);
 
-    int content_y = y + btn_y_offset + btn_h;
-    int content_h = h - btn_h;
+    m_dec_pattern_btn = new Fl_Button(x, y + btn_y_offset + btn_h, 60, btn_h, "-");
+    m_dec_pattern_btn->labelsize(12);
+    m_dec_pattern_btn->callback(cb_dec_pattern, this);
+
+    m_inc_pattern_btn = new Fl_Button(x + 60, y + btn_y_offset + btn_h, 60, btn_h, "+");
+    m_inc_pattern_btn->labelsize(12);
+    m_inc_pattern_btn->callback(cb_inc_pattern, this);
+
+    int content_y = y + btn_y_offset + 2 * btn_h;
+    int content_h = h - (btn_y_offset + 2 * btn_h);
     int pattern_list_width = 120;
 
     m_pattern_scroll = new Fl_Scroll(x, content_y, pattern_list_width, content_h);
@@ -83,10 +94,6 @@ void TrackerPanel::update() {
 }
 
 void TrackerPanel::update_pattern_list_browser() {
-    for (int i = 0; i < m_pattern_list_container->children(); ++i) {
-        void* d = m_pattern_list_container->child(i)->user_data();
-        if (d) delete static_cast<std::pair<TrackerPanel*, size_t>*>(d);
-    }
     m_pattern_list_container->clear();
     m_pattern_list_container->begin();
     const auto& order = m_engine.order_list();
@@ -99,33 +106,44 @@ void TrackerPanel::update_pattern_list_browser() {
         
         char pos_str[16];
         snprintf(pos_str, 16, "%02zu:", i);
-        Fl_Button* b = new Fl_Button(start_x, cur_y, 30, row_h, strdup(pos_str));
-        b->box(FL_FLAT_BOX);
+        Fl_Button* b = new Fl_Button(start_x, cur_y, 30, row_h);
+        b->copy_label(pos_str);
+        b->box(m_selected_order_idx == (int)i ? FL_DOWN_BOX : FL_FLAT_BOX);
+        if (m_selected_order_idx == (int)i) b->color(FL_SELECTION_COLOR);
         b->labelsize(12);
-        b->callback([](Fl_Widget*, void* d){
-            auto* p = static_cast<std::pair<TrackerPanel*, size_t>*>(d);
-            auto& eng = p->first->m_engine;
+        b->user_data((void*)(uintptr_t)i);
+        b->callback([](Fl_Widget* w, void* d){
+            TrackerPanel* self = static_cast<TrackerPanel*>(d);
+            if (!self) return;
+            size_t idx = (size_t)(uintptr_t)w->user_data();
+            auto& eng = self->m_engine;
             auto ord = eng.order_list();
-            if (p->second < ord.size()) {
-                eng.set_active_pattern(ord[p->second]);
-                p->first->m_tracker->set_pattern(eng.pattern());
+            if (idx < ord.size()) {
+                self->m_selected_order_idx = (int)idx;
+                eng.set_active_pattern(ord[idx]);
+                self->m_tracker->set_pattern(eng.pattern());
             }
-            delete p;
-        }, new std::pair<TrackerPanel*, size_t>(this, i));
+            self->update_pattern_list_browser();
+        }, this);
         
         char pat_str[16];
         snprintf(pat_str, 16, "%02u", order[i]);
-        Fl_Box* p = new Fl_Box(start_x + 30, cur_y, 30, row_h, strdup(pat_str));
+        Fl_Box* p = new Fl_Box(start_x + 30, cur_y, 30, row_h);
+        p->copy_label(pat_str);
         p->labelsize(12);
         p->labelcolor(FL_YELLOW);
         
-        Fl_Button* dec = new Fl_Button(start_x + 65, cur_y + 2, 20, 20, "-");
-        dec->labelsize(10);
-        dec->callback(cb_dec_pattern, new std::pair<TrackerPanel*, size_t>(this, i));
-        
-        Fl_Button* inc = new Fl_Button(start_x + 90, cur_y + 2, 20, 20, "+");
-        inc->labelsize(10);
-        inc->callback(cb_inc_pattern, new std::pair<TrackerPanel*, size_t>(this, i));
+        // Pattern length input
+        int pat_idx = order[i];
+        size_t len = m_engine.pattern(pat_idx).row_count();
+        char len_str[16];
+        snprintf(len_str, 16, "%zu", len);
+        Fl_Int_Input* len_inp = new Fl_Int_Input(start_x + 65, cur_y + 2, 40, 20);
+        len_inp->value(len_str);
+        len_inp->labelsize(10);
+        len_inp->textsize(10);
+        len_inp->user_data((void*)(uintptr_t)pat_idx);
+        len_inp->callback(cb_pattern_length, this);
     }
     m_pattern_list_container->end();
     m_pattern_list_container->size(m_pattern_list_container->w(), (int)(order.size() * row_h));
@@ -170,36 +188,51 @@ void TrackerPanel::cb_copy_pattern(Fl_Widget*, void* data) {
 }
 
 void TrackerPanel::cb_inc_pattern(Fl_Widget*, void* data) {
-    auto* pair = static_cast<std::pair<TrackerPanel*, size_t>*>(data);
-    TrackerPanel* self = pair->first;
-    size_t pos = pair->second;
+    TrackerPanel* self = static_cast<TrackerPanel*>(data);
+    size_t pos = self->m_selected_order_idx;
     auto order = self->m_engine.order_list();
     if (pos < order.size()) {
-        order[pos]++;
-        if (order[pos] >= self->m_engine.pattern_count()) {
-             order[pos] = self->m_engine.pattern_count() - 1;
-        }
-        self->m_engine.set_order(order);
-        for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
-            MainWindow* mw = dynamic_cast<MainWindow*>(win);
-            if (mw) mw->request_update();
+        if (order[pos] < self->m_engine.pattern_count() - 1) {
+             order[pos]++;
+             self->m_engine.set_order(order);
+             self->m_engine.set_active_pattern(order[pos]);
+             self->m_tracker->set_pattern(self->m_engine.pattern());
+             for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+                 MainWindow* mw = dynamic_cast<MainWindow*>(win);
+                 if (mw) mw->request_update();
+             }
         }
     }
 }
 
 void TrackerPanel::cb_dec_pattern(Fl_Widget*, void* data) {
-    auto* pair = static_cast<std::pair<TrackerPanel*, size_t>*>(data);
-    TrackerPanel* self = pair->first;
-    size_t pos = pair->second;
+    TrackerPanel* self = static_cast<TrackerPanel*>(data);
+    size_t pos = self->m_selected_order_idx;
     auto order = self->m_engine.order_list();
     if (pos < order.size()) {
         if (order[pos] > 0) {
             order[pos]--;
             self->m_engine.set_order(order);
+            self->m_engine.set_active_pattern(order[pos]);
+            self->m_tracker->set_pattern(self->m_engine.pattern());
             for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
                 MainWindow* mw = dynamic_cast<MainWindow*>(win);
                 if (mw) mw->request_update();
             }
+        }
+    }
+}
+
+void TrackerPanel::cb_pattern_length(Fl_Widget* w, void* data) {
+    TrackerPanel* self = static_cast<TrackerPanel*>(data);
+    size_t pat_idx = (size_t)(uintptr_t)w->user_data();
+    Fl_Int_Input* inp = static_cast<Fl_Int_Input*>(w);
+    int new_len = atoi(inp->value());
+    if (new_len > 0 && new_len <= 512) {
+        self->m_engine.resize_pattern(pat_idx, (size_t)new_len);
+        for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+            MainWindow* mw = dynamic_cast<MainWindow*>(win);
+            if (mw) mw->request_update();
         }
     }
 }

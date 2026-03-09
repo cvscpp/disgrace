@@ -6,13 +6,15 @@ enum class EngineCommandType
     Play,
     Stop,
     SetTempo,
-    PlayPattern
+    PlayPattern,
+    ResizePattern
 };
 
 struct EngineCommand
 {
     EngineCommandType type;
-    float value;
+    size_t index;
+    size_t value;
 };
 
 } // namespace disgrace_ns

@@ -25,7 +25,7 @@ namespace disgrace_ns
 
     private:
         void delete_current_field();
-        Pattern* m_pattern;
+        void clamp_cursor();
         Engine&  m_engine;
 
         struct TrackUI {

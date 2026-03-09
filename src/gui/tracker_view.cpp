@@ -1,25 +1,45 @@
 #include "tracker_view.h"
 #include "../core/engine.h"
 #include <FL/fl_draw.H>
-#include <FL/Fl.H>
-#include <FL/Fl_Group.H>
 #include <FL/Fl_Scroll.H>
 #include <algorithm>
+#include <cstdio>
 
 namespace disgrace_ns {
 
 TrackerView::TrackerView(int x, int y, int w, int h, Pattern& pattern, Engine& engine)
-    : Fl_Widget(x, y, w, h), m_pattern(&pattern), m_engine(engine) {
+    : Fl_Widget(x, y, w, h), m_engine(engine) {
 }
 
 void TrackerView::set_pattern(Pattern& pattern) {
-    m_pattern = &pattern;
     recalculate_size();
     redraw();
 }
 
+void TrackerView::clamp_cursor() {
+    auto& pat = m_engine.pattern();
+    int num_tracks = (int)m_engine.track_count();
+    int num_rows = (int)pat.row_count();
+
+    if (num_tracks > 0) {
+        if (m_cursor_track >= num_tracks) m_cursor_track = num_tracks - 1;
+        if (m_cursor_track < 0) m_cursor_track = 0;
+    } else {
+        m_cursor_track = 0;
+    }
+
+    if (num_rows > 0) {
+        if (m_cursor_row >= num_rows) m_cursor_row = num_rows - 1;
+        if (m_cursor_row < 0) m_cursor_row = 0;
+    } else {
+        m_cursor_row = 0;
+    }
+}
+
 void TrackerView::draw() {
-    recalculate_size();
+    auto& pat = m_engine.pattern();
+    clamp_cursor();
+    
     fl_push_clip(x(), y(), w(), h());
     fl_color(30, 30, 30);
     fl_rectf(x(), y(), w(), h());
@@ -33,13 +53,7 @@ void TrackerView::draw() {
     int char_w = 8;
     
     size_t num_tracks = m_engine.track_count();
-    size_t num_rows = m_pattern->row_count();
-
-    // Clamp cursor
-    if (m_cursor_track >= (int)num_tracks) m_cursor_track = (int)num_tracks - 1;
-    if (m_cursor_row >= (int)num_rows) m_cursor_row = (int)num_rows - 1;
-    if (m_cursor_track < 0) m_cursor_track = 0;
-    if (m_cursor_row < 0) m_cursor_row = 0;
+    size_t num_rows = pat.row_count();
 
     m_track_ui.clear();
 
@@ -101,7 +115,7 @@ void TrackerView::draw() {
     for (size_t t = 0; t < num_tracks; ++t) {
         auto& track_obj = m_engine.track(t);
         bool is_sampler = (track_obj.instrument() && track_obj.instrument()->type() == InstrumentType::Sampler);
-        size_t num_cols = m_pattern->column_count(t);
+        size_t num_cols = pat.column_count(t);
         int track_w = (int)(num_cols * 10 * char_w + 12 * char_w + 10);
         
         TrackUI ui; ui.x = cur_x; ui.w = track_w; ui.btn_plus_x = cur_x + track_w - 20; ui.btn_minus_x = cur_x + track_w - 40;
@@ -119,12 +133,13 @@ void TrackerView::draw() {
 
             // Selection highlight
             if (m_sel_active) {
-                int s_r = std::min(m_sel_start_row, m_sel_end_row);
-                int e_r = std::max(m_sel_start_row, m_sel_end_row);
                 int s_t = std::min(m_sel_start_track, m_sel_end_track);
                 int e_t = std::max(m_sel_start_track, m_sel_end_track);
-                if ((int)r >= s_r && (int)r <= e_r && (int)t >= s_t && (int)t <= e_t) {
-                    fl_color(80, 80, 40); fl_rectf(cur_x, ry, track_w, row_h);
+                int s_r = std::min(m_sel_start_row, m_sel_end_row);
+                int e_r = std::max(m_sel_start_row, m_sel_end_row);
+                if ((int)t >= s_t && (int)t <= e_t && (int)r >= s_r && (int)r <= e_r) {
+                    fl_color(60, 60, 100);
+                    fl_rectf(cur_x, ry, track_w, row_h);
                 }
             }
 
@@ -134,7 +149,7 @@ void TrackerView::draw() {
 
             int col_x = cur_x + 2;
             for (size_t c = 0; c < num_cols; ++c) {
-                const auto& ev = m_pattern->event(t, r, c);
+                const auto& ev = pat.event(t, r, c);
                 
                 // Note
                 if ((int)r == m_cursor_row && (int)t == m_cursor_track && (int)c == m_cursor_col && m_cursor_field == 0) {
@@ -169,7 +184,7 @@ void TrackerView::draw() {
                 col_x += 3 * char_w;
             }
 
-            const auto& row_ev = m_pattern->event(t, r, 0); 
+            const auto& row_ev = pat.event(t, r, 0); 
             
             // FX1
             if ((int)r == m_cursor_row && (int)t == m_cursor_track && m_cursor_field == 3) {
@@ -206,8 +221,9 @@ void TrackerView::draw() {
 }
 
 void TrackerView::delete_current_field() {
+    clamp_cursor();
     if (m_cursor_track < (int)m_engine.track_count()) {
-        auto& ev = m_pattern->event(m_cursor_track, m_cursor_row, m_cursor_col);
+        auto& ev = m_engine.pattern().event(m_cursor_track, m_cursor_row, m_cursor_col);
         switch (m_cursor_field) {
             case 0: ev.note = 255; break;
             case 1: ev.sample_idx = 0; break;
@@ -222,15 +238,13 @@ void TrackerView::delete_current_field() {
 }
 
 void TrackerView::ensure_cursor_visible() {
+    clamp_cursor();
     Fl_Scroll* scroll = dynamic_cast<Fl_Scroll*>(parent());
     if (!scroll) return;
 
-    // Vertical scroll is now handled by centered drawing,
-    // we don't need to scroll the parent Fl_Scroll vertically.
-
     // Horizontal scroll
     if (m_cursor_track < (int)m_track_ui.size()) {
-        int tx = m_track_ui[m_cursor_track].x - x(); // Relative to widget start
+        int tx = m_track_ui[m_cursor_track].x - x(); 
         int tw = m_track_ui[m_cursor_track].w;
         int scroll_x = scroll->xposition();
         int scroll_w = scroll->w();
@@ -244,6 +258,7 @@ void TrackerView::ensure_cursor_visible() {
 }
 
 int TrackerView::handle(int event) {
+    clamp_cursor();
     switch (event) {
         case FL_FOCUS:
         case FL_UNFOCUS:
@@ -255,8 +270,8 @@ int TrackerView::handle(int event) {
             if (my >= y() && my < y() + 20) { // Header
                 for (size_t t = 0; t < m_track_ui.size(); ++t) {
                     const auto& ui = m_track_ui[t];
-                    if (mx >= ui.btn_plus_x && mx < ui.btn_plus_x + 18) { m_pattern->set_column_count(t, m_pattern->column_count(t) + 1); redraw(); return 1; }
-                    if (mx >= ui.btn_minus_x && mx < ui.btn_minus_x + 18) { size_t current = m_pattern->column_count(t); if (current > 1) { m_pattern->set_column_count(t, current - 1); redraw(); } return 1; }
+                    if (mx >= ui.btn_plus_x && mx < ui.btn_plus_x + 18) { m_engine.pattern().set_column_count(t, m_engine.pattern().column_count(t) + 1); redraw(); return 1; }
+                    if (mx >= ui.btn_minus_x && mx < ui.btn_minus_x + 18) { size_t current = m_engine.pattern().column_count(t); if (current > 1) { m_engine.pattern().set_column_count(t, current - 1); redraw(); } return 1; }
                 }
             } else { // Grid
                 int row_h = 18;
@@ -265,7 +280,7 @@ int TrackerView::handle(int event) {
                 center_y = ((center_y - (y() + 20)) / row_h) * row_h + (y() + 20);
                 
                 m_cursor_row = center_row + (my - center_y) / row_h;
-                m_cursor_row = std::max(0, std::min((int)m_pattern->row_count() - 1, m_cursor_row));
+                m_cursor_row = std::max(0, std::min((int)m_engine.pattern().row_count() - 1, m_cursor_row));
 
                 int tx = x() + 40;
                 for (size_t t = 0; t < m_track_ui.size(); ++t) {
@@ -301,7 +316,7 @@ int TrackerView::handle(int event) {
             center_y = ((center_y - (y() + 20)) / row_h) * row_h + (y() + 20);
 
             m_cursor_row = center_row + (my - center_y) / row_h;
-            m_cursor_row = std::max(0, std::min((int)m_pattern->row_count() - 1, m_cursor_row));
+            m_cursor_row = std::max(0, std::min((int)m_engine.pattern().row_count() - 1, m_cursor_row));
 
             for (size_t t = 0; t < m_track_ui.size(); ++t) {
                 if (mx >= m_track_ui[t].x && mx < m_track_ui[t].x + m_track_ui[t].w) { m_cursor_track = (int)t; break; }
@@ -318,7 +333,6 @@ int TrackerView::handle(int event) {
             
             Action action = m_engine.m_key_bindings.get_action(key, Fl::event_state() & (FL_CTRL | FL_SHIFT | FL_ALT | FL_META));
             
-            // Note mapping helper
             auto action_to_note = [](Action a) -> int {
                 switch(a) {
                     case Action::NoteC: return 0;  case Action::NoteCs: return 1;
@@ -338,88 +352,50 @@ int TrackerView::handle(int event) {
                     default: return -1;
                 }
             };
+            
+            auto is_note_action = [](Action a) -> bool {
+                return ((int)a >= (int)Action::NoteC && (int)a <= (int)Action::NoteB) ||
+                       ((int)a >= (int)Action::NoteC2 && (int)a <= (int)Action::NoteB2) ||
+                       (a == Action::NoteC3) || (a == Action::NoteOff);
+            };
 
-            int semitone = action_to_note(action);
-            if (semitone >= 0 && m_cursor_field == 0) {
-                int final_note = (semitone == 254) ? 254 : (semitone + (m_engine.base_octave() * 12));
-                if (m_engine.m_record_enabled) {
-                    insert_note(final_note);
+            if (is_note_action(action)) {
+                int note = action_to_note(action);
+                if (note != -1) {
+                    insert_note(note);
                 }
-                m_engine.preview_note(m_cursor_track, final_note, m_cursor_col);
-                ensure_cursor_visible();
                 return 1;
-            }
-
-            // Hex input
-            if (m_engine.m_record_enabled && m_cursor_field > 0) {
-                int hex = -1;
-                if (key >= '0' && key <= '9') hex = key - '0';
-                else if (key >= 'a' && key <= 'f') hex = key - 'a' + 10;
-                else if (key >= 'A' && key <= 'F') hex = key - 'A' + 10;
-
-                if (hex >= 0) {
-                    auto& ev = m_pattern->event(m_cursor_track, m_cursor_row, m_cursor_col);
-                    switch (m_cursor_field) {
-                        case 1: ev.sample_idx = ((ev.sample_idx << 4) & 0xF0) | (uint8_t)hex; break;
-                        case 2: ev.volume = (ev.volume == 255) ? (uint8_t)hex : (((ev.volume << 4) & 0xF0) | (uint8_t)hex); break;
-                        case 3: ev.effect1 = ((ev.effect1 << 4) & 0xF0) | (uint8_t)hex; break;
-                        case 4: ev.param1 = ((ev.param1 << 4) & 0xF0) | (uint8_t)hex; break;
-                        case 5: ev.effect2 = ((ev.effect2 << 4) & 0xF0) | (uint8_t)hex; break;
-                        case 6: ev.param2 = ((ev.param2 << 4) & 0xF0) | (uint8_t)hex; break;
-                    }
-                    redraw();
-                    return 1;
-                }
-            }
-
-            switch (action) {
-                case Action::Play: m_engine.transport().toggle_play(); return 1;
-                case Action::PlaySong: m_engine.play_song(); return 1;
-                case Action::PlayPattern: m_engine.play_pattern(); return 1;
-                case Action::PlayFromPosition: m_engine.play_from_position(m_cursor_row); return 1;
-                case Action::Stop: m_engine.stop(); return 1;
-                case Action::Record: m_engine.enable_record(!m_engine.m_record_enabled); return 1;
-                case Action::ToggleMetronome: m_engine.toggle_metronome(); return 1;
-                default: break;
             }
 
             if (shift && !m_sel_active) { m_sel_active = true; m_sel_start_row = m_cursor_row; m_sel_start_track = m_cursor_track; }
             
-            int num_note_cols = (int)m_pattern->column_count(m_cursor_track);
-            int num_fields_per_note_col = 3; // Note, Sample, Volume
-            int num_fx_fields = 4; // FX1, Param1, FX2, Param2
-            int total_fields_in_track = num_note_cols * num_fields_per_note_col + num_fx_fields;
-
-            // Absolute field index within the track
-            int abs_field = m_cursor_col * num_fields_per_note_col + m_cursor_field;
+            int num_note_cols = (int)m_engine.pattern().column_count(m_cursor_track);
+            int total_fields_in_track = num_note_cols * 3 + 4;
+            int abs_field = m_cursor_col * 3 + m_cursor_field;
 
             switch (key) {
                 case FL_Up: 
                     m_cursor_row--;
-                    if (m_cursor_row < 0) m_cursor_row = (int)m_pattern->row_count() - 1;
+                    if (m_cursor_row < 0) m_cursor_row = (int)m_engine.pattern().row_count() - 1;
                     break;
                 case FL_Down: 
                     m_cursor_row++;
-                    if (m_cursor_row >= (int)m_pattern->row_count()) m_cursor_row = 0;
+                    if (m_cursor_row >= (int)m_engine.pattern().row_count()) m_cursor_row = 0;
                     break;
                 case FL_Left: 
                     abs_field--;
                     if (abs_field < 0) {
                         if (m_cursor_track > 0) {
                             m_cursor_track--;
-                            int prev_track_cols = (int)m_pattern->column_count(m_cursor_track);
-                            abs_field = prev_track_cols * 3 + 4 - 1;
-                        } else {
-                            abs_field = 0;
-                        }
+                            abs_field = (int)m_engine.pattern().column_count(m_cursor_track) * 3 + 4 - 1;
+                        } else abs_field = 0;
                     }
-                    // Re-calculate col and field from abs_field
-                    if (abs_field < num_note_cols * 3) {
+                    if (abs_field < (int)m_engine.pattern().column_count(m_cursor_track) * 3) {
                         m_cursor_col = abs_field / 3;
                         m_cursor_field = abs_field % 3;
                     } else {
-                        m_cursor_col = 0; // FX fields are associated with col 0 for storage
-                        m_cursor_field = 3 + (abs_field - num_note_cols * 3);
+                        m_cursor_col = 0;
+                        m_cursor_field = 3 + (abs_field - (int)m_engine.pattern().column_count(m_cursor_track) * 3);
                     }
                     break;
                 case FL_Right: 
@@ -428,28 +404,25 @@ int TrackerView::handle(int event) {
                         if (m_cursor_track < (int)m_engine.track_count() - 1) {
                             m_cursor_track++;
                             abs_field = 0;
-                        } else {
-                            abs_field = total_fields_in_track - 1;
-                        }
+                        } else abs_field = total_fields_in_track - 1;
                     }
-                    // Re-calculate col and field from abs_field
-                    if (abs_field < (int)m_pattern->column_count(m_cursor_track) * 3) {
+                    if (abs_field < (int)m_engine.pattern().column_count(m_cursor_track) * 3) {
                         m_cursor_col = abs_field / 3;
                         m_cursor_field = abs_field % 3;
                     } else {
                         m_cursor_col = 0;
-                        m_cursor_field = 3 + (abs_field - (int)m_pattern->column_count(m_cursor_track) * 3);
+                        m_cursor_field = 3 + (abs_field - (int)m_engine.pattern().column_count(m_cursor_track) * 3);
                     }
                     break;
                 case FL_Page_Up: m_cursor_row = std::max(0, m_cursor_row - 16); break;
-                case FL_Page_Down: m_cursor_row = std::min((int)m_pattern->row_count() - 1, m_cursor_row + 16); break;
+                case FL_Page_Down: m_cursor_row = std::min((int)m_engine.pattern().row_count() - 1, m_cursor_row + 16); break;
                 case FL_Home: m_cursor_row = 0; break;
-                case FL_End: m_cursor_row = (int)m_pattern->row_count() - 1; break;
+                case FL_End: m_cursor_row = (int)m_engine.pattern().row_count() - 1; break;
                 case FL_Escape: m_sel_active = false; break;
                 case FL_BackSpace:
                     delete_current_field();
                     m_cursor_row--;
-                    if (m_cursor_row < 0) m_cursor_row = (int)m_pattern->row_count() - 1;
+                    if (m_cursor_row < 0) m_cursor_row = (int)m_engine.pattern().row_count() - 1;
                     break;
                 case FL_Delete:
                     delete_current_field();
@@ -465,11 +438,12 @@ int TrackerView::handle(int event) {
     return Fl_Widget::handle(event);
 }
 
-void TrackerView::set_current_row(int row) { m_cursor_row = row; redraw(); }
+void TrackerView::set_current_row(int row) { m_cursor_row = row; clamp_cursor(); redraw(); }
 void TrackerView::insert_note(uint8_t note) {
+    clamp_cursor();
     if (m_cursor_track < (int)m_engine.track_count()) {
-        m_pattern->event(m_cursor_track, m_cursor_row, m_cursor_col).note = note;
-        m_cursor_row = std::min((int)m_pattern->row_count()-1, m_cursor_row + 1);
+        m_engine.pattern().event(m_cursor_track, m_cursor_row, m_cursor_col).note = note;
+        m_cursor_row = std::min((int)m_engine.pattern().row_count()-1, m_cursor_row + 1);
         redraw();
     }
 }
@@ -478,13 +452,11 @@ void TrackerView::recalculate_size() {
     int char_w = 8;
     int row_h = 18;
     size_t num_tracks = m_engine.track_count();
-    size_t num_rows = m_pattern->row_count();
+    size_t num_rows = m_engine.pattern().row_count();
     
-    int total_w = 40; // row numbers
+    int total_w = 40; 
     for (size_t t = 0; t < num_tracks; ++t) {
-        size_t num_cols = m_pattern->column_count(t);
-        // Each note column: 4 (note) + 3 (sample) + 3 (vol) = 10 chars
-        // 4 FX fields: 4 * 3 = 12 chars
+        size_t num_cols = m_engine.pattern().column_count(t);
         total_w += (int)(num_cols * 10 * char_w + 12 * char_w + 20);
     }
     
@@ -492,14 +464,9 @@ void TrackerView::recalculate_size() {
     
     if (parent()) {
         if (parent()->w() > total_w) total_w = parent()->w();
-        // Vertically we want to match parent height if we are in a scroll, 
-        // to avoid Fl_Scroll showing a vertical scrollbar.
     }
     
     if (total_w != w() || total_h != h()) {
-        // Use Fl_Widget::resize directly to avoid recursion if called from draw
-        // Actually, in FLTK, resize() doesn't usually call draw() immediately, but marks for redraw.
-        // But let's be careful.
         this->size(total_w, total_h);
     }
 }

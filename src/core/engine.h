@@ -79,6 +79,7 @@ public:
     size_t pattern_count() const;
     size_t create_pattern();
     size_t copy_pattern(size_t index);
+    void resize_pattern(size_t index, size_t new_rows);
 
     ::std::vector<uint8_t> order_list() const;
     void set_order(const ::std::vector<uint8_t>&);
@@ -231,7 +232,7 @@ private:
 
     disgrace_ns::RingBuffer<disgrace_ns::EngineCommand, 128> m_cmd_queue;
 
-    ::std::vector<disgrace_ns::Pattern> m_patterns;
+    ::std::vector<::std::unique_ptr<disgrace_ns::Pattern>> m_patterns;
     ::std::atomic<size_t>  m_active_pattern{0};
 
     bool write_wav(const ::std::string& path, const ::std::vector<float>& l, const ::std::vector<float>& r, size_t frames);

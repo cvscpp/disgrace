@@ -40,6 +40,7 @@ private:
     size_t m_last_pattern_count = 0;
     bool m_follow_playback = false;
     std::unordered_map<long, Fl_Widget*> m_pattern_length_inputs;
+    std::unordered_map<long, Fl_Widget*> m_order_buttons;
 
     static void cb_add_pattern(Fl_Widget*, void*);
     static void cb_remove_pattern(Fl_Widget*, void*);

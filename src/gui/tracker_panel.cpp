@@ -127,6 +127,8 @@ void TrackerPanel::update_pattern_list_browser() {
 
     m_pattern_list_container->clear();
     m_pattern_list_container->begin();
+    m_pattern_length_inputs.clear();
+    m_order_buttons.clear();
     int row_h = 25;
     int start_y = m_pattern_list_container->y();
     int start_x = m_pattern_list_container->x();
@@ -141,19 +143,28 @@ void TrackerPanel::update_pattern_list_browser() {
         b->box(m_selected_order_idx == (int)i ? FL_DOWN_BOX : FL_FLAT_BOX);
         if (m_selected_order_idx == (int)i) b->color(FL_SELECTION_COLOR);
         b->labelsize(12);
-        b->user_data((void*)(uintptr_t)i);
         b->callback([](Fl_Widget* w, void* d){
             TrackerPanel* self = static_cast<TrackerPanel*>(d);
             if (!self) return;
-            size_t idx = (size_t)(uintptr_t)w->user_data();
+            // Find the order index from the map
+            size_t idx = 0;
+            for (auto& kv : self->m_order_buttons) {
+                if (kv.second == w) {
+                    idx = kv.first;
+                    break;
+                }
+            }
             auto& eng = self->m_engine;
             auto ord = eng.order_list();
             if (idx < ord.size()) {
                 eng.m_edit_order_pos.store(idx);
                 eng.set_active_pattern(ord[idx]);
+                self->m_selected_order_idx = (int)idx;
                 self->m_tracker->set_pattern(eng.pattern());
+                self->update_pattern_list_browser();
             }
         }, this);
+        m_order_buttons[i] = b;
         
         char pat_str[16];
         snprintf(pat_str, 16, "%02u", order[i]);
@@ -265,7 +276,6 @@ void TrackerPanel::cb_pattern_length(Fl_Widget* w, void* data) {
             break;
         }
     }
-    printf("DEBUG cb: found pat_idx=%zu\n", pat_idx);
     
     int new_len = atoi(inp->value());
     if (new_len > 0 && new_len <= 512) {

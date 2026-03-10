@@ -3,7 +3,8 @@
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Light_Button.H>
 #include <FL/Fl_Box.H>
-#include <FL/Fl_Value_Input.H>
+#include <FL/Fl_Counter.H>
+#include <FL/Fl_Simple_Counter.H>
 #include "vu_meter.h"
 #include "../core/transport.h" // Add this for TransportState
 
@@ -28,6 +29,7 @@ private:
     static void cb_tempo(Fl_Widget*, void*);
     static void cb_lpb(Fl_Widget*, void*);
     static void cb_step(Fl_Widget*, void*);
+    static void cb_loop(Fl_Widget*, void*);
 
     Engine& m_engine; // Use unqualified Engine
 
@@ -35,9 +37,10 @@ private:
     Fl_Button* m_stop;
     Fl_Light_Button* m_record;
     Fl_Light_Button* m_metronome;
-    Fl_Value_Input* m_tempo;
-    Fl_Value_Input* m_lpb;
-    Fl_Value_Input* m_step;
+    Fl_Light_Button* m_loop;
+    Fl_Simple_Counter* m_tempo;
+    Fl_Simple_Counter* m_lpb;
+    Fl_Simple_Counter* m_step;
     Fl_Box* m_status;
     VUMeter* m_meter_l;
     VUMeter* m_meter_r;

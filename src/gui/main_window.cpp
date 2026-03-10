@@ -115,6 +115,22 @@ void disgrace_ns::MainWindow::timer_cb(void* data)
           m_engine.play();
           return 1;
 
+        case Action::PlaySong:
+          m_engine.play_song();
+          return 1;
+
+        case Action::PlayPattern:
+          m_engine.play_pattern();
+          return 1;
+
+        case Action::PlayFromPosition:
+          m_engine.play_from_position(m_engine.current_row());
+          return 1;
+
+        case Action::Stop:
+          m_engine.panic();
+          return 1;
+
         case Action::Record:
           m_engine.enable_record(!m_engine.m_record_enabled);
           if (m_transport) m_transport->update();

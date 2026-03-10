@@ -92,6 +92,7 @@ public:
     int    m_current_tick = 0;
     size_t m_current_row = 0;
     ::std::atomic<size_t> m_order_pos{0};
+    ::std::atomic<size_t> m_edit_order_pos{0};
     ::std::atomic<size_t> m_order_start{0};
     ::std::atomic<size_t> m_order_end{0};
 

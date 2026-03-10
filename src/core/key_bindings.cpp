@@ -86,6 +86,13 @@ void KeyBindings::set_defaults() {
     add_default(Action::NoteAs2, '7');
     add_default(Action::NoteB2,  'u');
     add_default(Action::NoteC3,  'i');
+
+    add_default(Action::NextPattern, FL_F + 12);
+    add_default(Action::PrevPattern, FL_F + 11);
+    add_default(Action::OctaveUp,    ']');
+    add_default(Action::OctaveDown,  '[');
+    add_default(Action::NextOrderPos, FL_Right, FL_ALT);
+    add_default(Action::PrevOrderPos, FL_Left, FL_ALT);
 }
 
 Action KeyBindings::get_action(int key, int modifiers) const {
@@ -159,6 +166,12 @@ std::string KeyBindings::get_action_name(Action action) const {
         case Action::NoteAs2: return "Note A# (2nd Octave)";
         case Action::NoteB2: return "Note B (2nd Octave)";
         case Action::NoteC3: return "Note C (3rd Octave)";
+        case Action::NextPattern: return "Next Pattern";
+        case Action::PrevPattern: return "Previous Pattern";
+        case Action::OctaveUp: return "Increase Octave";
+        case Action::OctaveDown: return "Decrease Octave";
+        case Action::NextOrderPos: return "Next Order Position";
+        case Action::PrevOrderPos: return "Previous Order Position";
     }
     return "Unknown";
 }

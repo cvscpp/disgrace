@@ -263,7 +263,8 @@ void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float*
                 break;
             case EngineCommandType::ResizePattern:
                 if (cmd.index < m_patterns.size()) {
-                    m_patterns[cmd.index]->resize_rows(cmd.value);
+                    printf("DEBUG: Engine: Resizing pattern %zu to %zu rows\n", cmd.index, (size_t)cmd.value);
+                    m_patterns[cmd.index]->resize_rows((size_t)cmd.value);
                     if (m_active_pattern.load() == cmd.index) {
                         if (m_current_row >= m_patterns[cmd.index]->row_count()) {
                             m_current_row = 0;
@@ -471,7 +472,7 @@ size_t Engine::pattern_count() const { return m_patterns.size(); }
 
 size_t Engine::create_pattern() {
     size_t rows = 64;
-    if (!m_patterns.empty()) rows = m_patterns[0]->row_count();
+    if (!m_patterns.empty()) rows = pattern().row_count();
     m_patterns.push_back(std::make_unique<Pattern>(rows, m_tracks.size()));
     Pattern& p = *m_patterns.back();
     for (size_t i = 0; i < m_tracks.size(); ++i) {
@@ -490,7 +491,7 @@ void Engine::resize_pattern(size_t index, size_t new_rows) {
     EngineCommand cmd;
     cmd.type = EngineCommandType::ResizePattern;
     cmd.index = index;
-    cmd.value = new_rows;
+    cmd.value = (float)new_rows;
     m_cmd_queue.push(cmd);
 }
 

@@ -1,4 +1,5 @@
 #include "tracker_view.h"
+#include "main_window.h"
 #include "../core/engine.h"
 #include <FL/fl_draw.H>
 #include <FL/Fl_Scroll.H>
@@ -367,6 +368,57 @@ int TrackerView::handle(int event) {
                 return 1;
             }
 
+            if (action == Action::OctaveUp) {
+                m_engine.set_base_octave(m_engine.base_octave() + 1);
+                redraw();
+                return 1;
+            }
+            if (action == Action::OctaveDown) {
+                m_engine.set_base_octave(m_engine.base_octave() - 1);
+                redraw();
+                return 1;
+            }
+            if (action == Action::NextPattern || action == Action::PrevPattern) {
+                auto order = m_engine.order_list();
+                size_t pos = m_engine.m_edit_order_pos.load();
+                if (pos < order.size()) {
+                    if (action == Action::NextPattern) {
+                        if (order[pos] < m_engine.pattern_count() - 1) order[pos]++;
+                    } else {
+                        if (order[pos] > 0) order[pos]--;
+                    }
+                    m_engine.set_order(order);
+                    m_engine.set_active_pattern(order[pos]);
+                    redraw();
+                    
+                    for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+                        MainWindow* mw = dynamic_cast<MainWindow*>(win);
+                        if (mw) mw->request_update();
+                    }
+                }
+                return 1;
+            }
+
+            if (action == Action::NextOrderPos || action == Action::PrevOrderPos) {
+                auto order = m_engine.order_list();
+                size_t pos = m_engine.m_edit_order_pos.load();
+                if (action == Action::NextOrderPos) {
+                    if (pos < order.size() - 1) pos++;
+                } else {
+                    if (pos > 0) pos--;
+                }
+                m_engine.m_edit_order_pos.store(pos);
+                if (pos < order.size()) {
+                    m_engine.set_active_pattern(order[pos]);
+                }
+                redraw();
+                for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+                    MainWindow* mw = dynamic_cast<MainWindow*>(win);
+                    if (mw) mw->request_update();
+                }
+                return 1;
+            }
+
             if (shift && !m_sel_active) { m_sel_active = true; m_sel_start_row = m_cursor_row; m_sel_start_track = m_cursor_track; }
             
             int num_note_cols = (int)m_engine.pattern().column_count(m_cursor_track);
@@ -442,7 +494,13 @@ void TrackerView::set_current_row(int row) { m_cursor_row = row; clamp_cursor();
 void TrackerView::insert_note(uint8_t note) {
     clamp_cursor();
     if (m_cursor_track < (int)m_engine.track_count()) {
-        m_engine.pattern().event(m_cursor_track, m_cursor_row, m_cursor_col).note = note;
+        if (note != 254) {
+            int final_note = note + m_engine.base_octave() * 12;
+            if (final_note > 119) final_note = 119;
+            m_engine.pattern().event(m_cursor_track, m_cursor_row, m_cursor_col).note = (uint8_t)final_note;
+        } else {
+            m_engine.pattern().event(m_cursor_track, m_cursor_row, m_cursor_col).note = 254;
+        }
         m_cursor_row = std::min((int)m_engine.pattern().row_count()-1, m_cursor_row + 1);
         redraw();
     }
@@ -460,10 +518,11 @@ void TrackerView::recalculate_size() {
         total_w += (int)(num_cols * 10 * char_w + 12 * char_w + 20);
     }
     
-    int total_h = parent() ? parent()->h() : 20 + (int)num_rows * row_h + 20;
+    int total_h = 20 + (int)num_rows * row_h + 20;
     
     if (parent()) {
         if (parent()->w() > total_w) total_w = parent()->w();
+        if (parent()->h() > total_h) total_h = parent()->h();
     }
     
     if (total_w != w() || total_h != h()) {

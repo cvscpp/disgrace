@@ -34,6 +34,9 @@ private:
     Fl_Button* m_detach_btn;
     DetachedWindow* m_detached_window = nullptr;
     int m_selected_order_idx = 0;
+    size_t m_last_order_size = 0;
+    size_t m_last_pattern_count = 0;
+    bool m_follow_playback = false;
 
     static void cb_add_pattern(Fl_Widget*, void*);
     static void cb_remove_pattern(Fl_Widget*, void*);
@@ -42,6 +45,7 @@ private:
     static void cb_dec_pattern(Fl_Widget*, void*);
     static void cb_pattern_length(Fl_Widget*, void*);
     static void cb_detach(Fl_Widget*, void*);
+    static void cb_follow_playback(Fl_Widget*, void*);
 };
 
 } // namespace disgrace_ns

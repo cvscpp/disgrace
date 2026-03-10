@@ -7,12 +7,12 @@ namespace disgrace_ns
 void to_json(nlohmann::json& j, const TrackEvent& p) {
     j = nlohmann::json{
         {"note", p.note},
-        {"sample_idx", p.sample_idx},
+        {"sample", p.sample_idx},
         {"volume", p.volume},
-        {"effect1", p.effect1},
-        {"param1", p.param1},
-        {"effect2", p.effect2},
-        {"param2", p.param2}
+        {"fx1", p.effect1},
+        {"p1", p.param1},
+        {"fx2", p.effect2},
+        {"p2", p.param2}
     };
 }
 

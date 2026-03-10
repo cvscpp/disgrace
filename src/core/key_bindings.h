@@ -49,7 +49,13 @@ enum class Action {
     NoteA2,
     NoteAs2,
     NoteB2,
-    NoteC3
+    NoteC3,
+    NextPattern,
+    PrevPattern,
+    OctaveUp,
+    OctaveDown,
+    NextOrderPos,
+    PrevOrderPos
 };
 
 enum class KeyboardLayout {

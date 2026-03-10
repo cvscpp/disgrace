@@ -45,9 +45,6 @@ namespace disgrace_ns
         int m_sel_end_track = -1;
         int m_sel_end_row = -1;
 
-        int m_rows  = 64;
-        int m_tracks = 8;
-
         bool m_selecting = false;
 
         int m_sel_row_start = -1;

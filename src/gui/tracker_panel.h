@@ -3,6 +3,8 @@
 #include <FL/Fl_Group.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Scroll.H>
+#include <unordered_map>
+#include <utility>
 
 namespace disgrace_ns {
 
@@ -37,6 +39,7 @@ private:
     size_t m_last_order_size = 0;
     size_t m_last_pattern_count = 0;
     bool m_follow_playback = false;
+    std::unordered_map<long, Fl_Widget*> m_pattern_length_inputs;
 
     static void cb_add_pattern(Fl_Widget*, void*);
     static void cb_remove_pattern(Fl_Widget*, void*);

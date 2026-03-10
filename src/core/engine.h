@@ -80,6 +80,7 @@ public:
     size_t create_pattern();
     size_t copy_pattern(size_t index);
     void resize_pattern(size_t index, size_t new_rows);
+    void process_commands();
 
     ::std::vector<uint8_t> order_list() const;
     void set_order(const ::std::vector<uint8_t>&);

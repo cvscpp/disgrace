@@ -493,6 +493,35 @@ void Engine::resize_pattern(size_t index, size_t new_rows) {
     cmd.index = index;
     cmd.value = (float)new_rows;
     m_cmd_queue.push(cmd);
+    process_commands();
+}
+
+void Engine::process_commands() {
+    EngineCommand cmd;
+    while (m_cmd_queue.pop(cmd)) {
+        switch (cmd.type) {
+            case EngineCommandType::Play: m_playing.store(true); break;
+            case EngineCommandType::Stop: m_playing.store(false); break;
+            case EngineCommandType::SetTempo: m_timing.set_bpm((int)cmd.value); break;
+            case EngineCommandType::PlayPattern:
+                m_current_row = 0;
+                m_current_tick = 0;
+                transport().set_loop(true);
+                auto_seek();
+                m_playing.store(true);
+                break;
+            case EngineCommandType::ResizePattern:
+                if (cmd.index < m_patterns.size()) {
+                    m_patterns[cmd.index]->resize_rows((size_t)cmd.value);
+                    if (m_active_pattern.load() == cmd.index) {
+                        if (m_current_row >= m_patterns[cmd.index]->row_count()) {
+                            m_current_row = 0;
+                        }
+                    }
+                }
+                break;
+        }
+    }
 }
 
 std::vector<uint8_t> Engine::order_list() const {

@@ -7,7 +7,8 @@
 #include <FL/Fl_Int_Input.H>
 #include <cstdlib>
 #include <cstdint>
-#include <utility> // For std::pair
+#include <string>
+#include <utility>
 
 namespace disgrace_ns {
 
@@ -171,8 +172,8 @@ void TrackerPanel::update_pattern_list_browser() {
         len_inp->labelsize(10);
         len_inp->textsize(10);
         len_inp->when(FL_WHEN_ENTER_KEY_ALWAYS);
-        len_inp->user_data((void*)(uintptr_t)pat_idx);
         len_inp->callback(cb_pattern_length, this);
+        m_pattern_length_inputs[pat_idx] = len_inp;
     }
     m_pattern_list_container->end();
     m_pattern_list_container->size(m_pattern_list_container->w(), (int)(order.size() * row_h));
@@ -254,21 +255,28 @@ void TrackerPanel::cb_dec_pattern(Fl_Widget*, void* data) {
 
 void TrackerPanel::cb_pattern_length(Fl_Widget* w, void* data) {
     TrackerPanel* self = static_cast<TrackerPanel*>(data);
-    size_t pat_idx = (size_t)(uintptr_t)w->user_data();
     Fl_Int_Input* inp = static_cast<Fl_Int_Input*>(w);
+    
+    // Find the pattern index for this input widget
+    size_t pat_idx = 0;
+    for (auto& kv : self->m_pattern_length_inputs) {
+        if (kv.second == w) {
+            pat_idx = kv.first;
+            break;
+        }
+    }
+    printf("DEBUG cb: found pat_idx=%zu\n", pat_idx);
+    
     int new_len = atoi(inp->value());
-    printf("DEBUG: cb_pattern_length: pat_idx=%zu, value='%s', parsed=%d\n", pat_idx, inp->value(), new_len);
     if (new_len > 0 && new_len <= 512) {
         self->m_engine.resize_pattern(pat_idx, (size_t)new_len);
-        if (self->m_tracker) {
-            self->m_tracker->recalculate_size();
-            self->m_tracker->redraw();
-            if (self->m_main_scroll) self->m_main_scroll->redraw();
-        }
-        for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
-            MainWindow* mw = dynamic_cast<MainWindow*>(win);
-            if (mw) mw->request_update();
-        }
+        inp->value(std::to_string(new_len).c_str());
+    } else {
+        inp->value(std::to_string(self->m_engine.pattern(pat_idx).row_count()).c_str());
+    }
+    if (self->m_tracker) {
+        self->m_tracker->recalculate_size();
+        self->m_tracker->redraw();
     }
 }
 

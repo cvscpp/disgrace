@@ -14,6 +14,16 @@ float MasterBus::gain() const
     return m_gain.load();
 }
 
+void MasterBus::set_mute(bool m)
+{
+    m_muted.store(m);
+}
+
+bool MasterBus::muted() const
+{
+    return m_muted.load();
+}
+
 float MasterBus::soft_clip(float x)
 {
     // simple musical soft limiter
@@ -26,7 +36,7 @@ void MasterBus::process(float* l,
 {
     m_chain.process(l, r, nframes);
 
-    float gain = m_gain.load();
+    float gain = m_muted.load() ? 0.f : m_gain.load();
     float peak_l = 0.f;
     float peak_r = 0.f;
 

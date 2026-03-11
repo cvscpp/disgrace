@@ -14,6 +14,9 @@ public:
     void set_gain(float g);
     float gain() const;
 
+    void set_mute(bool m);
+    bool muted() const;
+
     void process(float* l,
                  float* r,
                  size_t nframes);
@@ -38,6 +41,7 @@ private:
     ::std::atomic<float> m_gain{1.f};
     ::std::atomic<float> m_meter_l{0.f};
     ::std::atomic<float> m_meter_r{0.f};
+    ::std::atomic<bool> m_muted{false};
     disgrace_ns::DSPChain m_chain;
 };
 

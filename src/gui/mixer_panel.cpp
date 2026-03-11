@@ -50,14 +50,36 @@ MixerPanel::MixerPanel(int x, int y, int w, int h, Engine& engine)
     m_detach_btn->callback(cb_detach, this);
 
     // Use a scroll area for tracks
-    Fl_Scroll* scroll = new Fl_Scroll(x, y + 25, w, h / 2 - 25);
+    int master_w = 90;
+    Fl_Scroll* scroll = new Fl_Scroll(x, y + 25, w - master_w - 5, h / 2 - 25);
     scroll->type(Fl_Scroll::HORIZONTAL);
 
     // This group will hold the tracks
-    m_track_group = new Fl_Group(x, y + 25, w, h / 2 - 25);
+    m_track_group = new Fl_Group(x, y + 25, w - master_w - 5, h / 2 - 25);
     m_track_group->end();
     scroll->add(m_track_group);
     scroll->end();
+
+    // Master channel group - positioned fixed to the right
+    m_master_group = new Fl_Group(x + w - master_w, y + 25, master_w, h / 2 - 25);
+    m_master_group->box(FL_THIN_DOWN_BOX);
+    m_master_group->begin();
+    
+    m_master_gain = new Fl_Slider(0, 0, 20, 100);
+    m_master_gain->type(FL_VERTICAL);
+    m_master_gain->bounds(2.0, 0.0);
+    m_master_gain->value(1.0);
+    m_master_gain->callback(cb_master_gain, this);
+
+    m_master_meter_l = new VUMeter(0, 0, 10, 100);
+    m_master_meter_r = new VUMeter(0, 0, 10, 100);
+
+    m_master_mute = new Fl_Check_Button(0, 0, 35, 25, "M");
+    m_master_mute->callback(cb_master_mute, this);
+
+    m_master_sel_btn = new Fl_Button(0, 0, 80, 25, "SEL");
+    
+    m_master_group->end();
     m_upper_pane->end();
 
     // Lower Pane: Effects
@@ -110,24 +132,6 @@ MixerPanel::MixerPanel(int x, int y, int w, int h, Engine& engine)
 
     m_lower_pane->end();
 
-    m_tile->end();
-
-    // Master section
-    m_upper_pane->begin();
-    m_master_gain = new Fl_Value_Slider(x + w - 250, y + h/2 - 35, 150, 25, "Master");
-    m_master_gain->type(FL_HOR_NICE_SLIDER);
-    m_master_gain->range(0.0, 2.0);
-    m_master_gain->value(1.0);
-    m_master_gain->callback(cb_master_gain, this);
-
-    m_master_meter_l = new VUMeter(x + w - 45, y + h/2 - 35, 15, 25);
-    m_master_meter_r = new VUMeter(x + w - 25, y + h/2 - 35, 15, 25);
-
-    m_master_sel_btn = new Fl_Button(x + w - 330, y + h/2 - 35, 75, 25, "SEL");
-    // We will set callback in update_mixer_ui
-    
-    m_upper_pane->end();
-
     m_lower_pane->begin();
     m_spectral_view = new SpectralView(x + w - 200, y + h - 140, 190, 100, m_engine);
     m_lower_pane->end();
@@ -160,29 +164,49 @@ void MixerPanel::update_mixer_ui() {
     size_t num_tracks = m_engine.track_count();
     size_t num_buses = m_engine.bus_count();
     
+    int total_channels = (int)num_tracks + (int)num_buses;
     int x_offset = 0;
+    int cur_y = 0;
     int std_h = m_engine.m_gui_button_height;
     int font_sz = m_engine.m_gui_font_size;
 
+    int available_w = m_track_group->w() - 40;
+    int channel_w = total_channels > 0 ? available_w / total_channels : 80;
+    if (channel_w < 80) channel_w = 80;
+    int vol_w = 20;
+    int meter_w = channel_w - vol_w - 35;
+    if (meter_w < 10) meter_w = 10;
+    int pan_w = channel_w;
+
+    int available_h = m_track_group->h() - 20;
+    int fixed_elements_h = std_h + 5 + 15 + 5 + std_h + 5 + std_h + 5;
+    if (num_tracks > 0 && m_engine.track(0).instrument() && m_engine.track(0).instrument()->type() == InstrumentType::Midi) {
+        fixed_elements_h += std_h + 5 + std_h + 5;
+    }
+    int slider_h = available_h - fixed_elements_h;
+    if (slider_h < 50) slider_h = 50;
+
+    int top_margin = 15;
+
     for (size_t i = 0; i < num_tracks; ++i)
     {
-      int cur_y = 5;
-      Fl_Box* b = new Fl_Box(20 + x_offset, cur_y, 80, std_h, strdup(("Track " + ::std::to_string(i+1)).c_str()));
+      int cur_y = top_margin;
+      Fl_Box* b = new Fl_Box(20 + x_offset, cur_y, channel_w, std_h, strdup(("Track " + ::std::to_string(i+1)).c_str()));
       b->labelsize(font_sz);
       cur_y += std_h + 5;
       
-      Fl_Slider* vol = new Fl_Slider(20 + x_offset, cur_y, 20, 150);
+      Fl_Slider* vol = new Fl_Slider(20 + x_offset, cur_y, vol_w, slider_h);
       vol->type(FL_VERTICAL);
       vol->bounds(1, 0); 
       vol->value(m_engine.track(i).volume());
       vol->callback(cb_track_volume, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
 
-      VUMeter* meter_l = new VUMeter(45 + x_offset, cur_y, 8, 150);
-      VUMeter* meter_r = new VUMeter(55 + x_offset, cur_y, 8, 150);
+      VUMeter* meter_l = new VUMeter(20 + x_offset + vol_w, cur_y, meter_w, slider_h);
+      VUMeter* meter_r = new VUMeter(20 + x_offset + vol_w + meter_w, cur_y, meter_w, slider_h);
       m_track_meters.push_back({meter_l, meter_r});
-      cur_y += 150 + 5;
+      cur_y += slider_h + 5;
 
-      Fl_Slider* pan_slider = new Fl_Slider(20 + x_offset, cur_y, 75, 15);
+      Fl_Slider* pan_slider = new Fl_Slider(20 + x_offset, cur_y, pan_w, 15);
       pan_slider->type(FL_HOR_SLIDER);
       pan_slider->range(-1.0, 1.0);
       pan_slider->value(m_engine.track(i).get_pan());
@@ -194,13 +218,13 @@ void MixerPanel::update_mixer_ui() {
       mute->value(m_engine.track(i).muted());
       mute->callback(cb_track_mute, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
 
-      Fl_Check_Button* solo = new Fl_Check_Button(60 + x_offset, cur_y, 35, std_h, "S");
+      Fl_Check_Button* solo = new Fl_Check_Button(20 + x_offset + 40, cur_y, 35, std_h, "S");
       solo->labelsize(font_sz);
       solo->value(m_engine.track(i).solo());
       solo->callback(cb_track_solo, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
       cur_y += std_h + 5;
 
-      Fl_Button* sel = new Fl_Button(20 + x_offset, cur_y, 75, std_h, "SEL");
+      Fl_Button* sel = new Fl_Button(20 + x_offset, cur_y, channel_w, std_h, "SEL");
       sel->labelsize(font_sz);
       sel->color((int)i == m_selected_track ? FL_YELLOW : FL_BACKGROUND_COLOR);
       sel->callback(cb_track_select, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
@@ -208,7 +232,7 @@ void MixerPanel::update_mixer_ui() {
 
       // Audio Input for MIDI instruments
       if (m_engine.track(i).instrument() && m_engine.track(i).instrument()->type() == InstrumentType::Midi) {
-        Fl_Choice* input_choice = new Fl_Choice(20 + x_offset, cur_y, 75, std_h);
+        Fl_Choice* input_choice = new Fl_Choice(20 + x_offset, cur_y, channel_w, std_h);
         input_choice->labelsize(font_sz - 2);
         input_choice->add("None");
         uint32_t num_ins = m_engine.m_num_ins;
@@ -238,7 +262,7 @@ void MixerPanel::update_mixer_ui() {
         delay_input->callback(cb_track_delay, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
       }
 
-      x_offset += 100;
+      x_offset += channel_w;
     }
 
     if (num_buses > 0) {
@@ -248,22 +272,22 @@ void MixerPanel::update_mixer_ui() {
 
       for (size_t i = 0; i < num_buses; ++i) {
         int cur_y = 5;
-        Fl_Box* b = new Fl_Box(20 + x_offset, cur_y, 80, std_h, strdup(("Bus " + ::std::to_string(i+1)).c_str()));
+        Fl_Box* b = new Fl_Box(20 + x_offset, cur_y, channel_w, std_h, strdup(("Bus " + ::std::to_string(i+1)).c_str()));
         b->labelsize(font_sz);
         cur_y += std_h + 5;
         
-        Fl_Slider* vol = new Fl_Slider(20 + x_offset, cur_y, 20, 150);
+        Fl_Slider* vol = new Fl_Slider(20 + x_offset, cur_y, vol_w, slider_h);
         vol->type(FL_VERTICAL);
         vol->bounds(1, 0); 
         vol->value(m_engine.bus(i).volume());
         vol->callback(cb_bus_volume, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
 
-        VUMeter* meter_l = new VUMeter(45 + x_offset, cur_y, 8, 150);
-        VUMeter* meter_r = new VUMeter(55 + x_offset, cur_y, 8, 150);
+        VUMeter* meter_l = new VUMeter(20 + x_offset + vol_w, cur_y, meter_w, slider_h);
+        VUMeter* meter_r = new VUMeter(20 + x_offset + vol_w + meter_w, cur_y, meter_w, slider_h);
         m_bus_meters.push_back({meter_l, meter_r});
-        cur_y += 150 + 5;
+        cur_y += slider_h + 5;
 
-        Fl_Slider* pan_slider = new Fl_Slider(20 + x_offset, cur_y, 75, 15);
+        Fl_Slider* pan_slider = new Fl_Slider(20 + x_offset, cur_y, pan_w, 15);
         pan_slider->type(FL_HOR_SLIDER);
         pan_slider->range(-1.0, 1.0);
         pan_slider->value(m_engine.bus(i).pan());
@@ -275,11 +299,66 @@ void MixerPanel::update_mixer_ui() {
         mute->value(m_engine.bus(i).muted());
         mute->callback(cb_bus_mute, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
         
-        x_offset += 100;
+        x_offset += channel_w;
       }
     }
-
     m_track_group->end();
+
+    // Master channel layout
+    m_master_group->begin();
+    int master_x = m_master_group->x();
+    int master_y = m_master_group->y();
+    int master_w = m_master_group->w();
+    int master_h = m_master_group->h();
+
+    // Clear and rebuild master group children (except persistent ones)
+    // Actually m_master_group is NOT cleared, we just resize persistent widgets.
+    // We might need to add/remove labels or others.
+    // But let's just use persistent ones for everything if possible.
+    
+    // Check if we already have a master label
+    Fl_Box* master_label = nullptr;
+    for(int i=0; i<m_master_group->children(); ++i) {
+        Fl_Widget* child = m_master_group->child(i);
+        if(dynamic_cast<Fl_Box*>(child) && !dynamic_cast<VUMeter*>(child)) {
+            master_label = (Fl_Box*)child;
+            break;
+        }
+    }
+    if(!master_label) {
+        master_label = new Fl_Box(master_x, master_y + top_margin, master_w, std_h, "Master");
+    } else {
+        master_label->resize(master_x, master_y + top_margin, master_w, std_h);
+    }
+    master_label->labelsize(font_sz);
+    master_label->labelfont(FL_BOLD);
+
+    int cur_master_y = master_y + top_margin + std_h + 5;
+    
+    m_master_gain->resize(master_x + 5, cur_master_y, vol_w, slider_h);
+    m_master_gain->value(m_engine.master_gain());
+    
+    m_master_meter_l->resize(master_x + 5 + vol_w, cur_master_y, meter_w, slider_h);
+    m_master_meter_r->resize(master_x + 5 + vol_w + meter_w, cur_master_y, meter_w, slider_h);
+    
+    cur_master_y += slider_h + 5;
+
+    // Dummy pan space or something to align with tracks
+    cur_master_y += 15 + 5;
+
+    m_master_mute->resize(master_x + 5, cur_master_y, 35, std_h);
+    m_master_mute->labelsize(font_sz);
+    m_master_mute->value(m_engine.m_master.muted());
+    
+    cur_master_y += std_h + 5;
+
+    m_master_sel_btn->resize(master_x + 5, cur_master_y, master_w - 10, std_h);
+    m_master_sel_btn->labelsize(font_sz);
+    m_master_sel_btn->color(m_selected_track == -1 ? FL_YELLOW : FL_BACKGROUND_COLOR);
+
+    m_master_group->end();
+    m_master_group->redraw();
+
     m_track_group->size((int)(x_offset + 40), m_track_group->h());
     m_track_group->redraw();
 }
@@ -711,8 +790,14 @@ void MixerPanel::cb_load_chain(Fl_Widget* w, void* data) {
 
 void MixerPanel::cb_master_gain(Fl_Widget* w, void* data) {
     MixerPanel* self = static_cast<MixerPanel*>(data);
-    float g = static_cast<Fl_Value_Slider*>(w)->value();
+    float g = static_cast<Fl_Slider*>(w)->value();
     self->m_engine.set_master_gain(g);
+}
+
+void MixerPanel::cb_master_mute(Fl_Widget* w, void* data) {
+    MixerPanel* self = static_cast<MixerPanel*>(data);
+    bool m = static_cast<Fl_Check_Button*>(w)->value();
+    self->m_engine.m_master.set_mute(m);
 }
 
 void MixerPanel::cb_track_volume(Fl_Widget* w, void* data) {

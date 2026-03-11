@@ -1,6 +1,7 @@
 #pragma once
 
 #include <FL/Fl_Group.H>
+#include <FL/Fl_Slider.H>
 #include <FL/Fl_Value_Slider.H>
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Box.H>
@@ -45,7 +46,9 @@ private:
     Fl_Group* m_lower_pane;
 
     Fl_Group* m_track_group;
-    Fl_Value_Slider* m_master_gain;
+    Fl_Group* m_master_group;
+    Fl_Slider* m_master_gain;
+    Fl_Check_Button* m_master_mute;
     Fl_Button* m_master_sel_btn;
     VUMeter* m_master_meter_l;
     VUMeter* m_master_meter_r;
@@ -63,6 +66,7 @@ private:
     Fl_Button*  m_save_chain_btn;
 
     static void cb_master_gain(Fl_Widget*, void*);
+    static void cb_master_mute(Fl_Widget*, void*);
     static void cb_track_volume(Fl_Widget*, void*);
     static void cb_track_pan(Fl_Widget*, void*);
     static void cb_track_mute(Fl_Widget*, void*);

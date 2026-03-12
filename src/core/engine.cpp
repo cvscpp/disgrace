@@ -12,12 +12,19 @@
 #include <algorithm>
 #include <iostream>
 #include <fstream>
+#include <thread>
+#include <chrono>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace disgrace_ns {
 
 Engine::Engine() : m_initialized(false), m_timing(44100) {
     m_transport = std::make_unique<Transport>(*this);
     m_backend = std::make_unique<JackBackend>(this);
+    m_export_progress.store(0.0f);
+    m_is_exporting.store(false);
 }
 
 Engine::~Engine() {
@@ -278,10 +285,20 @@ void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float*
     if (!transport().is_playing()) {
         render_block(out_l, out_r, nframes, in_bufs);
         m_master.process(out_l, out_r, nframes);
+        
+        if (m_is_exporting.load()) {
+            for (size_t i = 0; i < nframes; ++i) { out_l[i] = 0.f; out_r[i] = 0.f; }
+        }
+
         for (size_t i = 0; i < nframes; ++i) m_spectral_rb.push((out_l[i] + out_r[i]) * 0.5f);
         return;
     }
     process_block(out_l, out_r, nframes, in_bufs);
+
+    if (m_is_exporting.load()) {
+        for (size_t i = 0; i < nframes; ++i) { out_l[i] = 0.f; out_r[i] = 0.f; }
+    }
+
     for (size_t i = 0; i < nframes; ++i) m_spectral_rb.push((out_l[i] + out_r[i]) * 0.5f);
 }
 
@@ -563,8 +580,144 @@ float Engine::master_meter_l() const { return m_master.meter_l(); }
 float Engine::master_meter_r() const { return m_master.meter_r(); }
 Transport& Engine::transport() { return *m_transport; }
 const Transport& Engine::transport() const { return *m_transport; }
-size_t Engine::total_song_samples() const { size_t total = 0; for (const auto& p : m_patterns) total += p->row_count(); return total * m_timing.samples_per_row(); }
-bool Engine::render_to_wav(const std::string& path) { return false; } // Stub
+
+size_t Engine::total_song_samples() const { 
+    size_t total_rows = 0;
+    for (uint8_t pat_idx : m_order) {
+        if (pat_idx < m_patterns.size()) {
+            total_rows += m_patterns[pat_idx]->row_count();
+        }
+    }
+    // BPM/Speed might change during playback, but this is a base estimate
+    return total_rows * m_timing.samples_per_row(); 
+}
+
+bool Engine::render_to_wav(const std::string& path, const ExportOptions& opts) {
+    if (m_order.empty()) return false;
+    
+    m_is_exporting.store(true);
+    m_export_progress.store(0.0f);
+    m_master.m_export_mute.store(true);
+
+    // Save current state
+    bool was_playing = m_playing.load();
+    size_t old_order_pos = m_order_pos.load();
+    size_t old_row = m_current_row;
+    size_t old_tick = m_current_tick;
+    bool old_loop = transport().m_loop_pattern.load();
+    uint32_t old_sr = m_sample_rate;
+
+    // Prepare for rendering
+    stop();
+    m_sample_rate = opts.sample_rate;
+    m_timing.set_sample_rate(opts.sample_rate);
+
+    m_order_pos.store(0);
+    set_active_pattern(m_order[0]);
+    m_current_row = 0;
+    m_current_tick = 0;
+    m_samples_until_next_tick = 0;
+    transport().set_loop(false);
+
+    // Estimate length
+    size_t total_frames = total_song_samples();
+    if (total_frames == 0) return false;
+
+    // Buffers for export
+    std::vector<float> final_l, final_r;
+    std::vector<std::vector<float>> tracks_l, tracks_r;
+    
+    if (opts.separate_tracks) {
+        tracks_l.resize(m_tracks.size());
+        tracks_r.resize(m_tracks.size());
+    }
+
+    size_t rendered = 0;
+    const size_t block_size = 512;
+    float bl[block_size], br[block_size];
+
+    m_playing.store(true);
+
+    while (rendered < total_frames && m_playing.load()) {
+        size_t to_render = std::min(block_size, total_frames - rendered);
+        
+        if (opts.realtime) {
+            // Realtime export
+            m_master.m_recorded_l.clear();
+            m_master.m_recorded_r.clear();
+            m_master.m_recorded_l.reserve(total_frames);
+            m_master.m_recorded_r.reserve(total_frames);
+            m_master.m_is_recording.store(true);
+            
+            start();
+            while (transport().is_playing() && m_order_pos.load() < m_order.size()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            m_master.m_is_recording.store(false);
+            stop();
+            
+            final_l = std::move(m_master.m_recorded_l);
+            final_r = std::move(m_master.m_recorded_r);
+            break;
+        }
+
+        process_block(bl, br, to_render, nullptr);
+        
+        for (size_t i = 0; i < to_render; ++i) {
+            final_l.push_back(bl[i]);
+            final_r.push_back(br[i]);
+        }
+
+        if (opts.separate_tracks) {
+            for (size_t t = 0; t < m_tracks.size(); ++t) {
+                for (size_t i = 0; i < to_render; ++i) {
+                    tracks_l[t].push_back(m_track_l[t][i]);
+                    tracks_r[t].push_back(m_track_r[t][i]);
+                }
+            }
+        }
+
+        rendered += to_render;
+        m_export_progress.store((float)rendered / (float)total_frames);
+        
+        if (m_order_pos.load() >= m_order.size() || (m_order_pos.load() == m_order.size()-1 && m_current_row >= pattern().row_count())) {
+             break;
+        }
+    }
+
+    // Save to WAV
+    bool success = write_wav(path, final_l, final_r, final_l.size(), opts.sample_rate);
+
+    if (success && opts.separate_tracks) {
+        fs::path p(path);
+        std::string stem = p.stem().string();
+        std::string ext = p.extension().string();
+        fs::path parent = p.parent_path();
+        
+        for (size_t t = 0; t < m_tracks.size(); ++t) {
+            std::string filename = stem + "_" + std::to_string(t) + ext;
+            fs::path track_path = parent / filename;
+            write_wav(track_path.string(), tracks_l[t], tracks_r[t], tracks_l[t].size(), opts.sample_rate);
+        }
+    }
+
+    // Restore state
+    stop();
+    m_sample_rate = old_sr;
+    m_timing.set_sample_rate(old_sr);
+    m_order_pos.store(old_order_pos);
+    set_active_pattern(m_order[old_order_pos]);
+    m_current_row = old_row;
+    m_current_tick = (int)old_tick;
+    transport().set_loop(old_loop);
+    if (was_playing) start();
+
+    m_is_exporting.store(false);
+    m_master.m_export_mute.store(false);
+    m_export_progress.store(1.0f);
+
+    return success;
+}
 inline float Engine::soft_clip(float x) { const float limit = 0.95f; if (x > limit) return limit; if (x < -limit) return -limit; return x; }
 UndoStack& Engine::undo_stack() { return m_undo; }
 BlockClipboard& Engine::clipboard() { return m_clipboard; }
@@ -582,6 +735,41 @@ void Engine::start_recording_sample(SampleRecordMode mode, uint32_t channel, boo
 void Engine::stop_recording_sample() {
     m_is_recording_sample.store(false);
     m_recording_synced_active.store(false);
+}
+
+bool Engine::write_wav(const std::string& path, const std::vector<float>& l, const std::vector<float>& r, size_t frames, uint32_t sample_rate) {
+    std::ofstream f(path, std::ios::binary);
+    if (!f.is_open()) return false;
+
+    struct {
+        char chunkID[4]; uint32_t chunkSize; char format[4];
+        char subchunk1ID[4]; uint32_t subchunk1Size; uint16_t audioFormat;
+        uint16_t numChannels; uint32_t sampleRate; uint32_t byteRate;
+        uint16_t blockAlign; uint16_t bitsPerSample;
+        char subchunk2ID[4]; uint32_t subchunk2Size;
+    } h;
+    
+    memcpy(h.chunkID, "RIFF", 4);
+    h.chunkSize = 36 + (uint32_t)(frames * 2 * 2);
+    memcpy(h.format, "WAVE", 4);
+    memcpy(h.subchunk1ID, "fmt ", 4);
+    h.subchunk1Size = 16; h.audioFormat = 1; h.numChannels = 2;
+    h.sampleRate = sample_rate; h.byteRate = sample_rate * 2 * 2;
+    h.blockAlign = 4; h.bitsPerSample = 16;
+    memcpy(h.subchunk2ID, "data", 4);
+    h.subchunk2Size = (uint32_t)(frames * 2 * 2);
+
+    f.write(reinterpret_cast<char*>(&h), sizeof(h));
+
+    for (size_t i = 0; i < frames; ++i) {
+        float sl_f = std::max(-1.f, std::min(1.f, l[i]));
+        float sr_f = std::max(-1.f, std::min(1.f, r[i]));
+        int16_t sl = static_cast<int16_t>(sl_f * 32767.f);
+        int16_t sr = static_cast<int16_t>(sr_f * 32767.f);
+        f.write(reinterpret_cast<char*>(&sl), 2);
+        f.write(reinterpret_cast<char*>(&sr), 2);
+    }
+    return true;
 }
 
 } // namespace disgrace_ns

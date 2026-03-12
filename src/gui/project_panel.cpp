@@ -30,10 +30,40 @@ ProjectPanel::ProjectPanel(int x, int y, int w, int h, Engine& engine)
 
     cur_y += 25 + margin;
 
-    m_file_browser = new Fl_File_Browser(x + margin, y + cur_y, left_w - 2 * margin, h - cur_y - 45 - margin);
+    // Fixed control space at the bottom (Export button, 2 checkboxes, sample rate)
+    int controls_h = 25 * 3 + 10 * 3 + margin; 
+    int browser_h = h - cur_y - controls_h - margin;
+    
+    m_file_browser = new Fl_File_Browser(x + margin, y + cur_y, left_w - 2 * margin, browser_h);
     m_file_browser->type(FL_HOLD_BROWSER);
     m_file_browser->load(".");
     m_file_browser->callback(cb_file_select, this);
+
+    cur_y += browser_h + margin;
+
+    // Export controls
+    Fl_Box* sr_label = new Fl_Box(x + margin, y + cur_y, 160, 25, "Export Sample Rate:");
+    sr_label->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+    m_sample_rate_ch = new Fl_Choice(x + margin + 170, y + cur_y, 100, 25);
+    m_sample_rate_ch->add("44100");
+    m_sample_rate_ch->add("48000");
+    m_sample_rate_ch->add("88200");
+    m_sample_rate_ch->add("96000");
+    m_sample_rate_ch->add("192000");
+    m_sample_rate_ch->value(0);
+
+    cur_y += 25 + margin / 2;
+    m_separate_tracks_btn = new Fl_Check_Button(x + margin, y + cur_y, 200, 25, "Separate Files (per track)");
+    
+    cur_y += 25 + margin / 2;
+    m_realtime_btn = new Fl_Check_Button(x + margin, y + cur_y, 200, 25, "Realtime Export (for MIDI/HW)");
+
+    cur_y += 25 + margin / 2;
+    m_export_progress_bar = new Fl_Progress(x + margin, y + cur_y, left_w - 2 * margin, 15);
+    m_export_progress_bar->minimum(0.0f);
+    m_export_progress_bar->maximum(1.0f);
+    m_export_progress_bar->value(0.0f);
+    m_export_progress_bar->hide();
 
     m_export_btn = new Fl_Button(x + margin, y + h - 35, left_w - 2 * margin, 25, "Export to WAV");
     m_export_btn->callback(cb_export, this);
@@ -107,7 +137,34 @@ void ProjectPanel::cb_export(Fl_Widget*, void* data) {
     fnfc.filter("WAV Files\t*.wav\n");
     fnfc.preset_file("output.wav");
     if (fnfc.show() == 0) {
-        self->m_engine.render_to_wav(fnfc.filename());
+        Engine::ExportOptions opts;
+        opts.sample_rate = std::stoul(self->m_sample_rate_ch->text(self->m_sample_rate_ch->value()));
+        opts.separate_tracks = self->m_separate_tracks_btn->value();
+        opts.realtime = self->m_realtime_btn->value();
+        
+        std::string path = fnfc.filename();
+        self->m_export_btn->deactivate();
+        self->m_export_progress_bar->value(0.0f);
+        self->m_export_progress_bar->show();
+        
+        std::thread([self, path, opts]() {
+            self->m_engine.render_to_wav(path, opts);
+        }).detach();
+        
+        Fl::add_timeout(0.1, cb_export_timeout, self);
+    }
+}
+
+void ProjectPanel::cb_export_timeout(void* data) {
+    auto* self = static_cast<ProjectPanel*>(data);
+    float p = self->m_engine.m_export_progress.load();
+    self->m_export_progress_bar->value(p);
+    
+    if (self->m_engine.m_is_exporting.load()) {
+        Fl::repeat_timeout(0.1, cb_export_timeout, self);
+    } else {
+        self->m_export_btn->activate();
+        self->m_export_progress_bar->hide();
     }
 }
 

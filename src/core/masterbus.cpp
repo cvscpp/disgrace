@@ -51,11 +51,22 @@ void MasterBus::process(float* l,
         l[i] = sl;
         r[i] = sr;
 
+        if (m_is_recording.load()) {
+            m_recorded_l.push_back(sl);
+            m_recorded_r.push_back(sr);
+        }
+
         float pl = ::std::fabs(sl);
         if (pl > peak_l) peak_l = pl;
 
         float pr = ::std::fabs(sr);
         if (pr > peak_r) peak_r = pr;
+    }
+
+    if (m_export_mute.load()) {
+        for (size_t i = 0; i < nframes; ++i) {
+            l[i] = 0.f; r[i] = 0.f;
+        }
     }
 
     float prev_l = m_meter_l.load();

@@ -163,7 +163,17 @@ public:
     float master_gain() const;
     float master_meter_l() const;
     float master_meter_r() const;
-    bool render_to_wav(const ::std::string& path);
+
+    struct ExportOptions {
+        uint32_t sample_rate = 44100;
+        bool separate_tracks = false;
+        bool realtime = false;
+    };
+
+    std::atomic<float> m_export_progress{0.0f};
+    std::atomic<bool>  m_is_exporting{false};
+
+    bool render_to_wav(const ::std::string& path, const ExportOptions& options);
     void process_block(float* l, float* r, size_t nframes, const float* const* in_bufs = nullptr);
     void save_project(const ::std::string& path);
     void load_project(const ::std::string& path);
@@ -239,7 +249,7 @@ private:
     ::std::vector<::std::unique_ptr<disgrace_ns::Pattern>> m_patterns;
     ::std::atomic<size_t>  m_active_pattern{0};
 
-    bool write_wav(const ::std::string& path, const ::std::vector<float>& l, const ::std::vector<float>& r, size_t frames);
+    bool write_wav(const ::std::string& path, const ::std::vector<float>& l, const ::std::vector<float>& r, size_t frames, uint32_t sample_rate);
 
     size_t total_song_samples() const;
     void reset_transport_to_start();

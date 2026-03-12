@@ -7,6 +7,8 @@
 #include <FL/Fl_Scroll.H>
 #include <FL/Fl_Input.H>
 #include <FL/Fl_Choice.H>
+#include <FL/Fl_Check_Button.H>
+#include <FL/Fl_Progress.H>
 
 namespace disgrace_ns {
 
@@ -30,6 +32,11 @@ private:
     Fl_Button* m_export_btn;
     Fl_File_Browser* m_file_browser;
 
+    Fl_Choice* m_sample_rate_ch;
+    Fl_Check_Button* m_separate_tracks_btn;
+    Fl_Check_Button* m_realtime_btn;
+    Fl_Progress* m_export_progress_bar;
+
     Fl_Scroll* m_track_scroll;
     Fl_Group*  m_track_container;
     Fl_Button* m_add_track_btn;
@@ -47,6 +54,8 @@ private:
     static void cb_track_output(Fl_Widget*, void*);
     static void cb_move_track_up(Fl_Widget*, void*);
     static void cb_move_track_down(Fl_Widget*, void*);
+
+    static void cb_export_timeout(void* data);
 
     static void cb_add_bus(Fl_Widget*, void*);
     static void cb_remove_bus(Fl_Widget*, void*);

@@ -38,6 +38,11 @@ public:
     const disgrace_ns::DSPChain& chain() const { return m_chain; }
     disgrace_ns::DSPChain& chain() { return m_chain; }
 
+    ::std::atomic<bool> m_is_recording{false};
+    ::std::atomic<bool> m_export_mute{false};
+    ::std::vector<float> m_recorded_l;
+    ::std::vector<float> m_recorded_r;
+
 private:
     float soft_clip(float x);
 

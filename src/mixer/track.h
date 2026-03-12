@@ -94,6 +94,9 @@ public:
     disgrace_ns::DSP* get_effect(size_t index) const;
     bool is_effect_enabled(size_t index) const;
 
+    const disgrace_ns::DSPChain& chain() const { return m_chain; }
+    disgrace_ns::DSPChain& chain() { return m_chain; }
+
     void save_effect_chain(const std::string& path);
     void load_effect_chain(const std::string& path);
 

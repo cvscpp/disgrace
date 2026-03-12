@@ -28,6 +28,9 @@ public:
     void save_chain(const std::string& path);
     void load_chain(const std::string& path);
 
+    void to_json(void* j_ptr) const; // j_ptr is nlohmann::json*
+    void from_json(const void* j_ptr); // j_ptr is const nlohmann::json*
+
 private:
     ::std::array<::std::unique_ptr<disgrace_ns::DSP>, MAX_INSERTS> m_effects{};
     ::std::array<bool, MAX_INSERTS> m_enabled{};

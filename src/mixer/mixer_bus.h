@@ -37,6 +37,9 @@ public:
     void set_output_bus(int bus_idx);
     int output_bus() const;
 
+    const disgrace_ns::DSPChain& chain() const { return m_chain; }
+    disgrace_ns::DSPChain& chain() { return m_chain; }
+
 private:
     std::string m_name;
     float m_volume = 1.0f;

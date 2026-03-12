@@ -5,6 +5,9 @@
 #include "../mixer/track.h"
 #include "../instrument/sample_instrument.h"
 #include "../instrument/soundfont_instrument.h"
+#include "../instrument/midi_instrument.h"
+#include "../instrument/dssi_instrument.h"
+#include "../instrument/lv2_instrument.h"
 #include "audio_file.h"
 
 #include <fstream>
@@ -33,6 +36,14 @@ namespace disgrace_ns
         j["tempo"] = engine.tempo();
         j["lpb"]   = engine.lpb();
         j["order"] = engine.order_list();
+
+        json jmaster;
+        jmaster["gain"] = engine.master_gain();
+        jmaster["muted"] = engine.m_master.muted();
+        json jmchain;
+        engine.m_master.chain().to_json(&jmchain);
+        jmaster["dsp_chain"] = jmchain;
+        j["master"] = jmaster;
 
         j["instruments"] = json::array();
         for (size_t i = 0; i < engine.instrument_count(); ++i) {
@@ -73,6 +84,27 @@ namespace disgrace_ns
                     } catch (...) {}
                 }
                 jinst["preset"] = sf.current_preset();
+            } else if (inst.type() == InstrumentType::Midi) {
+                const auto& midi = static_cast<const MidiInstrument&>(inst);
+                jinst["channel"] = midi.channel();
+                jinst["program"] = midi.program();
+            } else if (inst.type() == InstrumentType::Plugin) {
+                // Determine if DSSI or LV2 (for now only DSSI has path in save/load)
+                try {
+                    const auto& dssi = static_cast<const DSSIInstrument&>(inst);
+                    jinst["plugin_path"] = dssi.path();
+                    jinst["plugin_index"] = dssi.index();
+                    jinst["bank"] = dssi.bank();
+                    jinst["program"] = dssi.program();
+                    
+                    json jparams = json::array();
+                    for (size_t p = 0; p < dssi.parameter_count(); ++p) {
+                        jparams.push_back(dssi.get_parameter(p).value);
+                    }
+                    jinst["parameters"] = jparams;
+                } catch (...) {
+                    // Placeholder for LV2 or others
+                }
             }
             j["instruments"].push_back(jinst);
         }
@@ -85,6 +117,19 @@ namespace disgrace_ns
             jt["volume"] = engine.track(t).volume();
             jt["pan"] = engine.track(t).pan;
             jt["output_bus"] = engine.track(t).output_bus();
+            jt["muted"] = engine.track(t).muted();
+            jt["solo"] = engine.track(t).solo();
+            
+            int in_l, in_r;
+            engine.track(t).get_audio_input(in_l, in_r);
+            jt["audio_input_l"] = in_l;
+            jt["audio_input_r"] = in_r;
+            jt["input_delay_ms"] = engine.track(t).input_delay();
+            
+            json jchain;
+            engine.track(t).chain().to_json(&jchain);
+            jt["dsp_chain"] = jchain;
+
             j["tracks"].push_back(jt);
         }
 
@@ -95,6 +140,12 @@ namespace disgrace_ns
             jb["volume"] = engine.bus(b).volume();
             jb["pan"] = engine.bus(b).pan();
             jb["output_bus"] = engine.bus(b).output_bus();
+            jb["muted"] = engine.bus(b).muted();
+
+            json jchain;
+            engine.bus(b).chain().to_json(&jchain);
+            jb["dsp_chain"] = jchain;
+
             j["buses"].push_back(jb);
         }
 
@@ -126,6 +177,14 @@ namespace disgrace_ns
         engine.set_lpb(j["lpb"]);
         engine.set_order(j["order"].get<::std::vector<uint8_t>>());
 
+        if (j.contains("master")) {
+            engine.set_master_gain(j["master"].value("gain", 1.0f));
+            engine.m_master.set_mute(j["master"].value("muted", false));
+            if (j["master"].contains("dsp_chain")) {
+                engine.m_master.chain().from_json(&j["master"]["dsp_chain"]);
+            }
+        }
+
         if (j.contains("instruments")) {
             engine.m_instruments.clear();
             for (auto& ji : j["instruments"]) {
@@ -153,6 +212,22 @@ namespace disgrace_ns
                     if (sf.load_soundfont(sf_path.string())) {
                         sf.set_preset(ji["preset"]);
                     }
+                } else if (type == InstrumentType::Midi) {
+                    MidiInstrument& midi = static_cast<MidiInstrument&>(inst);
+                    midi.set_channel(ji.value("channel", 0));
+                    midi.set_program(ji.value("program", 0));
+                } else if (type == InstrumentType::Plugin && ji.contains("plugin_path")) {
+                    // For now, assume DSSI if plugin_path is present
+                    DSSIInstrument& dssi = static_cast<DSSIInstrument&>(inst);
+                    if (dssi.load_plugin(ji["plugin_path"], ji.value("plugin_index", 0))) {
+                        dssi.load_program(ji.value("bank", 0), ji.value("program", 0));
+                        if (ji.contains("parameters")) {
+                            auto& jparams = ji["parameters"];
+                            for (size_t p = 0; p < jparams.size() && p < dssi.parameter_count(); ++p) {
+                                dssi.set_parameter(p, jparams[p]);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -166,6 +241,10 @@ namespace disgrace_ns
                 bus.set_volume(jb["volume"]);
                 bus.set_pan(jb["pan"]);
                 bus.set_output_bus(jb["output_bus"]);
+                bus.set_mute(jb.value("muted", false));
+                if (jb.contains("dsp_chain")) {
+                    bus.chain().from_json(&jb["dsp_chain"]);
+                }
             }
         }
 
@@ -178,6 +257,14 @@ namespace disgrace_ns
                 track.set_volume(jt["volume"]);
                 track.pan = jt["pan"];
                 track.set_output_bus(jt.value("output_bus", -1));
+                track.set_mute(jt.value("muted", false));
+                track.set_solo(jt.value("solo", false));
+                track.set_audio_input(jt.value("audio_input_l", -1), jt.value("audio_input_r", -1));
+                track.set_input_delay(jt.value("input_delay_ms", 0.0f), engine.sample_rate());
+
+                if (jt.contains("dsp_chain")) {
+                    track.chain().from_json(&jt["dsp_chain"]);
+                }
                 int inst_idx = jt["instrument_index"];
                 if (inst_idx >= 0 && inst_idx < (int)engine.instrument_count()) {
                     track.set_instrument(&engine.instrument(inst_idx));

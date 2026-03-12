@@ -35,6 +35,9 @@ public:
     void load_effect_chain(const std::string& path);
     void save_effect_chain(const std::string& path);
 
+    const disgrace_ns::DSPChain& chain() const { return m_chain; }
+    disgrace_ns::DSPChain& chain() { return m_chain; }
+
 private:
     float soft_clip(float x);
 

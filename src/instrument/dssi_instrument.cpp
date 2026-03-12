@@ -33,6 +33,9 @@ bool DSSIInstrument::load_plugin(const std::string& path, int index) {
         return false;
     }
 
+    m_path = path;
+    m_index = index;
+
     DSSI_Descriptor_Function df = (DSSI_Descriptor_Function)dlsym(m_lib_handle, "dssi_descriptor");
     if (!df) {
         std::cerr << "Not a valid DSSI plugin (missing dssi_descriptor)" << std::endl;
@@ -127,6 +130,8 @@ void DSSIInstrument::set_parameter(size_t index, float value) {
 void DSSIInstrument::load_program(unsigned long bank, unsigned long program) {
     if (m_instance && m_descriptor && m_descriptor->select_program) {
         m_descriptor->select_program(m_instance, bank, program);
+        m_bank = bank;
+        m_program = program;
     }
 }
 

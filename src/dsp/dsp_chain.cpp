@@ -90,7 +90,25 @@ void disgrace_ns::DSPChain::remove(size_t index)
 
 void disgrace_ns::DSPChain::save_chain(const std::string& path)
 {
-    nlohmann::json j = nlohmann::json::array();
+    nlohmann::json j;
+    to_json(&j);
+    std::ofstream f(path);
+    if (f.is_open()) f << j.dump(4);
+}
+
+void disgrace_ns::DSPChain::load_chain(const std::string& path)
+{
+    std::ifstream f(path);
+    if (!f.is_open()) return;
+    try {
+        auto j = nlohmann::json::parse(f);
+        from_json(&j);
+    } catch (...) {}
+}
+
+void disgrace_ns::DSPChain::to_json(void* j_ptr) const {
+    auto& j = *static_cast<nlohmann::json*>(j_ptr);
+    j = nlohmann::json::array();
     for (size_t i = 0; i < MAX_INSERTS; ++i) {
         if (m_effects[i]) {
             nlohmann::json fx;
@@ -100,39 +118,30 @@ void disgrace_ns::DSPChain::save_chain(const std::string& path)
             j.push_back(fx);
         }
     }
-    std::ofstream f(path);
-    if (f.is_open()) f << j.dump(4);
 }
 
-void disgrace_ns::DSPChain::load_chain(const std::string& path)
-{
-    std::ifstream f(path);
-    if (!f.is_open()) return;
-    
-    try {
-        auto j = nlohmann::json::parse(f);
-        if (j.is_array()) {
-            // Clear current chain
-            for (size_t i = 0; i < MAX_INSERTS; ++i) {
-                m_effects[i].reset();
-                m_enabled[i] = false;
-            }
+void disgrace_ns::DSPChain::from_json(const void* j_ptr) {
+    auto& j = *static_cast<const nlohmann::json*>(j_ptr);
+    if (j.is_array()) {
+        for (size_t i = 0; i < MAX_INSERTS; ++i) {
+            m_effects[i].reset();
+            m_enabled[i] = false;
+        }
 
-            size_t idx = 0;
-            for (const auto& fx : j) {
-                if (idx >= MAX_INSERTS) break;
-                if (fx.contains("type")) {
-                    auto dsp = create_dsp(fx["type"]);
-                    if (dsp) {
-                        if (fx.contains("state")) dsp->set_state(fx["state"].dump());
-                        m_effects[idx] = std::move(dsp);
-                        m_enabled[idx] = fx.value("enabled", true);
-                        idx++;
-                    }
+        size_t idx = 0;
+        for (const auto& fx : j) {
+            if (idx >= MAX_INSERTS) break;
+            if (fx.contains("type")) {
+                auto dsp = create_dsp(fx["type"]);
+                if (dsp) {
+                    if (fx.contains("state")) dsp->set_state(fx["state"].dump());
+                    m_effects[idx] = std::move(dsp);
+                    m_enabled[idx] = fx.value("enabled", true);
+                    idx++;
                 }
             }
         }
-    } catch (...) {}
+    }
 }
 
 } // namespace disgrace_ns

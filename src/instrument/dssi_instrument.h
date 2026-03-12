@@ -29,6 +29,11 @@ public:
 
     void load_program(unsigned long bank, unsigned long program);
 
+    const std::string& path() const { return m_path; }
+    int index() const { return m_index; }
+    unsigned long bank() const { return m_bank; }
+    unsigned long program() const { return m_program; }
+
 protected:
     std::unique_ptr<Voice> create_voice() override { return nullptr; }
 
@@ -37,6 +42,11 @@ private:
     const DSSI_Descriptor* m_descriptor = nullptr;
     LADSPA_Handle m_instance = nullptr;
     double m_sample_rate;
+
+    std::string   m_path;
+    int           m_index = 0;
+    unsigned long m_bank = 0;
+    unsigned long m_program = 0;
 
     std::vector<float> m_port_values;
     std::vector<int>   m_control_indices;

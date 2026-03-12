@@ -772,4 +772,32 @@ bool Engine::write_wav(const std::string& path, const std::vector<float>& l, con
     return true;
 }
 
+double Engine::get_current_time_seconds() const {
+    size_t total_rows = 0;
+    
+    if (transport().m_loop_pattern.load()) {
+        // Only current pattern time
+        total_rows = m_current_row;
+    } else {
+        // Song time from beginning
+        for (size_t i = 0; i < m_order_pos.load() && i < m_order.size(); ++i) {
+            size_t pat_idx = m_order[i];
+            if (pat_idx < m_patterns.size()) {
+                total_rows += m_patterns[pat_idx]->row_count();
+            }
+        }
+        total_rows += m_current_row;
+    }
+    
+    double samples = (double)total_rows * m_timing.samples_per_row();
+    samples += (double)m_current_tick * m_timing.samples_per_tick();
+    
+    // Add sub-tick progress if playing
+    if (m_playing.load()) {
+        samples += (double)m_timing.samples_per_tick() - (double)m_samples_until_next_tick;
+    }
+    
+    return samples / (double)m_sample_rate;
+}
+
 } // namespace disgrace_ns

@@ -213,6 +213,8 @@ public:
     uint32_t step_size() const { return m_step_size; }
     void set_step_size(uint32_t s) { m_step_size = std::max(1u, std::min(64u, s)); }
 
+    double get_current_time_seconds() const;
+
     friend class SongSerializer;
 
 private:

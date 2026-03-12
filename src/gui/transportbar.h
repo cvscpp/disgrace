@@ -20,6 +20,7 @@ public:
     TransportBar(int X, int Y, int W, int H, Engine& engine); // Use unqualified Engine now that we are in the namespace
 
     void update();
+    void resize(int x, int y, int w, int h) override;
 
 private:
     static void cb_play(Fl_Widget*, void*);
@@ -42,8 +43,11 @@ private:
     Fl_Simple_Counter* m_lpb;
     Fl_Simple_Counter* m_step;
     Fl_Box* m_status;
+    Fl_Box* m_clock;
     VUMeter* m_meter_l;
     VUMeter* m_meter_r;
+
+    char m_clock_str[32];
 };
 
 } // namespace disgrace_ns

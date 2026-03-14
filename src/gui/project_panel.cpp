@@ -218,6 +218,22 @@ void ProjectPanel::update_track_list() {
         inst_ch->callback(cb_track_inst, new std::pair<ProjectPanel*, size_t>(this, i));
         cur_x += choice_w - 20 + 5;
 
+        // Notation Type Dropdown
+        Fl_Choice* notation_ch = new Fl_Choice(cur_x, row_y + 5, 100, 25);
+        notation_ch->add("Violin|Bass|Violin+Bass|Drums");
+        notation_ch->value((int)m_engine.track(i).notation());
+        notation_ch->callback(cb_track_notation, new std::pair<ProjectPanel*, size_t>(this, i));
+        
+        Instrument* inst_ptr = m_engine.track(i).instrument();
+        if (inst_ptr && (inst_ptr->type() == InstrumentType::SoundFont || 
+                         inst_ptr->type() == InstrumentType::Plugin || 
+                         inst_ptr->type() == InstrumentType::Midi)) {
+            notation_ch->activate();
+        } else {
+            notation_ch->deactivate();
+        }
+        cur_x += 100 + 5;
+
         Fl_Choice* out_ch = new Fl_Choice(cur_x, row_y + 5, 80, 25);
         out_ch->add("Master");
         for (size_t j = 0; j < num_buses; ++j) {
@@ -320,6 +336,12 @@ void ProjectPanel::cb_track_inst(Fl_Widget* w, void* data) {
         MainWindow* mw = dynamic_cast<MainWindow*>(win);
         if (mw) mw->request_update();
     }
+}
+
+void ProjectPanel::cb_track_notation(Fl_Widget* w, void* data) {
+    auto* pair = static_cast<std::pair<ProjectPanel*, size_t>*>(data);
+    Fl_Choice* ch = static_cast<Fl_Choice*>(w);
+    pair->first->m_engine.track(pair->second).set_notation((NotationType)ch->value());
 }
 
 void ProjectPanel::cb_track_output(Fl_Widget* w, void* data) {

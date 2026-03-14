@@ -51,6 +51,7 @@ private:
     static void cb_remove_track(Fl_Widget*, void*);
     static void cb_track_name(Fl_Widget*, void*);
     static void cb_track_inst(Fl_Widget*, void*);
+    static void cb_track_notation(Fl_Widget*, void*);
     static void cb_track_output(Fl_Widget*, void*);
     static void cb_move_track_up(Fl_Widget*, void*);
     static void cb_move_track_down(Fl_Widget*, void*);

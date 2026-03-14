@@ -3,6 +3,7 @@
 #include "transportbar.h"
 #include "tracker_panel.h"
 #include "tracks_panel.h"
+#include "notation_panel.h"
 #include "mixer_panel.h"
 #include "instrument_panel.h"
 #include "project_panel.h"
@@ -32,6 +33,8 @@ namespace disgrace_ns
   m_settings_tab(nullptr),
   m_loop_btn(nullptr),
   m_tracker_panel(nullptr),
+  m_tracks_panel(nullptr),
+  m_notation_panel(nullptr),
   m_instrument_panel(nullptr),
   m_mixer_panel(nullptr),
   m_settings_panel(nullptr),
@@ -123,6 +126,9 @@ void disgrace_ns::MainWindow::timer_cb(void* data)
     
     if (self->m_tracks_panel && (self->m_engine.transport_state() != TransportState::Stopped || self->m_tabs->value() == self->m_tracks_tab))
         self->m_tracks_panel->update();
+    
+    if (self->m_notation_panel && (self->m_engine.transport_state() != TransportState::Stopped || self->m_tabs->value() == self->m_notation_tab))
+        self->m_notation_panel->update();
     
     // Periodically update other UIs if needed
     // self->update_all_uis(); // Too frequent? 30ms might be okay.

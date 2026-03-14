@@ -6,7 +6,7 @@ namespace disgrace_ns
 {
 
 disgrace_ns::Track::Track()
-    : m_meter_l(0.0f), m_meter_r(0.0f), m_current_freq(440.0f), m_name("New Track"), m_output_bus(-1)
+    : m_meter_l(0.0f), m_meter_r(0.0f), m_current_freq(440.0f), m_name("New Track"), m_output_bus(-1), m_notation(NotationType::Violin)
 {
 }
 
@@ -18,6 +18,7 @@ disgrace_ns::Track::Track(Track&& other) noexcept
       m_volume(other.m_volume),
       m_mute(other.m_mute),
       m_solo(other.m_solo),
+      m_notation(other.m_notation),
       m_output_bus(other.m_output_bus),
       m_name(std::move(other.m_name)),
       m_instrument(other.m_instrument),
@@ -38,6 +39,7 @@ Track& disgrace_ns::Track::operator=(Track&& other) noexcept
         m_volume = other.m_volume;
         m_mute = other.m_mute;
         m_solo = other.m_solo;
+        m_notation = other.m_notation;
         m_output_bus = other.m_output_bus;
         m_name = std::move(other.m_name);
         m_instrument = other.m_instrument;

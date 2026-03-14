@@ -28,6 +28,13 @@ namespace disgrace_ns
         int note_cut_tick = -1;
     };
 
+    enum class NotationType {
+        Violin,
+        Bass,
+        ViolinBass,
+        Drums
+    };
+
 class Instrument;
 
 class Track
@@ -74,6 +81,9 @@ public:
     void set_mute(bool m);
     bool muted() const;
 
+    void set_notation(NotationType n) { m_notation = n; }
+    NotationType notation() const { return m_notation; }
+
     float meter_level_l() const;
     float meter_level_r() const;
     bool solo() const;
@@ -110,6 +120,7 @@ private:
     float m_volume = 1.f;
     bool  m_mute   = false;
     bool  m_solo   = false;
+    NotationType m_notation = NotationType::Violin;
     int   m_output_bus = -1; // -1 = Master
     std::string m_name;
 

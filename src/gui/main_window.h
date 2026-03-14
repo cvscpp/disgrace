@@ -20,6 +20,7 @@ namespace disgrace_ns
     class Track; 
     class TrackerPanel;
     class TracksPanel;
+    class NotationPanel;
     class InstrumentPanel;
     class MixerPanel;
     class SettingsPanel;
@@ -61,6 +62,7 @@ namespace disgrace_ns
 
         TrackerPanel* m_tracker_panel;
         TracksPanel* m_tracks_panel;
+        NotationPanel* m_notation_panel;
         InstrumentPanel* m_instrument_panel;
         MixerPanel* m_mixer_panel;
         SettingsPanel* m_settings_panel;

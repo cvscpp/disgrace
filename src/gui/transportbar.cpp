@@ -88,8 +88,8 @@ TransportBar::TransportBar(int X, int Y, int W, int H, Engine& engine)
     int meter_w = W - x - 10;
     if (meter_w < 150) meter_w = 150; 
 
-    m_meter_l = new VUMeter(x, Y+5, meter_w, 10, nullptr, true);
-    m_meter_r = new VUMeter(x, Y+18, meter_w, 10, nullptr, true);
+    m_meter_l = new VUMeter(x, Y+5, meter_w, 10, m_engine, nullptr, true);
+    m_meter_r = new VUMeter(x, Y+18, meter_w, 10, m_engine, nullptr, true);
 
     memset(m_clock_str, 0, sizeof(m_clock_str));
     strcpy(m_clock_str, "00:00.000");

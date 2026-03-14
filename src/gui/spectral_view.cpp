@@ -44,7 +44,7 @@ void SpectralView::draw() {
     int bw = w() - 4;
     int bh = h() - 4;
 
-    fl_color(FL_BLACK);
+    fl_color((Fl_Color)m_engine.m_tracker_bg);
     fl_rectf(bx, by, bw, bh);
 
     if (m_history.empty()) return;
@@ -91,7 +91,7 @@ void SpectralView::draw() {
     }
     
     // Draw grid
-    fl_color(FL_GRAY0);
+    fl_color((Fl_Color)m_engine.m_tracker_lpb_highlight);
     for (int db = -40; db <= 0; db += 20) {
         float y_norm = (db + 60.0f) / 60.0f;
         int gy = by + bh - (int)(y_norm * bh);

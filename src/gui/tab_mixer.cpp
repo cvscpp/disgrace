@@ -5,9 +5,7 @@ namespace disgrace_ns {
 
 void MainWindow::init_mixer_tab(int w, int h) {
     m_mixer_tab = new Fl_Group(0, 65, w, h - 100, "Mixer");
-    m_mixer_tab->begin();
     m_mixer_panel = new MixerPanel(m_mixer_tab->x(), m_mixer_tab->y(), m_mixer_tab->w(), m_mixer_tab->h(), m_engine);
-    m_mixer_tab->resizable(m_mixer_panel);
     m_mixer_tab->end();
 }
 

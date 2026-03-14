@@ -42,11 +42,13 @@ void TrackerView::draw() {
     clamp_cursor();
     
     fl_push_clip(x(), y(), w(), h());
-    fl_color(30, 30, 30);
+    
+    // Background from theme
+    fl_color((Fl_Color)m_engine.m_tracker_bg);
     fl_rectf(x(), y(), w(), h());
 
     if (Fl::focus() == this) {
-        fl_color(255, 0, 0);
+        fl_color((Fl_Color)m_engine.m_tracker_cursor); // Maybe use cursor color as border too? Or selection.
         fl_rect(x(), y(), w(), h());
     }
 
@@ -59,7 +61,7 @@ void TrackerView::draw() {
     m_track_ui.clear();
 
     if (num_tracks == 0) {
-        fl_color(200, 200, 200);
+        fl_color((Fl_Color)m_engine.m_tracker_text);
         fl_font(FL_HELVETICA, 16);
         fl_draw("No tracks. Click '+ Track' in the transport bar to add one.", x() + 50, y() + 50);
         fl_pop_clip();
@@ -75,7 +77,7 @@ void TrackerView::draw() {
     center_y = ((center_y - (y() + 20)) / row_h) * row_h + (y() + 20);
 
     // Draw row numbers
-    fl_color(100, 100, 100);
+    fl_color((Fl_Color)m_engine.m_tracker_text); // Or maybe a slightly darker text for row numbers
     fl_font(FL_COURIER, 12);
     for (size_t r = 0; r < num_rows; ++r) {
         int ry = center_y + ((int)r - center_row) * row_h;
@@ -94,20 +96,25 @@ void TrackerView::draw() {
         // LPB highlight
         uint32_t lpb = m_engine.lpb();
         if (lpb > 0 && r % lpb == 0) {
-            fl_color(40, 40, 40); 
+            fl_color((Fl_Color)m_engine.m_tracker_lpb_highlight); 
             fl_rectf(x(), ry, w(), row_h);
         }
 
         // Playing row highlight (Full width)
         if (is_playing && (int)r == playing_row) {
-            fl_color(40, 80, 40); 
+            fl_color((Fl_Color)m_engine.m_tracker_row_highlight); 
             fl_rectf(x(), ry, w(), row_h);
         }
         
         // Cursor row highlight (Full width, but lighter if not focused)
         if ((int)r == m_cursor_row) {
-            if (Fl::focus() == this) fl_color(45, 45, 60);
-            else fl_color(35, 35, 45);
+            if (Fl::focus() == this) fl_color((Fl_Color)m_engine.m_tracker_row_highlight); // reusing row_highlight or cursor color for selection?
+            else {
+                // If not focused, make it a bit less prominent
+                unsigned char r_h, g_h, b_h;
+                Fl::get_color((Fl_Color)m_engine.m_tracker_row_highlight, r_h, g_h, b_h);
+                fl_color(r_h/2, g_h/2, b_h/2); // Very simple darkening
+            }
             fl_rectf(x() + 40, ry, w() - 40, row_h);
         }
     }
@@ -122,10 +129,11 @@ void TrackerView::draw() {
         TrackUI ui; ui.x = cur_x; ui.w = track_w; ui.btn_plus_x = cur_x + track_w - 20; ui.btn_minus_x = cur_x + track_w - 40;
         m_track_ui.push_back(ui);
 
-        fl_color(60, 60, 60); fl_rectf(cur_x, y(), track_w, 20);
-        fl_color(200, 200, 200); fl_draw(track_obj.name().substr(0, 10).c_str(), cur_x + 5, y() + 15);
-        fl_color(80, 80, 80); fl_rectf(ui.btn_minus_x, y() + 2, 18, 16); fl_rectf(ui.btn_plus_x, y() + 2, 18, 16);
-        fl_color(255, 255, 255); fl_draw("-", ui.btn_minus_x + 5, y() + 14); fl_draw("+", ui.btn_plus_x + 5, y() + 14);
+        // Track Header - use generic GUI colors from engine
+        fl_color((Fl_Color)m_engine.m_bg_color); fl_rectf(cur_x, y(), track_w, 20);
+        fl_color((Fl_Color)m_engine.m_fg_color); fl_draw(track_obj.name().substr(0, 10).c_str(), cur_x + 5, y() + 15);
+        fl_color((Fl_Color)m_engine.m_button_color); fl_rectf(ui.btn_minus_x, y() + 2, 18, 16); fl_rectf(ui.btn_plus_x, y() + 2, 18, 16);
+        fl_color((Fl_Color)m_engine.m_fg_color); fl_draw("-", ui.btn_minus_x + 5, y() + 14); fl_draw("+", ui.btn_plus_x + 5, y() + 14);
         
         for (size_t r = 0; r < num_rows; ++r) {
             int ry = center_y + ((int)r - center_row) * row_h;
@@ -139,13 +147,15 @@ void TrackerView::draw() {
                 int s_r = std::min(m_sel_start_row, m_sel_end_row);
                 int e_r = std::max(m_sel_start_row, m_sel_end_row);
                 if ((int)t >= s_t && (int)t <= e_t && (int)r >= s_r && (int)r <= e_r) {
-                    fl_color(60, 60, 100);
+                    fl_color(FL_SELECTION_COLOR);
                     fl_rectf(cur_x, ry, track_w, row_h);
                 }
             }
 
             if ((int)r == m_cursor_row && (int)t == m_cursor_track) {
-                fl_color(60, 60, 80); fl_rectf(cur_x, ry, track_w, row_h);
+                 // Already handled by cursor row highlight above for background, 
+                 // but we can add more specific per-track-row cursor background here if desired
+                 // fl_color((Fl_Color)m_engine.m_tracker_row_highlight); fl_rectf(cur_x, ry, track_w, row_h);
             }
 
             int col_x = cur_x + 2;
@@ -154,9 +164,12 @@ void TrackerView::draw() {
                 
                 // Note
                 if ((int)r == m_cursor_row && (int)t == m_cursor_track && (int)c == m_cursor_col && m_cursor_field == 0) {
-                    fl_color(100, 100, 150); fl_rectf(col_x - 1, ry, 3 * char_w + 4, row_h);
+                    fl_color((Fl_Color)m_engine.m_tracker_cursor); fl_rectf(col_x - 1, ry, 3 * char_w + 4, row_h);
+                    fl_color((Fl_Color)m_engine.m_tracker_bg); // Draw text on cursor with background color
+                } else {
+                    fl_color(ev.note == 255 ? (Fl_Color)m_engine.m_tracker_lpb_highlight : (Fl_Color)m_engine.m_tracker_note);
                 }
-                fl_color(ev.note == 255 ? 80 : 255, ev.note == 255 ? 80 : 255, ev.note == 255 ? 80 : 255);
+                
                 if (ev.note == 255) fl_draw("---", col_x, ry + 14);
                 else if (ev.note == 254) fl_draw("===", col_x, ry + 14);
                 else {
@@ -168,18 +181,28 @@ void TrackerView::draw() {
 
                 // Sample
                 if ((int)r == m_cursor_row && (int)t == m_cursor_track && (int)c == m_cursor_col && m_cursor_field == 1) {
-                    fl_color(100, 100, 150); fl_rectf(col_x - 1, ry, 2 * char_w + 4, row_h);
+                    fl_color((Fl_Color)m_engine.m_tracker_cursor); fl_rectf(col_x - 1, ry, 2 * char_w + 4, row_h);
+                    fl_color((Fl_Color)m_engine.m_tracker_bg);
+                } else {
+                    fl_color((Fl_Color)m_engine.m_tracker_sample);
+                    if (!is_sampler) {
+                        unsigned char rs, gs, bs;
+                        Fl::get_color((Fl_Color)m_engine.m_tracker_sample, rs, gs, bs);
+                        fl_color(rs/3, gs/3, bs/3);
+                    }
                 }
-                fl_color(0, is_sampler ? 200 : 40, is_sampler ? 200 : 40);
+                
                 if (ev.sample_idx == 0) fl_draw("..", col_x, ry + 14);
                 else { char buf[4]; snprintf(buf, 4, "%02X", ev.sample_idx); fl_draw(buf, col_x, ry + 14); }
                 col_x += 3 * char_w;
 
                 // Volume
                 if ((int)r == m_cursor_row && (int)t == m_cursor_track && (int)c == m_cursor_col && m_cursor_field == 2) {
-                    fl_color(100, 100, 150); fl_rectf(col_x - 1, ry, 2 * char_w + 4, row_h);
+                    fl_color((Fl_Color)m_engine.m_tracker_cursor); fl_rectf(col_x - 1, ry, 2 * char_w + 4, row_h);
+                    fl_color((Fl_Color)m_engine.m_tracker_bg);
+                } else {
+                    fl_color((Fl_Color)m_engine.m_tracker_volume);
                 }
-                fl_color(0, 255, 0);
                 if (ev.volume == 255) fl_draw("..", col_x, ry + 14);
                 else { char buf[4]; snprintf(buf, 4, "%02X", ev.volume); fl_draw(buf, col_x, ry + 14); }
                 col_x += 3 * char_w;
@@ -189,33 +212,44 @@ void TrackerView::draw() {
             
             // FX1
             if ((int)r == m_cursor_row && (int)t == m_cursor_track && m_cursor_field == 3) {
-                fl_color(100, 100, 150); fl_rectf(col_x - 1, ry, 2 * char_w + 4, row_h);
+                fl_color((Fl_Color)m_engine.m_tracker_cursor); fl_rectf(col_x - 1, ry, 2 * char_w + 4, row_h);
+                fl_color((Fl_Color)m_engine.m_tracker_bg);
+            } else {
+                fl_color((Fl_Color)m_engine.m_tracker_effect);
             }
-            fl_color(255, 255, 0);
             char fx1_type[4]; snprintf(fx1_type, 4, "%02X", row_ev.effect1); fl_draw(fx1_type, col_x, ry + 14);
             col_x += 3 * char_w;
 
             // Param1
             if ((int)r == m_cursor_row && (int)t == m_cursor_track && m_cursor_field == 4) {
-                fl_color(100, 100, 150); fl_rectf(col_x - 1, ry, 2 * char_w + 4, row_h);
+                fl_color((Fl_Color)m_engine.m_tracker_cursor); fl_rectf(col_x - 1, ry, 2 * char_w + 4, row_h);
+                fl_color((Fl_Color)m_engine.m_tracker_bg);
+            } else {
+                fl_color((Fl_Color)m_engine.m_tracker_effect);
             }
             char fx1_param[4]; snprintf(fx1_param, 4, "%02X", row_ev.param1); fl_draw(fx1_param, col_x, ry + 14);
             col_x += 3 * char_w;
             
             // FX2
             if ((int)r == m_cursor_row && (int)t == m_cursor_track && m_cursor_field == 5) {
-                fl_color(100, 100, 150); fl_rectf(col_x - 1, ry, 2 * char_w + 4, row_h);
+                fl_color((Fl_Color)m_engine.m_tracker_cursor); fl_rectf(col_x - 1, ry, 2 * char_w + 4, row_h);
+                fl_color((Fl_Color)m_engine.m_tracker_bg);
+            } else {
+                fl_color((Fl_Color)m_engine.m_tracker_effect);
             }
             char fx2_type[4]; snprintf(fx2_type, 4, "%02X", row_ev.effect2); fl_draw(fx2_type, col_x, ry + 14);
             col_x += 3 * char_w;
 
             // Param2
             if ((int)r == m_cursor_row && (int)t == m_cursor_track && m_cursor_field == 6) {
-                fl_color(100, 100, 150); fl_rectf(col_x - 1, ry, 2 * char_w + 4, row_h);
+                fl_color((Fl_Color)m_engine.m_tracker_cursor); fl_rectf(col_x - 1, ry, 2 * char_w + 4, row_h);
+                fl_color((Fl_Color)m_engine.m_tracker_bg);
+            } else {
+                fl_color((Fl_Color)m_engine.m_tracker_effect);
             }
             char fx2_param[4]; snprintf(fx2_param, 4, "%02X", row_ev.param2); fl_draw(fx2_param, col_x, ry + 14);
         }
-        fl_color(50, 50, 50); fl_line(cur_x + track_w, y(), cur_x + track_w, y() + h());
+        fl_color((Fl_Color)m_engine.m_fg_color); fl_line(cur_x + track_w, y(), cur_x + track_w, y() + h());
         cur_x += track_w + 10;
     }
     fl_pop_clip();

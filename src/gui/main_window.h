@@ -19,6 +19,7 @@ namespace disgrace_ns
     class TrackerView;
     class Track; 
     class TrackerPanel;
+    class TracksPanel;
     class InstrumentPanel;
     class MixerPanel;
     class SettingsPanel;
@@ -50,6 +51,8 @@ namespace disgrace_ns
         Fl_Tabs* m_tabs;
         Fl_Group* m_project_tab;
         Fl_Group* m_tracker_tab;
+        Fl_Group* m_tracks_tab;
+        Fl_Group* m_notation_tab;
         Fl_Group* m_mixer_tab;
         Fl_Group* m_instrument_tab;
         Fl_Group* m_settings_tab;
@@ -57,6 +60,7 @@ namespace disgrace_ns
         Fl_Check_Button* m_loop_btn;
 
         TrackerPanel* m_tracker_panel;
+        TracksPanel* m_tracks_panel;
         InstrumentPanel* m_instrument_panel;
         MixerPanel* m_mixer_panel;
         SettingsPanel* m_settings_panel;
@@ -65,6 +69,8 @@ namespace disgrace_ns
     private:
         void init_project_tab(int w, int h);
         void init_tracker_tab(int w, int h);
+        void init_tracks_tab(int w, int h);
+        void init_notation_tab(int w, int h);
         void init_instrument_tab(int w, int h);
         void init_mixer_tab(int w, int h);
         void init_settings_tab(int w, int h);

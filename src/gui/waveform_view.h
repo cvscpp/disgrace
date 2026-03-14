@@ -9,10 +9,12 @@ namespace disgrace_ns
 
     enum class ChannelMode { Both, Left, Right };
 
+    class Engine;
+
     class WaveformView : public Fl_Widget
     {
     public:
-        WaveformView(int x, int y, int w, int h);
+        WaveformView(int x, int y, int w, int h, Engine& engine);
 
         void set_sample(::std::shared_ptr<disgrace_ns::SampleData> s);
         void set_color(unsigned int c) { m_color = c; redraw(); }
@@ -31,6 +33,7 @@ namespace disgrace_ns
         size_t selection_end() const { return m_sel_end; }
 
     private:
+        Engine& m_engine;
         ::std::shared_ptr<disgrace_ns::SampleData> m_sample;
         unsigned int m_color = 0x40FF4000;
         

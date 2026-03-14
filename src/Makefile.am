@@ -20,11 +20,14 @@ disgrace_SOURCES = \
     gui/project_panel.cpp \
     gui/tab_project.cpp \
     gui/tab_tracker.cpp \
+    gui/tab_tracks.cpp \
+    gui/tab_notation.cpp \
     gui/tab_instrument.cpp \
     gui/tab_mixer.cpp \
     gui/tab_settings.cpp \
     gui/tab_help.cpp \
     gui/tracker_panel.cpp \
+    gui/tracks_panel.cpp \
     gui/instrument_panel.cpp \
     gui/mixer_panel.cpp \
     gui/settings_panel.cpp \

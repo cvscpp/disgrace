@@ -1,14 +1,15 @@
 #include "vu_meter.h"
+#include "../core/engine.h"
 #include <FL/fl_draw.H>
 #include <cmath>
 #include <algorithm>
 
 namespace disgrace_ns {
 
-VUMeter::VUMeter(int x, int y, int w, int h, const char* label, bool horizontal)
-    : Fl_Box(x, y, w, h, label), m_horizontal(horizontal) {
+VUMeter::VUMeter(int x, int y, int w, int h, Engine& engine, const char* label, bool horizontal)
+    : Fl_Box(x, y, w, h, label), m_engine(engine), m_horizontal(horizontal) {
     box(FL_FLAT_BOX);
-    color(FL_BLACK);
+    color((Fl_Color)m_engine.m_tracker_bg);
 }
 
 void VUMeter::level(float l) {
@@ -38,8 +39,8 @@ void VUMeter::draw() {
     int bw = w() - 4;
     int bh = h() - 4;
 
-    // Background
-    fl_color(FL_BLACK);
+    // Background from theme
+    fl_color((Fl_Color)m_engine.m_tracker_bg);
     fl_rectf(bx, by, bw, bh);
 
     float draw_level = std::min(m_level, 2.0f) / 1.5f;
@@ -64,7 +65,7 @@ void VUMeter::draw() {
             fl_line(bx, by + bh - peak_y, bx + bw - 1, by + bh - peak_y);
         }
         
-        fl_color(FL_GRAY0);
+        fl_color((Fl_Color)m_engine.m_tracker_lpb_highlight);
         int y_0db = (int)(bh * (1.0f / 1.5f));
         fl_line(bx - 2, by + bh - y_0db, bx + bw + 1, by + bh - y_0db);
     } else {
@@ -86,7 +87,7 @@ void VUMeter::draw() {
             fl_line(bx + peak_x, by, bx + peak_x, by + bh - 1);
         }
 
-        fl_color(FL_GRAY0);
+        fl_color((Fl_Color)m_engine.m_tracker_lpb_highlight);
         int x_0db = (int)(bw * (1.0f / 1.5f));
         fl_line(bx + x_0db, by - 2, bx + x_0db, by + bh + 1);
     }

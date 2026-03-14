@@ -2,6 +2,7 @@
 #include "theme.h"
 #include "transportbar.h"
 #include "tracker_panel.h"
+#include "tracks_panel.h"
 #include "mixer_panel.h"
 #include "instrument_panel.h"
 #include "project_panel.h"
@@ -24,6 +25,8 @@ namespace disgrace_ns
   m_tabs(nullptr),
   m_project_tab(nullptr),
   m_tracker_tab(nullptr),
+  m_tracks_tab(nullptr),
+  m_notation_tab(nullptr),
   m_mixer_tab(nullptr),
   m_instrument_tab(nullptr),
   m_settings_tab(nullptr),
@@ -40,6 +43,33 @@ namespace disgrace_ns
     m_transport = new disgrace_ns::TransportBar(0, 0, w, 40, m_engine);
 
     m_tabs = new Fl_Tabs(0, 40, w, h - 75);
+    
+    init_project_tab(w, h);
+    if (m_project_tab) m_tabs->add(m_project_tab);
+    
+    init_tracker_tab(w, h);
+    if (m_tracker_tab) m_tabs->add(m_tracker_tab);
+    
+    init_tracks_tab(w, h);
+    if (m_tracks_tab) m_tabs->add(m_tracks_tab);
+    
+    init_notation_tab(w, h);
+    if (m_notation_tab) m_tabs->add(m_notation_tab);
+    
+    init_instrument_tab(w, h);
+    if (m_instrument_tab) m_tabs->add(m_instrument_tab);
+    
+    init_mixer_tab(w, h);
+    if (m_mixer_tab) m_tabs->add(m_mixer_tab);
+    
+    init_settings_tab(w, h);
+    if (m_settings_tab) m_tabs->add(m_settings_tab);
+    
+    init_help_tab(w, h);
+    if (m_help_tab) m_tabs->add(m_help_tab);
+
+    m_tabs->end();
+
     m_tabs->callback([](Fl_Widget* w, void* d) {
         MainWindow* self = (MainWindow*)d;
         Fl_Tabs* tabs = (Fl_Tabs*)w;
@@ -48,15 +78,6 @@ namespace disgrace_ns
         }
         self->update_all_uis();
     }, this);
-    
-    init_project_tab(w, h);
-    init_tracker_tab(w, h);
-    init_instrument_tab(w, h);
-    init_mixer_tab(w, h);
-    init_settings_tab(w, h);
-    init_help_tab(w, h);
-
-    m_tabs->end();
 
     Fl::add_timeout(0.03, timer_cb, this);
 
@@ -99,6 +120,9 @@ void disgrace_ns::MainWindow::timer_cb(void* data)
     if (self->m_mixer_panel) self->m_mixer_panel->update_meters();
     if (self->m_tracker_panel && self->m_engine.transport_state() != TransportState::Stopped) 
         self->m_tracker_panel->update();
+    
+    if (self->m_tracks_panel && (self->m_engine.transport_state() != TransportState::Stopped || self->m_tabs->value() == self->m_tracks_tab))
+        self->m_tracks_panel->update();
     
     // Periodically update other UIs if needed
     // self->update_all_uis(); // Too frequent? 30ms might be okay.

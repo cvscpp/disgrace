@@ -119,7 +119,7 @@ InstrumentPanel::InstrumentPanel(int x, int y, int w, int h, Engine& engine)
     m_sample_fmt_ch->callback(cb_sample_fmt, this);
     m_sample_fmt_ch->value(0); // Stereo as default
     rec_y += 25 + margin;
-    m_waveform_view = new WaveformView(split_x + margin, y + rec_y, w - split_x - 2 * margin, 400);
+    m_waveform_view = new WaveformView(split_x + margin, y + rec_y, w - split_x - 2 * margin, 400, m_engine);
     rec_y += 400 + margin;
     m_zoom_in_btn = new Fl_Button(split_x + margin, y + rec_y, 70, 25, "Zoom +");
     m_zoom_in_btn->callback(cb_zoom_in, this);

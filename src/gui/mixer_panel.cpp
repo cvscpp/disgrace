@@ -71,8 +71,8 @@ MixerPanel::MixerPanel(int x, int y, int w, int h, Engine& engine)
     m_master_gain->value(1.0);
     m_master_gain->callback(cb_master_gain, this);
 
-    m_master_meter_l = new VUMeter(0, 0, 10, 100);
-    m_master_meter_r = new VUMeter(0, 0, 10, 100);
+    m_master_meter_l = new VUMeter(0, 0, 10, 100, m_engine);
+    m_master_meter_r = new VUMeter(0, 0, 10, 100, m_engine);
 
     m_master_mute = new Fl_Check_Button(0, 0, 35, 25, "M");
     m_master_mute->callback(cb_master_mute, this);
@@ -201,8 +201,8 @@ void MixerPanel::update_mixer_ui() {
       vol->value(m_engine.track(i).volume());
       vol->callback(cb_track_volume, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
 
-      VUMeter* meter_l = new VUMeter(20 + x_offset + vol_w, cur_y, meter_w, slider_h);
-      VUMeter* meter_r = new VUMeter(20 + x_offset + vol_w + meter_w, cur_y, meter_w, slider_h);
+      VUMeter* meter_l = new VUMeter(20 + x_offset + vol_w, cur_y, meter_w, slider_h, m_engine);
+      VUMeter* meter_r = new VUMeter(20 + x_offset + vol_w + meter_w, cur_y, meter_w, slider_h, m_engine);
       m_track_meters.push_back({meter_l, meter_r});
       cur_y += slider_h + 5;
 
@@ -282,8 +282,8 @@ void MixerPanel::update_mixer_ui() {
         vol->value(m_engine.bus(i).volume());
         vol->callback(cb_bus_volume, reg_cb(new ::std::pair<MixerPanel*,int>(this, (int)i)));
 
-        VUMeter* meter_l = new VUMeter(20 + x_offset + vol_w, cur_y, meter_w, slider_h);
-        VUMeter* meter_r = new VUMeter(20 + x_offset + vol_w + meter_w, cur_y, meter_w, slider_h);
+        VUMeter* meter_l = new VUMeter(20 + x_offset + vol_w, cur_y, meter_w, slider_h, m_engine);
+        VUMeter* meter_r = new VUMeter(20 + x_offset + vol_w + meter_w, cur_y, meter_w, slider_h, m_engine);
         m_bus_meters.push_back({meter_l, meter_r});
         cur_y += slider_h + 5;
 

@@ -1,4 +1,5 @@
 #include "waveform_view.h"
+#include "../core/engine.h"
 #include <FL/fl_draw.H>
 #include <FL/Fl.H>
 #include <algorithm>
@@ -8,8 +9,8 @@ namespace disgrace_ns
 {
 
     disgrace_ns::WaveformView::WaveformView(int x, int y,
-                               int w, int h)
-    : Fl_Widget(x,y,w,h)
+                               int w, int h, Engine& engine)
+    : Fl_Widget(x,y,w,h), m_engine(engine)
     {
     }
 
@@ -21,6 +22,7 @@ namespace disgrace_ns
         m_sel_end = 0;
         m_zoom = 1.0;
         m_offset = 0;
+        m_color = m_engine.m_waveform_color;
         redraw();
     }
 
@@ -37,11 +39,11 @@ namespace disgrace_ns
     void disgrace_ns::WaveformView::draw()
     {
         fl_push_clip(x(), y(), w(), h());
-        fl_color(20,20,20);
+        fl_color((Fl_Color)m_engine.m_tracker_bg); // Use tracker bg for consistency
         fl_rectf(x(), y(), w(), h());
 
         if (!m_sample || m_sample->left.empty()) {
-            fl_color(60, 60, 60);
+            fl_color((Fl_Color)m_engine.m_tracker_lpb_highlight);
             fl_line(x(), y() + h()/2, x() + w(), y() + h()/2);
             fl_pop_clip();
             return;
@@ -51,7 +53,7 @@ namespace disgrace_ns
         get_view_range(v_start, v_end);
         size_t v_size = v_end - v_start;
         if (v_size == 0) {
-            fl_color(60, 60, 60);
+            fl_color((Fl_Color)m_engine.m_tracker_lpb_highlight);
             fl_line(x(), y() + h()/2, x() + w(), y() + h()/2);
             fl_pop_clip();
             return;
@@ -71,18 +73,19 @@ namespace disgrace_ns
                 int x1 = (int)((double)(ds1 - v_start) * w() / v_size);
                 int x2 = (int)((double)(ds2 - v_start) * w() / v_size);
                 
-                fl_color(60, 60, 100);
+                fl_color(FL_SELECTION_COLOR);
                 fl_rectf(x() + x1, y(), x2 - x1, h());
             }
         }
 
-        fl_color(m_color);
+        m_color = m_engine.m_waveform_color;
+        fl_color((Fl_Color)m_color);
 
         if (!has_right || m_mode == ChannelMode::Left) {
             // Mono or Left Only - Draw center line
-            fl_color(60, 60, 60);
+            fl_color((Fl_Color)m_engine.m_tracker_lpb_highlight);
             fl_line(x(), y() + h()/2, x() + w(), y() + h()/2);
-            fl_color(m_color);
+            fl_color((Fl_Color)m_color);
 
             for (int px = 0; px < w(); ++px) {
                 size_t idx = v_start + (px * v_size) / w();
@@ -92,12 +95,13 @@ namespace disgrace_ns
                 int amp = int(v * (h()/2 - 5));
                 if (amp != 0) fl_line(x()+px, yy - amp, x()+px, yy + amp);
             }
+            fl_color((Fl_Color)m_engine.m_tracker_text);
             fl_draw("L", x() + 5, y() + 15);
         } else if (m_mode == ChannelMode::Right) {
             // Right Only - Draw center line
-            fl_color(60, 60, 60);
+            fl_color((Fl_Color)m_engine.m_tracker_lpb_highlight);
             fl_line(x(), y() + h()/2, x() + w(), y() + h()/2);
-            fl_color(m_color);
+            fl_color((Fl_Color)m_color);
 
             for (int px = 0; px < w(); ++px) {
                 size_t idx = v_start + (px * v_size) / w();
@@ -107,17 +111,18 @@ namespace disgrace_ns
                 int amp = int(v * (h()/2 - 5));
                 if (amp != 0) fl_line(x()+px, yy - amp, x()+px, yy + amp);
             }
+            fl_color((Fl_Color)m_engine.m_tracker_text);
             fl_draw("R", x() + 5, y() + 15);
         } else {
             // Stereo Both
             int half_h = h() / 2;
             
             // Draw center lines for both
-            fl_color(60, 60, 60);
+            fl_color((Fl_Color)m_engine.m_tracker_lpb_highlight);
             fl_line(x(), y() + half_h / 2, x() + w(), y() + half_h / 2);
             fl_line(x(), y() + half_h + half_h / 2, x() + w(), y() + half_h + half_h / 2);
             
-            fl_color(m_color);
+            fl_color((Fl_Color)m_color);
             // Left
             for (int px = 0; px < w(); ++px) {
                 size_t idx = v_start + (px * v_size) / w();
@@ -127,8 +132,10 @@ namespace disgrace_ns
                 int amp = int(v * (half_h / 2 - 5));
                 if (amp != 0) fl_line(x()+px, yy - amp, x()+px, yy + amp);
             }
+            fl_color((Fl_Color)m_engine.m_tracker_text);
             fl_draw("L", x() + 5, y() + 15);
             // Right
+            fl_color((Fl_Color)m_color);
             for (int px = 0; px < w(); ++px) {
                 size_t idx = v_start + (px * v_size) / w();
                 if (idx >= v_end) break;
@@ -137,14 +144,15 @@ namespace disgrace_ns
                 int amp = int(v * (half_h / 2 - 5));
                 if (amp != 0) fl_line(x()+px, yy - amp, x()+px, yy + amp);
             }
+            fl_color((Fl_Color)m_engine.m_tracker_text);
             fl_draw("R", x() + 5, y() + half_h + 15);
             
-            fl_color(60, 60, 60);
+            fl_color((Fl_Color)m_engine.m_tracker_lpb_highlight);
             fl_line(x(), y() + half_h, x() + w(), y() + half_h);
         }
 
         // Draw Time Markers
-        fl_color(120, 120, 120);
+        fl_color((Fl_Color)m_engine.m_tracker_text);
         fl_font(FL_HELVETICA, 8);
         
         double sr = (double)m_sample->sample_rate;

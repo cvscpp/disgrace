@@ -1,0 +1,64 @@
+#ifndef DISGRACE_CORE_CONFIG_MANAGER_H
+#define DISGRACE_CORE_CONFIG_MANAGER_H
+
+#include <string>
+#include <vector>
+#include <nlohmann/json.hpp>
+#include "../gui/theme.h"
+
+namespace disgrace_ns {
+
+struct Config {
+    // Audio/MIDI
+    uint32_t num_audio_ins = 2;
+    uint32_t num_audio_outs = 2;
+    uint32_t num_midi_ins = 1;
+    uint32_t num_midi_outs = 1;
+
+    // GUI
+    int gui_button_height = 25;
+    int gui_font_size = 12;
+    ThemeType gui_theme = ThemeType::Classic;
+    unsigned int waveform_color = 0x00FF0000;
+    unsigned int bg_color = 0xCCCCCC00;
+    unsigned int fg_color = 0x00000000;
+    unsigned int button_color = 0xCCCCCC00;
+    int boxtype = 2; // FL_UP_BOX
+    int btn_boxtype = 2; // FL_UP_BOX
+    int label_boxtype = 0; // FL_NO_BOX
+
+    // Tracker
+    unsigned int tracker_bg = 0x1E1E1E00;
+    unsigned int tracker_text = 0xC8C8C800;
+    unsigned int tracker_cursor = 0xFFFF0000;
+    unsigned int tracker_row_highlight = 0x3C3C5000;
+    unsigned int tracker_lpb_highlight = 0x2D2D3700;
+    unsigned int tracker_note = 0xB4B4FF00;
+    unsigned int tracker_sample = 0xB4FFB400;
+    unsigned int tracker_volume = 0xFFB4B400;
+    unsigned int tracker_effect = 0xFFFFB400;
+
+    // Keyboard
+    int keyboard_layout = 0; // Auto
+};
+
+class ConfigManager {
+public:
+    static ConfigManager& instance();
+
+    void load();
+    void save();
+
+    const Config& config() const { return m_config; }
+    Config& config() { return m_config; }
+
+private:
+    ConfigManager();
+    std::string get_config_path();
+
+    Config m_config;
+};
+
+} // namespace disgrace_ns
+
+#endif // DISGRACE_CORE_CONFIG_MANAGER_H

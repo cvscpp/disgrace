@@ -8,6 +8,17 @@
 
 namespace disgrace_ns {
 
+int ProjectFileBrowser::handle(int event) {
+    int ret = Fl_File_Browser::handle(event);
+    if (event == FL_PUSH && Fl::event_clicks() > 0) {
+        if (callback() && user_data()) {
+            do_callback();
+        }
+        return 1;
+    }
+    return ret;
+}
+
 ProjectPanel::ProjectPanel(int x, int y, int w, int h, Engine& engine)
     : Fl_Group(x, y, w, h), m_engine(engine) {
     
@@ -17,60 +28,57 @@ ProjectPanel::ProjectPanel(int x, int y, int w, int h, Engine& engine)
     int margin = 10;
 
     // Buttons at top left
-    int cur_y = margin;
+    int cur_y = y + margin;
     int btn_w = (left_w - 4 * margin) / 3;
 
-    m_new_btn = new Fl_Button(x + margin, y + cur_y, btn_w, 25, "New");
+    m_new_btn = new Fl_Button(x + margin, cur_y, btn_w, 25, "New");
     m_new_btn->callback(cb_new, this);
 
-    m_load_btn = new Fl_Button(x + 2 * margin + btn_w, y + cur_y, btn_w, 25, "Load");
+    m_load_btn = new Fl_Button(x + 2 * margin + btn_w, cur_y, btn_w, 25, "Load");
     m_load_btn->callback(cb_load, this);
 
-    m_save_btn = new Fl_Button(x + 3 * margin + 2 * btn_w, y + cur_y, btn_w, 25, "Save");
+    m_save_btn = new Fl_Button(x + 3 * margin + 2 * btn_w, cur_y, btn_w, 25, "Save");
     m_save_btn->callback(cb_save, this);
 
     cur_y += 25 + margin;
 
-    // Fixed control space at the bottom (Export button, 2 checkboxes, sample rate)
-    int controls_h = 25 * 3 + 10 * 3 + margin; 
-    int browser_h = h - cur_y - controls_h - margin;
+    // Adjust layout to make space for export buttons at the bottom
+    int bottom_controls_h = 130;
+    int browser_h = h - cur_y - bottom_controls_h - margin;
+    if (browser_h < 100) browser_h = 100; // Minimum browser height
     
-    m_file_browser = new Fl_File_Browser(x + margin, y + cur_y, left_w - 2 * margin, browser_h);
+    m_file_browser = new ProjectFileBrowser(x + margin, cur_y, left_w - 2 * margin, browser_h);
     m_file_browser->type(FL_HOLD_BROWSER);
     m_file_browser->load(".");
     m_file_browser->callback(cb_file_select, this);
 
     cur_y += browser_h + margin;
 
-    // Export controls
-    Fl_Box* sr_label = new Fl_Box(x + margin, y + cur_y, 160, 25, "Export Sample Rate:");
+    // Export controls now placed below the file browser
+    Fl_Box* sr_label = new Fl_Box(x + margin, cur_y, 160, 25, "Export Sample Rate:");
     sr_label->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-    m_sample_rate_ch = new Fl_Choice(x + margin + 170, y + cur_y, 100, 25);
-    m_sample_rate_ch->add("44100");
-    m_sample_rate_ch->add("48000");
-    m_sample_rate_ch->add("88200");
-    m_sample_rate_ch->add("96000");
-    m_sample_rate_ch->add("192000");
+    m_sample_rate_ch = new Fl_Choice(x + margin + 170, cur_y, 100, 25);
+    m_sample_rate_ch->add("44100|48000|88200|96000|192000");
     m_sample_rate_ch->value(0);
 
     cur_y += 25 + margin / 2;
-    m_separate_tracks_btn = new Fl_Check_Button(x + margin, y + cur_y, 200, 25, "Separate Files (per track)");
+    m_separate_tracks_btn = new Fl_Check_Button(x + margin, cur_y, 200, 25, "Separate Files (per track)");
     
     cur_y += 25 + margin / 2;
-    m_realtime_btn = new Fl_Check_Button(x + margin, y + cur_y, 200, 25, "Realtime Export (for MIDI/HW)");
+    m_realtime_btn = new Fl_Check_Button(x + margin, cur_y, 200, 25, "Realtime Export (for MIDI/HW)");
 
-    cur_y += 25 + margin / 2;
-    m_export_progress_bar = new Fl_Progress(x + margin, y + cur_y, left_w - 2 * margin, 15);
+    cur_y += 25 + margin;
+    m_export_progress_bar = new Fl_Progress(x + margin, cur_y, left_w - 2 * margin, 15);
     m_export_progress_bar->minimum(0.0f);
     m_export_progress_bar->maximum(1.0f);
     m_export_progress_bar->value(0.0f);
     m_export_progress_bar->hide();
 
-    m_export_btn = new Fl_Button(x + margin, y + h - 65, left_w - 2 * margin, 25, "Export to WAV");
-    m_export_btn->callback(cb_export, this);
-
+    // Place export buttons at the very bottom
     m_export_ly_btn = new Fl_Button(x + margin, y + h - 35, left_w - 2 * margin, 25, "Export to LilyPond");
     m_export_ly_btn->callback(cb_export_ly, this);
+    m_export_btn = new Fl_Button(x + margin, y + h - 65, left_w - 2 * margin, 25, "Export to WAV");
+    m_export_btn->callback(cb_export, this);
 
     // Right side: Tracks
     int rcur_y = margin;
@@ -424,6 +432,39 @@ void ProjectPanel::cb_export_ly(Fl_Widget*, void* data) {
     }
 }
 
-void ProjectPanel::cb_file_select(Fl_Widget*, void*) {}
+void ProjectPanel::cb_file_select(Fl_Widget* w, void* data) {
+    auto* self = static_cast<ProjectPanel*>(data);
+    auto* browser = static_cast<ProjectFileBrowser*>(w);
+    
+    if (Fl::event() == FL_PUSH) {
+        printf("cb_file_select called, event: %d, clicks: %d\n", Fl::event(), Fl::event_clicks());
 
+        if (Fl::event_clicks() > 0) { // It's a double click
+            int selected = browser->value();
+            printf("Double click detected, selected item: %d\n", selected);
+            if (selected > 0) {
+                const char* filename = browser->text(selected);
+                printf("Filename: %s\n", filename ? filename : "null");
+                if (filename && fl_filename_match(filename, "*.dg")) {
+                    const char* dir = browser->get_directory();
+                    printf("Directory: %s\n", dir ? dir : "null");
+                    if (dir) {
+                        char full_path[FL_PATH_MAX];
+                        snprintf(full_path, sizeof(full_path), "%s/%s", dir, filename);
+                        printf("Full path: %s\n", full_path);
+                        
+                        if (fl_ask("Load project %s? All unsaved changes will be lost.", filename)) {
+                            printf("Loading project...\n");
+                            self->m_engine.load_project(full_path);
+                            for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
+                                MainWindow* mw = dynamic_cast<MainWindow*>(win);
+                                if (mw) mw->update_all_uis();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 } // namespace disgrace_ns

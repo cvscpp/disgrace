@@ -14,6 +14,16 @@ namespace disgrace_ns {
 
 class Engine;
 
+class ProjectFileBrowser : public Fl_File_Browser {
+public:
+    ProjectFileBrowser(int x, int y, int w, int h, const char* l = 0) : Fl_File_Browser(x, y, w, h, l) {}
+    int handle(int event) override;
+    void load(const char* dir) { Fl_File_Browser::load(dir); directory_ = dir; }
+    const char* get_directory() const { return directory_ ? directory_ : "."; }
+private:
+    const char* directory_ = ".";
+};
+
 class ProjectPanel : public Fl_Group {
 public:
     ProjectPanel(int x, int y, int w, int h, Engine& engine);
@@ -31,7 +41,7 @@ private:
     Fl_Button* m_save_btn;
     Fl_Button* m_export_btn;
     Fl_Button* m_export_ly_btn;
-    Fl_File_Browser* m_file_browser;
+    ProjectFileBrowser* m_file_browser;
 
     Fl_Choice* m_sample_rate_ch;
     Fl_Check_Button* m_separate_tracks_btn;

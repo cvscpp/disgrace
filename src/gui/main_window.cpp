@@ -1,4 +1,5 @@
 #include "main_window.h"
+#include "theme.h"
 #include "transportbar.h"
 #include "tracker_panel.h"
 #include "mixer_panel.h"
@@ -33,6 +34,7 @@ namespace disgrace_ns
   m_settings_panel(nullptr),
   m_project_panel(nullptr)
   {
+    ThemeManager::apply_theme_and_settings(m_engine);
     begin();
 
     m_transport = new disgrace_ns::TransportBar(0, 0, w, 40, m_engine);

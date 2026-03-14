@@ -4,6 +4,7 @@ disgrace_SOURCES = \
     main.cpp \
     core/engine.cpp \
     core/engine_save.cpp \
+    core/config_manager.cpp \
     core/key_bindings.cpp \
     core/masterbus.cpp \
     core/metronome.cpp \
@@ -35,6 +36,7 @@ disgrace_SOURCES = \
     gui/transportbar.cpp \
     gui/waveform_view.cpp \
     gui/spectral_view.cpp \
+    gui/theme.cpp \
     instrument/instrument.cpp \
     instrument/instrument_rack.cpp \
     instrument/sample_instrument.cpp \

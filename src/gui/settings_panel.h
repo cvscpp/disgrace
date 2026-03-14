@@ -41,6 +41,10 @@ private:
     Fl_Choice* m_gui_btn_h;
     Fl_Choice* m_gui_font_size;
     Fl_Button* m_waveform_color_btn;
+    Fl_Button* m_bg_color_btn;
+    Fl_Button* m_fg_color_btn;
+    Fl_Choice* m_boxtype_choice;
+    Fl_Choice* m_btn_boxtype_choice;
 
     Fl_Choice* m_kbd_layout;
     Fl_Choice* m_action_choice;
@@ -63,6 +67,10 @@ private:
     static void cb_gui_btn_h(Fl_Widget*, void*);
     static void cb_gui_font_size(Fl_Widget*, void*);
     static void cb_waveform_color(Fl_Widget*, void*);
+    static void cb_bg_color(Fl_Widget*, void*);
+    static void cb_fg_color(Fl_Widget*, void*);
+    static void cb_boxtype(Fl_Widget*, void*);
+    static void cb_btn_boxtype(Fl_Widget*, void*);
     static void cb_kbd_layout(Fl_Widget*, void*);
     static void cb_assign_key(Fl_Widget*, void*);
 };

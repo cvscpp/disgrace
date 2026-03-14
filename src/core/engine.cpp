@@ -1,4 +1,5 @@
 #include "engine.h"
+#include "config_manager.h"
 #include "../audio/audio_backend.h"
 #include "../audio/jack_backend.h"
 #include "../sequencer/timing.h"
@@ -33,6 +34,34 @@ Engine::~Engine() {
 
 bool Engine::initialize() {
     if (m_initialized) return true;
+    
+    ConfigManager::instance().load();
+    const auto& conf = ConfigManager::instance().config();
+    m_num_ins = conf.num_audio_ins;
+    m_num_outs = conf.num_audio_outs;
+    m_num_midi_ins = conf.num_midi_ins;
+    m_num_midi_outs = conf.num_midi_outs;
+    m_gui_button_height = conf.gui_button_height;
+    m_gui_font_size = conf.gui_font_size;
+    m_gui_theme = conf.gui_theme;
+    m_waveform_color = conf.waveform_color;
+    m_bg_color = conf.bg_color;
+    m_fg_color = conf.fg_color;
+    m_button_color = conf.button_color;
+    m_boxtype = conf.boxtype;
+    m_btn_boxtype = conf.btn_boxtype;
+    m_label_boxtype = conf.label_boxtype;
+
+    m_tracker_bg = conf.tracker_bg;
+    m_tracker_text = conf.tracker_text;
+    m_tracker_cursor = conf.tracker_cursor;
+    m_tracker_row_highlight = conf.tracker_row_highlight;
+    m_tracker_lpb_highlight = conf.tracker_lpb_highlight;
+    m_tracker_note = conf.tracker_note;
+    m_tracker_sample = conf.tracker_sample;
+    m_tracker_volume = conf.tracker_volume;
+    m_tracker_effect = conf.tracker_effect;
+
     new_project();
     if (m_backend->start()) {
         m_initialized = true;
@@ -41,8 +70,40 @@ bool Engine::initialize() {
     return false;
 }
 
+void Engine::save_config() {
+    auto& conf = ConfigManager::instance().config();
+    conf.num_audio_ins = m_num_ins;
+    conf.num_audio_outs = m_num_outs;
+    conf.num_midi_ins = m_num_midi_ins;
+    conf.num_midi_outs = m_num_midi_outs;
+    conf.gui_button_height = m_gui_button_height;
+    conf.gui_font_size = m_gui_font_size;
+    conf.gui_theme = m_gui_theme;
+    conf.waveform_color = m_waveform_color;
+    conf.bg_color = m_bg_color;
+    conf.fg_color = m_fg_color;
+    conf.button_color = m_button_color;
+    conf.boxtype = m_boxtype;
+    conf.btn_boxtype = m_btn_boxtype;
+    conf.label_boxtype = m_label_boxtype;
+
+    conf.tracker_bg = m_tracker_bg;
+    conf.tracker_text = m_tracker_text;
+    conf.tracker_cursor = m_tracker_cursor;
+    conf.tracker_row_highlight = m_tracker_row_highlight;
+    conf.tracker_lpb_highlight = m_tracker_lpb_highlight;
+    conf.tracker_note = m_tracker_note;
+    conf.tracker_sample = m_tracker_sample;
+    conf.tracker_volume = m_tracker_volume;
+    conf.tracker_effect = m_tracker_effect;
+
+    conf.keyboard_layout = (int)m_key_bindings.get_layout();
+    ConfigManager::instance().save();
+}
+
 void Engine::shutdown() {
     if (!m_initialized) return;
+    save_config();
     m_backend->stop();
     m_initialized = false;
 }

@@ -15,6 +15,7 @@
 #include "undo_stack.h"
 #include "transport.h"
 #include "key_bindings.h"
+#include "../gui/theme.h"
 #include "../midi/midi_queue.h"
 #include "../midi/midi_input.h"
 #include "metronome.h"
@@ -48,6 +49,7 @@ public:
 
     bool initialize();
     void shutdown();
+    void save_config();
     void new_project();
     void reinitialize_audio(uint32_t num_ins = 2, uint32_t num_outs = 2,
                             uint32_t num_midi_ins = 1, uint32_t num_midi_outs = 1);
@@ -203,7 +205,25 @@ public:
 
     int m_gui_button_height = 25;
     int m_gui_font_size = 12;
-    unsigned int m_waveform_color = 0x00FF0000; 
+    ThemeType m_gui_theme = ThemeType::Classic;
+    unsigned int m_waveform_color = 0x00FF0000;
+    unsigned int m_bg_color = 0xCCCCCC00; // Standard FLTK gray
+    unsigned int m_fg_color = 0x00000000; // Black
+    unsigned int m_button_color = 0xCCCCCC00;
+    int m_boxtype = 2; // FL_UP_BOX
+    int m_btn_boxtype = 2; // FL_UP_BOX
+    int m_label_boxtype = 0; // FL_NO_BOX
+
+    // Tracker colors
+    unsigned int m_tracker_bg = 0x1E1E1E00;
+    unsigned int m_tracker_text = 0xC8C8C800;
+    unsigned int m_tracker_cursor = 0xFFFF0000;
+    unsigned int m_tracker_row_highlight = 0x3C3C5000;
+    unsigned int m_tracker_lpb_highlight = 0x2D2D3700;
+    unsigned int m_tracker_note = 0xB4B4FF00;
+    unsigned int m_tracker_sample = 0xB4FFB400;
+    unsigned int m_tracker_volume = 0xFFB4B400;
+    unsigned int m_tracker_effect = 0xFFFFB400;
 
     KeyBindings m_key_bindings;
 

@@ -1,5 +1,6 @@
 #include "settings_panel.h"
 #include "main_window.h"
+#include "theme.h"
 #include "../core/engine.h"
 #include <FL/Fl_Button.H>
 #include <FL/Fl.H>
@@ -7,33 +8,6 @@
 #include <FL/Fl_Double_Window.H>
 
 namespace disgrace_ns {
-
-// Helper function to recursively apply settings to all widgets
-void apply_to_all_widgets(Fl_Widget* w, int font_size, int btn_h) {
-    w->labelsize(font_size);
-    
-    // If it's a button, try to resize it
-    if (dynamic_cast<Fl_Button*>(w)) {
-        w->size(w->w(), btn_h); // Only height for now as width depends on layout context
-    }
-
-    // If it's a group, recurse into children
-    Fl_Group* g = w->as_group();
-    if (g) {
-        for (int i = 0; i < g->children(); i++) {
-            apply_to_all_widgets(g->child(i), font_size, btn_h);
-        }
-    }
-}
-
-void apply_gui_settings(Engine& engine) {
-    FL_NORMAL_SIZE = engine.m_gui_font_size;
-    
-    for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
-        apply_to_all_widgets(win, engine.m_gui_font_size, engine.m_gui_button_height);
-        win->redraw();
-    }
-}
 
 SettingsPanel::SettingsPanel(int x, int y, int w, int h, Engine& engine)
     : Fl_Group(x, y, w, h), m_engine(engine) {
@@ -126,12 +100,10 @@ void SettingsPanel::init_gui_grp(int x, int y, int w, int h) {
     title->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
 
     m_gui_theme = new Fl_Choice(x + 120, y + 70, 100, 25, "Theme:");
-    m_gui_theme->add("none");
-    m_gui_theme->add("base");
-    m_gui_theme->add("plastic");
-    m_gui_theme->add("gtk+");
-    m_gui_theme->add("gleam");
-    m_gui_theme->value(0);
+    for (const auto& theme : ThemeManager::get_available_themes()) {
+        m_gui_theme->add(theme.name.c_str());
+    }
+    m_gui_theme->value((int)m_engine.m_gui_theme);
     m_gui_theme->callback(cb_gui_theme, this);
     m_gui_theme->align(FL_ALIGN_LEFT);
 
@@ -160,7 +132,39 @@ void SettingsPanel::init_gui_grp(int x, int y, int w, int h) {
     m_waveform_color_btn = new Fl_Button(x + 120, y + 160, 100, 25, "Waveform Color");
     m_waveform_color_btn->callback(cb_waveform_color, this);
 
-    Fl_Check_Button* show_meters = new Fl_Check_Button(x + 20, y + 190, 150, 25, "Show Level Meters");
+    m_bg_color_btn = new Fl_Button(x + 120, y + 190, 100, 25, "Background Color");
+    m_bg_color_btn->callback(cb_bg_color, this);
+
+    m_fg_color_btn = new Fl_Button(x + 120, y + 220, 100, 25, "Foreground Color");
+    m_fg_color_btn->callback(cb_fg_color, this);
+
+    m_boxtype_choice = new Fl_Choice(x + 120, y + 250, 100, 25, "Box Type:");
+    m_boxtype_choice->add("FL_FLAT_BOX");
+    m_boxtype_choice->add("FL_UP_BOX");
+    m_boxtype_choice->add("FL_DOWN_BOX");
+    m_boxtype_choice->add("FL_BORDER_BOX");
+    m_boxtype_choice->add("FL_SHADOW_BOX");
+    m_boxtype_choice->add("FL_ROUNDED_BOX");
+    m_boxtype_choice->add("FL_PLASTIC_UP_BOX");
+    m_boxtype_choice->add("FL_GLEAM_UP_BOX");
+    m_boxtype_choice->value(ThemeManager::get_boxtype_index(m_engine.m_boxtype));
+    m_boxtype_choice->callback(cb_boxtype, this);
+    m_boxtype_choice->align(FL_ALIGN_LEFT);
+
+    m_btn_boxtype_choice = new Fl_Choice(x + 120, y + 280, 100, 25, "Btn Box:");
+    m_btn_boxtype_choice->add("FL_FLAT_BOX");
+    m_btn_boxtype_choice->add("FL_UP_BOX");
+    m_btn_boxtype_choice->add("FL_DOWN_BOX");
+    m_btn_boxtype_choice->add("FL_BORDER_BOX");
+    m_btn_boxtype_choice->add("FL_SHADOW_BOX");
+    m_btn_boxtype_choice->add("FL_ROUNDED_BOX");
+    m_btn_boxtype_choice->add("FL_PLASTIC_UP_BOX");
+    m_btn_boxtype_choice->add("FL_GLEAM_UP_BOX");
+    m_btn_boxtype_choice->value(ThemeManager::get_boxtype_index(m_engine.m_btn_boxtype));
+    m_btn_boxtype_choice->callback(cb_btn_boxtype, this);
+    m_btn_boxtype_choice->align(FL_ALIGN_LEFT);
+
+    Fl_Check_Button* show_meters = new Fl_Check_Button(x + 20, y + 310, 150, 25, "Show Level Meters");
     show_meters->value(1);
     
     m_gui_grp->end();
@@ -265,11 +269,31 @@ void SettingsPanel::cb_reinit_midi(Fl_Widget*, void* data) {
 }
 
 void SettingsPanel::cb_gui_theme(Fl_Widget* w, void* data) {
+    auto* self = static_cast<SettingsPanel*>(data);
     auto* choice = static_cast<Fl_Choice*>(w);
-    const char* theme = choice->text();
-    if (theme) {
-        Fl::scheme(theme);
-        Fl::redraw();
+    int idx = choice->value();
+    if (idx >= 0) {
+        ThemeType type = (ThemeType)idx;
+        self->m_engine.m_gui_theme = type;
+        
+        const auto& themes = ThemeManager::get_available_themes();
+        if (idx < (int)themes.size()) {
+            const auto& theme = themes[idx];
+            self->m_engine.m_bg_color = (unsigned int)theme.background;
+            self->m_engine.m_fg_color = (unsigned int)theme.foreground;
+            self->m_engine.m_boxtype = (int)theme.boxtype;
+            self->m_engine.m_btn_boxtype = (int)theme.button_boxtype;
+            // No need to update waveform_color or other engine settings unless they are part of the theme
+        }
+        
+        ThemeManager::apply_theme(type);
+        
+        // After applying theme, we might need to update font/size too
+        ThemeManager::apply_theme_and_settings(self->m_engine);
+        
+        // Update the other controls in settings panel
+        self->m_boxtype_choice->value(ThemeManager::get_boxtype_index(self->m_engine.m_boxtype));
+        self->m_btn_boxtype_choice->value(ThemeManager::get_boxtype_index(self->m_engine.m_btn_boxtype));
     }
 }
 
@@ -279,7 +303,7 @@ void SettingsPanel::cb_gui_btn_h(Fl_Widget* w, void* data) {
     const char* val = choice->text();
     if (val) {
         self->m_engine.m_gui_button_height = atoi(val);
-        apply_gui_settings(self->m_engine);
+        ThemeManager::apply_theme_and_settings(self->m_engine);
     }
 }
 
@@ -289,7 +313,7 @@ void SettingsPanel::cb_gui_font_size(Fl_Widget* w, void* data) {
     const char* val = choice->text();
     if (val) {
         self->m_engine.m_gui_font_size = atoi(val);
-        apply_gui_settings(self->m_engine);
+        ThemeManager::apply_theme_and_settings(self->m_engine);
     }
 }
 
@@ -308,6 +332,67 @@ void SettingsPanel::cb_waveform_color(Fl_Widget*, void* data) {
             MainWindow* mw = dynamic_cast<MainWindow*>(win);
             if (mw) mw->update_all_uis();
         }
+    }
+}
+
+void SettingsPanel::cb_bg_color(Fl_Widget*, void* data) {
+    auto* self = static_cast<SettingsPanel*>(data);
+    unsigned char r, g, b;
+    unsigned int c = self->m_engine.m_bg_color;
+    r = (c >> 24) & 0xFF;
+    g = (c >> 16) & 0xFF;
+    b = (c >> 8) & 0xFF;
+    
+    if (fl_color_chooser("Background Color", r, g, b)) {
+        self->m_engine.m_bg_color = fl_rgb_color(r, g, b);
+        Fl::background(r, g, b);
+        Fl::redraw();
+    }
+}
+
+void SettingsPanel::cb_fg_color(Fl_Widget*, void* data) {
+    auto* self = static_cast<SettingsPanel*>(data);
+    unsigned char r, g, b;
+    unsigned int c = self->m_engine.m_fg_color;
+    r = (c >> 24) & 0xFF;
+    g = (c >> 16) & 0xFF;
+    b = (c >> 8) & 0xFF;
+    
+    if (fl_color_chooser("Foreground Color", r, g, b)) {
+        self->m_engine.m_fg_color = fl_rgb_color(r, g, b);
+        Fl::foreground(r, g, b);
+        Fl::redraw();
+    }
+}
+
+void SettingsPanel::cb_boxtype(Fl_Widget* w, void* data) {
+    auto* self = static_cast<SettingsPanel*>(data);
+    auto* choice = static_cast<Fl_Choice*>(w);
+    int idx = choice->value();
+    if (idx >= 0) {
+        // FLTK boxtypes are defined as an enum
+        static const Fl_Boxtype bt[] = { 
+            FL_FLAT_BOX, FL_UP_BOX, FL_DOWN_BOX, FL_BORDER_BOX, 
+            FL_SHADOW_BOX, FL_ROUNDED_BOX, FL_PLASTIC_UP_BOX, FL_GLEAM_UP_BOX 
+        };
+        self->m_engine.m_boxtype = (int)bt[idx];
+        // Note: this doesn't automatically change existing widgets, but sets default for new ones
+        // or we could force it by recursion
+        Fl::redraw();
+    }
+}
+
+void SettingsPanel::cb_btn_boxtype(Fl_Widget* w, void* data) {
+    auto* self = static_cast<SettingsPanel*>(data);
+    auto* choice = static_cast<Fl_Choice*>(w);
+    int idx = choice->value();
+    if (idx >= 0) {
+        static const Fl_Boxtype bt[] = { 
+            FL_FLAT_BOX, FL_UP_BOX, FL_DOWN_BOX, FL_BORDER_BOX, 
+            FL_SHADOW_BOX, FL_ROUNDED_BOX, FL_PLASTIC_UP_BOX, FL_GLEAM_UP_BOX 
+        };
+        self->m_engine.m_btn_boxtype = (int)bt[idx];
+        Fl::redraw();
     }
 }
 

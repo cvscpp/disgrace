@@ -297,14 +297,67 @@ void Engine::process_tick()
 void Engine::handle_effect_row_start(size_t t, const TrackEvent& ev)
 {
     auto& track = m_tracks[t];
-    auto process_fx = [&](uint8_t fx, uint8_t param) {
-        if (fx == 0) return;
+    auto process_fx = [&](EffectType fx, uint8_t param) {
+        if (fx == EffectType::None) return;
         switch (fx) {
-            case 0x0F: if (param < 32) m_timing.set_speed(param); else m_timing.set_bpm(param); break;
-            case 0x0C: track.set_volume(param / 64.f); break;
-            case 0x0A: track.m_fx_state.vol_slide_up = (param >> 4); track.m_fx_state.vol_slide_down = (param & 0x0F); break;
-            case 0x03: track.m_fx_state.porta_speed = param * 0.0005f; track.m_fx_state.porta_active = true; break;
-            case 0x0E: { uint8_t sub = param >> 4; uint8_t val = param & 0x0F; if (sub == 0x9) { track.m_fx_state.retrig_ticks = val; track.m_fx_state.retrig_counter = 0; } else if (sub == 0xC) track.m_fx_state.note_cut_tick = val; break; }
+            case EffectType::SetBPM: m_timing.set_bpm(param); break;
+            case EffectType::SetSpeed: m_timing.set_speed(param); break;
+            case EffectType::SetVolume: track.set_volume(param / 127.f); break;
+            case EffectType::SetPanning: track.set_pan((param / 127.f) * 2.f - 1.f); break;
+            case EffectType::VolumeSlide: {
+                if (param <= 127) { track.m_fx_state.vol_slide_up = param; track.m_fx_state.vol_slide_down = 0; }
+                else { track.m_fx_state.vol_slide_up = 0; track.m_fx_state.vol_slide_down = param - 127; }
+                break;
+            }
+            case EffectType::Portamento: track.m_fx_state.porta_speed = param * 0.0005f; track.m_fx_state.porta_active = true; break;
+            case EffectType::Arpeggio: {
+                // Decimal: use param as packed XY (e.g., 34 -> 3 semitones and 4 semitones)
+                // or just take high/low nibble for simplicity if we still want that "feel"
+                // But let's try true decimal: param is semi1, we might need a way to set semi2.
+                // For now, let's say param / 10 is semi1, param % 10 is semi2.
+                track.m_fx_state.arp_semi1 = param / 10;
+                track.m_fx_state.arp_semi2 = param % 10;
+                break;
+            }
+            case EffectType::Vibrato: {
+                track.m_fx_state.vib_speed = (param / 10) * 0.1f;
+                track.m_fx_state.vib_depth = (param % 10) * 2.0f; 
+                break;
+            }
+            case EffectType::PitchSlide: {
+                // 1-127 up, 128-255 down
+                if (param <= 127) track.m_fx_state.pitch_slide = param * 0.1f;
+                else track.m_fx_state.pitch_slide = (param - 127) * -0.1f;
+                break;
+            }
+            case EffectType::SampleOffset: {
+                // Decimal: each unit is 1024 samples. Param 0-255.
+                track.m_fx_state.sample_offset = param * 1024;
+                break;
+            }
+            case EffectType::Retrigger: track.m_fx_state.retrig_ticks = param; track.m_fx_state.retrig_counter = 0; break;
+            case EffectType::NoteCut: track.m_fx_state.note_cut_tick = param; break;
+            case EffectType::PatternBreak: {
+                m_current_row = 0; 
+                size_t next_pos = m_order_pos.load() + 1;
+                if (next_pos < m_order.size()) {
+                    m_order_pos.store(next_pos);
+                    set_active_pattern(m_order[next_pos]);
+                } else {
+                    m_order_pos.store(m_order_start.load());
+                    if (!m_order.empty()) set_active_pattern(m_order[m_order_start.load()]);
+                }
+                break;
+            }
+            case EffectType::Jump: {
+                if (param < m_order.size()) {
+                    m_order_pos.store(param);
+                    set_active_pattern(m_order[param]);
+                    m_current_row = 0;
+                }
+                break;
+            }
+            default: break;
         }
     };
     process_fx(ev.effect1, ev.param1);

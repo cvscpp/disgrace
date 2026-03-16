@@ -26,6 +26,24 @@ namespace disgrace_ns
 
         // note cut
         int note_cut_tick = -1;
+
+        // arpeggio (decimal friendly: X is semi 1, Y is semi 2)
+        int arp_semi1 = 0;
+        int arp_semi2 = 0;
+
+        // vibrato
+        float vib_speed = 0.f;
+        float vib_depth = 0.f;
+        float vib_phase = 0.f;
+
+        // pitch slide (signed decimal)
+        float pitch_slide = 0.f;
+
+        // current base freq (for effects to modulate)
+        float base_freq = 440.f;
+
+        // sample offset (decimal: 0-255, each unit is 1024 samples)
+        size_t sample_offset = 0;
     };
 
     enum class NotationType {

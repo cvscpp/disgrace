@@ -9,9 +9,9 @@ void to_json(nlohmann::json& j, const TrackEvent& p) {
         {"note", p.note},
         {"sample", p.sample_idx},
         {"volume", p.volume},
-        {"fx1", p.effect1},
+        {"fx1", (uint8_t)p.effect1},
         {"p1", p.param1},
-        {"fx2", p.effect2},
+        {"fx2", (uint8_t)p.effect2},
         {"p2", p.param2}
     };
 }

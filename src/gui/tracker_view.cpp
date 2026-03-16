@@ -263,9 +263,9 @@ void TrackerView::delete_current_field() {
             case 0: ev.note = 255; break;
             case 1: ev.sample_idx = 0; break;
             case 2: ev.volume = 255; break;
-            case 3: ev.effect1 = 0; break;
+            case 3: ev.effect1 = EffectType::None; break;
             case 4: ev.param1 = 0; break;
-            case 5: ev.effect2 = 0; break;
+            case 5: ev.effect2 = EffectType::None; break;
             case 6: ev.param2 = 0; break;
         }
         redraw();

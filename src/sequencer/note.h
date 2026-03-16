@@ -6,12 +6,21 @@ namespace disgrace_ns
 
 enum class EffectType : uint8_t
 {
-    None,
-    SetTempo,
-    Volume,
+    None = 0,
+    SetBPM,
+    SetSpeed,
+    SetVolume,
+    VolumeSlide,
+    SetPanning,
+    Portamento,
+    Arpeggio,
+    Vibrato,
+    PitchSlide,
+    NoteCut,
+    Retrigger,
+    SampleOffset,
     PatternBreak,
-    Jump,
-    NoteCut
+    Jump
 };
 
 struct TrackEvent
@@ -21,9 +30,9 @@ struct TrackEvent
     uint8_t volume = 255;    // 255 = empty/default, 0-127 = actual
     
     // Each track row has two effect columns
-    uint8_t effect1 = 0;
+    EffectType effect1 = EffectType::None;
     uint8_t param1 = 0;
-    uint8_t effect2 = 0;
+    EffectType effect2 = EffectType::None;
     uint8_t param2 = 0;
 };
 

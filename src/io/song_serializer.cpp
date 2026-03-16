@@ -305,9 +305,9 @@ namespace disgrace_ns
                         ev.note       = jev["note"];
                         ev.sample_idx = jev["sample"];
                         ev.volume     = jev["volume"];
-                        ev.effect1    = jev["fx1"];
+                        ev.effect1    = (EffectType)jev["fx1"];
                         ev.param1     = jev["p1"];
-                        ev.effect2    = jev["fx2"];
+                        ev.effect2    = (EffectType)jev["fx2"];
                         ev.param2     = jev["p2"];
                     }
                 }

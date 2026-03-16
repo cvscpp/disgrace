@@ -161,6 +161,10 @@ void disgrace_ns::Track::note_on(uint8_t note, uint8_t velocity, size_t column_i
         return;
 
     float freq = note_to_frequency(note);
+    m_fx_state.base_freq = freq;
+
+    size_t final_offset = offset_samples + m_fx_state.sample_offset;
+    m_fx_state.sample_offset = 0; // reset for next trigger
 
     if (m_fx_state.porta_active)
     {
@@ -169,7 +173,7 @@ void disgrace_ns::Track::note_on(uint8_t note, uint8_t velocity, size_t column_i
     else
     {
         m_instrument->set_pitch(freq);
-        m_instrument->note_on(note, velocity, column_index, offset_samples, sample_index);
+        m_instrument->note_on(note, velocity, column_index, final_offset, sample_index);
         m_current_freq = freq; // Update m_current_freq on note_on
     }
 }
@@ -191,6 +195,12 @@ void disgrace_ns::Track::panic()
     m_fx_state.porta_active = false;
     m_fx_state.retrig_ticks = 0;
     m_fx_state.note_cut_tick = -1;
+    m_fx_state.arp_semi1 = 0;
+    m_fx_state.arp_semi2 = 0;
+    m_fx_state.vib_speed = 0.f;
+    m_fx_state.vib_depth = 0.f;
+    m_fx_state.pitch_slide = 0.f;
+    m_fx_state.sample_offset = 0;
 }
 
 size_t disgrace_ns::Track::total_latency() const
@@ -238,18 +248,22 @@ void disgrace_ns::Track::process_tick(uint32_t engine_current_tick) // Added nam
 {
     // --- volume slide ---
     if (m_fx_state.vol_slide_up > 0)
-        m_volume += m_fx_state.vol_slide_up * 0.01f;
+        m_volume += m_fx_state.vol_slide_up * 0.001f;
 
     if (m_fx_state.vol_slide_down > 0)
-        m_volume -= m_fx_state.vol_slide_down * 0.01f;
+        m_volume -= m_fx_state.vol_slide_down * 0.001f;
 
     if (m_volume < 0.f) m_volume = 0.f;
     if (m_volume > 1.f) m_volume = 1.f;
 
+    // --- pitch slide ---
+    if (m_fx_state.pitch_slide != 0.f)
+        m_fx_state.base_freq += m_fx_state.pitch_slide;
+
     // --- portamento ---
     if (m_fx_state.porta_active)
     {
-        float current = m_current_freq;
+        float current = m_fx_state.base_freq;
 
         if (current < m_fx_state.porta_target)
         {
@@ -264,10 +278,27 @@ void disgrace_ns::Track::process_tick(uint32_t engine_current_tick) // Added nam
                 current = m_fx_state.porta_target;
         }
 
-        m_current_freq = current;
-        m_instrument->set_pitch(current);
+        m_fx_state.base_freq = current;
     }
 
+    // --- Vibrato & Arpeggio modulations ---
+    float final_freq = m_fx_state.base_freq;
+
+    // Arpeggio
+    if (m_fx_state.arp_semi1 != 0 || m_fx_state.arp_semi2 != 0) {
+        int tick_phase = engine_current_tick % 3;
+        if (tick_phase == 1) final_freq *= powf(2.0f, m_fx_state.arp_semi1 / 12.0f);
+        else if (tick_phase == 2) final_freq *= powf(2.0f, m_fx_state.arp_semi2 / 12.0f);
+    }
+
+    // Vibrato
+    if (m_fx_state.vib_depth > 0.f) {
+        m_fx_state.vib_phase += m_fx_state.vib_speed;
+        final_freq += sinf(m_fx_state.vib_phase) * m_fx_state.vib_depth;
+    }
+
+    m_current_freq = final_freq;
+    if (m_instrument) m_instrument->set_pitch(m_current_freq);
 
     // --- retrig ---
     if (m_fx_state.retrig_ticks > 0)

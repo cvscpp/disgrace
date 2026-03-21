@@ -1,6 +1,7 @@
 #include "wx_main_window.h"
 #include "wx_transportbar.h"
 #include "wx_tracker_panel.h"
+#include "wx_tracker_view.h"
 #include "wx_tracks_panel.h"
 #include "wx_notation_panel.h"
 #include "wx_mixer_panel.h"
@@ -158,6 +159,8 @@ void WxMainWindow::OnCharHook(wxKeyEvent& event) {
         case Action::PlayPattern: m_engine.play_pattern(); break;
         case Action::PlayFromPosition: m_engine.play_from_position(m_engine.current_row()); break;
         case Action::Stop: m_engine.stop(); break;
+        case Action::Undo: m_engine.undo_stack().undo(); break;
+        case Action::Redo: m_engine.undo_stack().redo(); break;
         case Action::Record:
             m_engine.enable_record(!m_engine.m_record_enabled);
             if (m_transport) m_transport->update();
@@ -170,6 +173,36 @@ void WxMainWindow::OnCharHook(wxKeyEvent& event) {
             m_engine.set_base_octave(m_engine.base_octave() - 1);
             if (m_transport) m_transport->update();
             break;
+        case Action::MuteTrack:
+            if (m_selected_tab == 1 && m_tracker_panel) {
+                int track_idx = m_tracker_panel->get_tracker_view()->get_cursor_track();
+                m_engine.track(track_idx).set_mute(!m_engine.track(track_idx).muted());
+            }
+            break;
+        case Action::SoloTrack:
+            if (m_selected_tab == 1 && m_tracker_panel) {
+                int track_idx = m_tracker_panel->get_tracker_view()->get_cursor_track();
+                m_engine.track(track_idx).set_solo(!m_engine.track(track_idx).solo());
+            }
+            break;
+        case Action::NextOrderPos: {
+            size_t pos = m_engine.m_edit_order_pos.load();
+            if (pos < m_engine.m_order.size() - 1) {
+                m_engine.m_edit_order_pos.store(pos + 1);
+                m_engine.set_active_pattern(m_engine.m_order[pos + 1]);
+                if (m_tracker_panel) m_tracker_panel->update_pattern_list();
+            }
+            break;
+        }
+        case Action::PrevOrderPos: {
+            size_t pos = m_engine.m_edit_order_pos.load();
+            if (pos > 0) {
+                m_engine.m_edit_order_pos.store(pos - 1);
+                m_engine.set_active_pattern(m_engine.m_order[pos - 1]);
+                if (m_tracker_panel) m_tracker_panel->update_pattern_list();
+            }
+            break;
+        }
         case Action::ToggleMetronome: m_engine.toggle_metronome(); break;
         case Action::Cut: if (m_selected_tab == 4 && m_instrument_panel) m_instrument_panel->cut(); break;
         case Action::Copy: if (m_selected_tab == 4 && m_instrument_panel) m_instrument_panel->copy(); break;

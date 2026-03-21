@@ -54,7 +54,23 @@ enum class Action {
     OctaveUp,
     OctaveDown,
     NextOrderPos,
-    PrevOrderPos
+    PrevOrderPos,
+    JumpToRow0,
+    JumpToRow16,
+    JumpToRow32,
+    JumpToRow48,
+    InsertRow,
+    DeleteRow,
+    InsertPattern,
+    DeletePattern,
+    DuplicatePattern,
+    SelectAll,
+    MuteTrack,
+    SoloTrack,
+    JumpToNextColumn,
+    JumpToPrevColumn,
+    IncPatternIndex,
+    DecPatternIndex
 };
 
 enum class KeyboardLayout {

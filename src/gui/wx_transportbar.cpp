@@ -42,7 +42,7 @@ TransportBar::TransportBar(wxWindow* parent, wxWindowID id, Engine& engine)
 
     int btn_w = 60;
     int btn_h = 25;
-    int btn_spacing = 4;
+    int btn_spacing = 2;
 
     m_play = new wxButton(this, ID_PLAY, "Play", wxDefaultPosition, wxSize(btn_w, btn_h));
     main_sizer->Add(m_play, 0, wxALL, btn_spacing);
@@ -61,37 +61,36 @@ TransportBar::TransportBar(wxWindow* parent, wxWindowID id, Engine& engine)
     m_metronome->SetValue(true);
     main_sizer->Add(m_metronome, 0, wxALL, btn_spacing);
 
-    int counter_w = 35;
-    int label_w = 35;
+    int counter_w = 100;
 
-    wxStaticText* tempo_label = new wxStaticText(this, wxID_ANY, "BPM", wxDefaultPosition, wxSize(label_w, btn_h));
+    wxStaticText* tempo_label = new wxStaticText(this, wxID_ANY, "BPM");
     main_sizer->Add(tempo_label, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
 
-    m_tempo_spin = new wxSpinCtrl(this, ID_TEMPO, wxEmptyString, wxDefaultPosition, wxSize(counter_w + 30, btn_h));
+    m_tempo_spin = new wxSpinCtrl(this, ID_TEMPO, wxEmptyString, wxDefaultPosition, wxSize(counter_w, -1));
     m_tempo_spin->SetRange(30, 300);
     m_tempo_spin->SetValue((int)m_engine.tempo());
     main_sizer->Add(m_tempo_spin, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
 
-    wxStaticText* lpb_label = new wxStaticText(this, wxID_ANY, "LPB", wxDefaultPosition, wxSize(label_w, btn_h));
+    wxStaticText* lpb_label = new wxStaticText(this, wxID_ANY, "LPB");
     main_sizer->Add(lpb_label, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
 
-    m_lpb_spin = new wxSpinCtrl(this, ID_LPB, wxEmptyString, wxDefaultPosition, wxSize(counter_w + 30, btn_h));
+    m_lpb_spin = new wxSpinCtrl(this, ID_LPB, wxEmptyString, wxDefaultPosition, wxSize(counter_w, -1));
     m_lpb_spin->SetRange(1, 128);
     m_lpb_spin->SetValue((int)m_engine.lpb());
     main_sizer->Add(m_lpb_spin, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
 
-    wxStaticText* oct_label = new wxStaticText(this, wxID_ANY, "Oct", wxDefaultPosition, wxSize(label_w, btn_h));
+    wxStaticText* oct_label = new wxStaticText(this, wxID_ANY, "Oct");
     main_sizer->Add(oct_label, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
 
-    m_octave_spin = new wxSpinCtrl(this, ID_OCTAVE, wxEmptyString, wxDefaultPosition, wxSize(counter_w + 30, btn_h));
+    m_octave_spin = new wxSpinCtrl(this, ID_OCTAVE, wxEmptyString, wxDefaultPosition, wxSize(counter_w, -1));
     m_octave_spin->SetRange(0, 9);
     m_octave_spin->SetValue((int)m_engine.base_octave());
     main_sizer->Add(m_octave_spin, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
 
-    wxStaticText* step_label = new wxStaticText(this, wxID_ANY, "Step", wxDefaultPosition, wxSize(label_w, btn_h));
+    wxStaticText* step_label = new wxStaticText(this, wxID_ANY, "Step");
     main_sizer->Add(step_label, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
 
-    m_step_spin = new wxSpinCtrl(this, ID_STEP, wxEmptyString, wxDefaultPosition, wxSize(counter_w + 30, btn_h));
+    m_step_spin = new wxSpinCtrl(this, ID_STEP, wxEmptyString, wxDefaultPosition, wxSize(counter_w, -1));
     m_step_spin->SetRange(1, 64);
     m_step_spin->SetValue(1);
     main_sizer->Add(m_step_spin, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
@@ -118,7 +117,7 @@ TransportBar::TransportBar(wxWindow* parent, wxWindowID id, Engine& engine)
     wxFont mini_font = l_lbl->GetFont(); mini_font.SetPointSize(8); l_lbl->SetFont(mini_font);
     l_row->Add(l_lbl, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
     m_meter_l = new VUMeter(this, wxID_ANY, m_engine, true);
-    m_meter_l->SetMinSize(wxSize(120, 8));
+    m_meter_l->SetMinSize(wxSize(80, 8));
     l_row->Add(m_meter_l, 1, wxEXPAND);
     meter_stack->Add(l_row, 1, wxEXPAND | wxBOTTOM, 1);
 
@@ -127,7 +126,7 @@ TransportBar::TransportBar(wxWindow* parent, wxWindowID id, Engine& engine)
     r_lbl->SetFont(mini_font);
     r_row->Add(r_lbl, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
     m_meter_r = new VUMeter(this, wxID_ANY, m_engine, true);
-    m_meter_r->SetMinSize(wxSize(120, 8));
+    m_meter_r->SetMinSize(wxSize(80, 8));
     r_row->Add(m_meter_r, 1, wxEXPAND);
     meter_stack->Add(r_row, 1, wxEXPAND);
 
@@ -175,10 +174,10 @@ void TransportBar::on_step(wxSpinEvent& event) {
 }
 
 void TransportBar::update() {
-    m_tempo_spin->SetValue((int)m_engine.tempo());
-    m_lpb_spin->SetValue((int)m_engine.lpb());
-    m_octave_spin->SetValue(m_engine.base_octave());
-    m_step_spin->SetValue((int)m_engine.step_size());
+    if (!m_tempo_spin->HasFocus()) m_tempo_spin->SetValue((int)m_engine.tempo());
+    if (!m_lpb_spin->HasFocus()) m_lpb_spin->SetValue((int)m_engine.lpb());
+    if (!m_octave_spin->HasFocus()) m_octave_spin->SetValue(m_engine.base_octave());
+    if (!m_step_spin->HasFocus()) m_step_spin->SetValue((int)m_engine.step_size());
     m_record->SetValue(m_engine.m_record_enabled);
 
     auto state = m_engine.transport_state();

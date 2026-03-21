@@ -5,10 +5,17 @@ namespace disgrace_ns {
 
 static const int WXK_SPACE = 32;
 static const int WXK_DELETE = 127;
+static const int WXK_BACK = 8;
+static const int WXK_INSERT = 322;
+static const int WXK_ESCAPE = 27;
+static const int WXK_GRAVE = 96;
+static const int WXK_BACKSLASH = 92;
 static const int WXK_UP = 315;
 static const int WXK_DOWN = 317;
 static const int WXK_LEFT = 314;
 static const int WXK_RIGHT = 316;
+static const int WXK_NUMPAD_MULTIPLY = 389;
+static const int WXK_NUMPAD_DIVIDE = 391;
 
 static const int WXK_F1 = 340;
 static const int WXK_F2 = 341;
@@ -89,9 +96,12 @@ void KeyBindings::set_defaults() {
     add_default(Action::PlayFromPosition, WXK_F7);
     add_default(Action::Stop, WXK_F8);
     add_default(Action::Record, 'r');
+    add_default(Action::Record, WXK_ESCAPE);
     add_default(Action::ToggleMetronome, 'm');
+    add_default(Action::ToggleMetronome, WXK_GRAVE);
     add_default(Action::Undo, 'z', WXK_CTRL);
     add_default(Action::Redo, 'y', WXK_CTRL);
+    add_default(Action::Redo, 'z', WXK_CTRL | WXK_SHIFT);
     add_default(Action::Copy, 'c', WXK_CTRL);
     add_default(Action::Cut, 'x', WXK_CTRL);
     add_default(Action::Paste, 'v', WXK_CTRL);
@@ -131,12 +141,34 @@ void KeyBindings::set_defaults() {
     add_default(Action::NoteB2,  'u');
     add_default(Action::NoteC3,  'i');
 
-    add_default(Action::NextPattern, WXK_F12);
-    add_default(Action::PrevPattern, WXK_F11);
+    add_default(Action::JumpToRow0,  WXK_F9);
+    add_default(Action::JumpToRow16, WXK_F10);
+    add_default(Action::JumpToRow32, WXK_F11);
+    add_default(Action::JumpToRow48, WXK_F12);
+
     add_default(Action::OctaveUp,    ']');
+    add_default(Action::OctaveUp,    WXK_NUMPAD_MULTIPLY);
     add_default(Action::OctaveDown,  '[');
-    add_default(Action::NextOrderPos, WXK_RIGHT, WXK_ALT);
-    add_default(Action::PrevOrderPos, WXK_LEFT, WXK_ALT);
+    add_default(Action::OctaveDown,  WXK_NUMPAD_DIVIDE);
+
+    add_default(Action::InsertRow,   WXK_INSERT);
+    add_default(Action::DeleteRow,   WXK_BACK);
+
+    add_default(Action::InsertPattern,    WXK_INSERT, WXK_CTRL);
+    add_default(Action::DeletePattern,    WXK_DELETE, WXK_CTRL);
+    add_default(Action::DuplicatePattern, 'k', WXK_CTRL);
+    add_default(Action::SelectAll,        'a', WXK_CTRL);
+
+    add_default(Action::MuteTrack,        WXK_BACKSLASH);
+    add_default(Action::SoloTrack,        WXK_BACKSLASH, WXK_CTRL);
+
+    add_default(Action::JumpToNextColumn, 9); // TAB
+    add_default(Action::JumpToPrevColumn, 9, WXK_SHIFT); // Shift+TAB
+
+    add_default(Action::IncPatternIndex, WXK_RIGHT, WXK_CTRL);
+    add_default(Action::DecPatternIndex, WXK_LEFT, WXK_CTRL);
+    add_default(Action::NextOrderPos,    WXK_DOWN, WXK_CTRL);
+    add_default(Action::PrevOrderPos,    WXK_UP, WXK_CTRL);
 }
 
 Action KeyBindings::get_action(int key, int modifiers) const {
@@ -213,6 +245,22 @@ std::string KeyBindings::get_action_name(Action action) const {
         case Action::OctaveDown: return "Decrease Octave";
         case Action::NextOrderPos: return "Next Order Position";
         case Action::PrevOrderPos: return "Previous Order Position";
+        case Action::JumpToRow0: return "Jump to Row 0";
+        case Action::JumpToRow16: return "Jump to Row 16";
+        case Action::JumpToRow32: return "Jump to Row 32";
+        case Action::JumpToRow48: return "Jump to Row 48";
+        case Action::InsertRow: return "Insert Row";
+        case Action::DeleteRow: return "Delete Row";
+        case Action::InsertPattern: return "Insert Pattern";
+        case Action::DeletePattern: return "Delete Pattern";
+        case Action::DuplicatePattern: return "Duplicate Pattern";
+        case Action::SelectAll: return "Select All";
+        case Action::MuteTrack: return "Mute Track";
+        case Action::SoloTrack: return "Solo Track";
+        case Action::JumpToNextColumn: return "Jump to Next Column";
+        case Action::JumpToPrevColumn: return "Jump to Previous Column";
+        case Action::IncPatternIndex: return "Increase Pattern Index";
+        case Action::DecPatternIndex: return "Decrease Pattern Index";
     }
     return "Unknown";
 }

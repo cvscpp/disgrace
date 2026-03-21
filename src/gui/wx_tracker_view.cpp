@@ -517,6 +517,108 @@ bool TrackerView::handle_action(Action action) {
         case Action::NoteAs2: note = 22; break;
         case Action::NoteB2: note = 23; break;
         case Action::NoteC3: note = 24; break;
+        
+        case Action::JumpToRow0:  m_cursor_row = 0; Refresh(); return true;
+        case Action::JumpToRow16: m_cursor_row = 16; clamp_cursor(); Refresh(); return true;
+        case Action::JumpToRow32: m_cursor_row = 32; clamp_cursor(); Refresh(); return true;
+        case Action::JumpToRow48: m_cursor_row = 48; clamp_cursor(); Refresh(); return true;
+
+        case Action::JumpToNextColumn: {
+            int num_cols = (int)m_pattern->column_count(m_cursor_track);
+            m_cursor_col++;
+            if (m_cursor_col >= num_cols) {
+                m_cursor_col = 0;
+                m_cursor_track++;
+                if (m_cursor_track >= (int)m_engine.track_count()) m_cursor_track = 0;
+            }
+            m_cursor_field = 0;
+            ensure_cursor_visible(); Refresh(); return true;
+        }
+        case Action::JumpToPrevColumn: {
+            m_cursor_col--;
+            if (m_cursor_col < 0) {
+                m_cursor_track--;
+                if (m_cursor_track < 0) m_cursor_track = (int)m_engine.track_count() - 1;
+                m_cursor_col = (int)m_pattern->column_count(m_cursor_track) - 1;
+            }
+            m_cursor_field = 0;
+            ensure_cursor_visible(); Refresh(); return true;
+        }
+
+        case Action::IncPatternIndex: {
+            size_t pos = m_engine.m_edit_order_pos.load();
+            auto order = m_engine.order_list();
+            if (pos < order.size()) {
+                if (order[pos] < m_engine.pattern_count() - 1) {
+                    order[pos]++;
+                    m_engine.set_order(order);
+                    m_engine.set_active_pattern(order[pos]);
+                    set_pattern(m_engine.pattern());
+                    Refresh();
+                }
+            }
+            return true;
+        }
+        case Action::DecPatternIndex: {
+            size_t pos = m_engine.m_edit_order_pos.load();
+            auto order = m_engine.order_list();
+            if (pos < order.size()) {
+                if (order[pos] > 0) {
+                    order[pos]--;
+                    m_engine.set_order(order);
+                    m_engine.set_active_pattern(order[pos]);
+                    set_pattern(m_engine.pattern());
+                    Refresh();
+                }
+            }
+            return true;
+        }
+
+        case Action::SelectAll:
+            m_sel_active = true;
+            m_sel_start_track = 0; m_sel_start_row = 0;
+            m_sel_end_track = (int)m_engine.track_count() - 1;
+            m_sel_end_row = (int)m_pattern->row_count() - 1;
+            Refresh();
+            return true;
+
+        case Action::Clear:
+            if (m_engine.m_record_enabled.load()) {
+                delete_current_field();
+                return true;
+            }
+            break;
+
+        case Action::InsertRow:
+            if (m_engine.m_record_enabled.load()) {
+                m_pattern->insert_row(m_cursor_row);
+                Refresh(); return true;
+            }
+            break;
+        case Action::DeleteRow:
+            if (m_engine.m_record_enabled.load()) {
+                m_pattern->delete_row(m_cursor_row);
+                Refresh(); return true;
+            }
+            break;
+
+        case Action::InsertPattern:
+            m_engine.add_pattern_to_order();
+            Refresh(); return true;
+        case Action::DeletePattern: {
+            size_t pos = m_engine.m_edit_order_pos.load();
+            m_engine.remove_pattern_from_order(pos);
+            if (pos >= m_engine.m_order.size() && pos > 0) m_engine.m_edit_order_pos.store(pos - 1);
+            if (!m_engine.m_order.empty()) m_engine.set_active_pattern(m_engine.m_order[m_engine.m_edit_order_pos.load()]);
+            set_pattern(m_engine.pattern());
+            Refresh(); return true;
+        }
+        case Action::DuplicatePattern: {
+            size_t pos = m_engine.m_edit_order_pos.load();
+            m_engine.copy_pattern_in_order(pos);
+            Refresh(); return true;
+        }
+
         default: return false;
     }
 

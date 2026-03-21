@@ -71,6 +71,9 @@ public:
         m_tracks.resize(new_tracks, TrackData(1));
     }
 
+    void insert_row(size_t row);
+    void delete_row(size_t row);
+
 private:
     size_t m_row_count;
     std::vector<TrackData> m_tracks;

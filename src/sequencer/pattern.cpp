@@ -42,4 +42,36 @@ nlohmann::json Pattern::to_json() const
     return j;
 }
 
+void Pattern::insert_row(size_t row) {
+    if (row >= m_row_count) return;
+    for (auto& track : m_tracks) {
+        // Shift rows down from the end up to the inserted row
+        for (size_t r = m_row_count - 1; r > row; --r) {
+            for (size_t c = 0; c < MAX_COLS; ++c) {
+                track.data[r * MAX_COLS + c] = track.data[(r - 1) * MAX_COLS + c];
+            }
+        }
+        // Clear the inserted row
+        for (size_t c = 0; c < MAX_COLS; ++c) {
+            track.data[row * MAX_COLS + c] = TrackEvent();
+        }
+    }
+}
+
+void Pattern::delete_row(size_t row) {
+    if (row >= m_row_count) return;
+    for (auto& track : m_tracks) {
+        // Shift rows up from the deleted row to the end
+        for (size_t r = row; r < m_row_count - 1; ++r) {
+            for (size_t c = 0; c < MAX_COLS; ++c) {
+                track.data[r * MAX_COLS + c] = track.data[(r + 1) * MAX_COLS + c];
+            }
+        }
+        // Clear the last row
+        for (size_t c = 0; c < MAX_COLS; ++c) {
+            track.data[(m_row_count - 1) * MAX_COLS + c] = TrackEvent();
+        }
+    }
+}
+
 } // namespace disgrace_ns

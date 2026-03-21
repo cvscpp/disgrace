@@ -29,7 +29,7 @@ bool DisgraceApp::OnInit() {
             return false;
         }
 
-        m_window = new WxMainWindow(1024, 768, "Disgrace", *m_engine);
+        m_window = new WxMainWindow(1280, 800, "Disgrace", *m_engine);
         m_window->Show(true);
 
         return true;

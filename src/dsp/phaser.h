@@ -11,6 +11,7 @@ class PhaserDSP : public disgrace_ns::DSP
 {
 public:
     PhaserDSP() {
+        m_current_preset = "Slow Sweep";
         m_ap_l.resize(4, 0.0f);
         m_ap_r.resize(4, 0.0f);
     }
@@ -87,6 +88,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "Slow Sweep") { rate = 0.1f; depth = 0.7f; feedback = 0.5f; mix = 0.5f; }
         else if (name == "Fast Wobble") { rate = 0.8f; depth = 0.3f; feedback = 0.2f; mix = 0.5f; }
         else if (name == "Deep Space") { rate = 0.05f; depth = 0.9f; feedback = 0.8f; mix = 0.6f; }

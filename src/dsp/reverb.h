@@ -11,6 +11,7 @@ class ReverbDSP : public disgrace_ns::DSP
 {
 public:
     ReverbDSP() {
+        m_current_preset = "Small Room";
         // Simple Schroeder Reverb initialization
         // Comb filters
         m_combs_l.resize(4);
@@ -88,6 +89,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "Small Room") { room_size = 0.3f; damp = 0.5f; mix = 0.2f; }
         else if (name == "Large Hall") { room_size = 0.7f; damp = 0.2f; mix = 0.4f; }
         else if (name == "Cathedral") { room_size = 0.9f; damp = 0.1f; mix = 0.5f; }

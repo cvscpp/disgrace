@@ -9,6 +9,7 @@ namespace disgrace_ns
 class LimiterDSP : public disgrace_ns::DSP
 {
 public:
+    LimiterDSP() { m_current_preset = "Safe Ceiling"; }
     float ceiling = 0.95f;
     float threshold = 0.95f;
     float release = 0.999f;
@@ -64,6 +65,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "Safe Ceiling") { ceiling = 0.95f; threshold = 0.90f; release = 0.999f; }
         else if (name == "Hard Wall") { ceiling = 1.0f; threshold = 1.0f; release = 0.99f; }
         else if (name == "Soft Limiter") { ceiling = 0.90f; threshold = 0.70f; release = 0.9995f; }

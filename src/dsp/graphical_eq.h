@@ -57,6 +57,7 @@ public:
     };
 
     GraphicalEQDSP() {
+        m_current_preset = "Flat";
         m_frequencies = {32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 12000, 16000, 20000};
         m_gains.fill(0.0f);
         m_filters.resize(NUM_BANDS);
@@ -124,6 +125,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "Flat") { m_gains.fill(0.0f); }
         else if (name == "Bass Boost") { m_gains.fill(0.0f); m_gains[0]=6; m_gains[1]=5; m_gains[2]=3; }
         else if (name == "Treble Boost") { m_gains.fill(0.0f); m_gains[8]=3; m_gains[9]=5; m_gains[10]=6; m_gains[11]=6; }

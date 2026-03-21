@@ -11,6 +11,7 @@ class ChorusDSP : public disgrace_ns::DSP
 {
 public:
     ChorusDSP() {
+        m_current_preset = "Subtle Width";
         m_buf_l.resize(4096, 0.0f);
         m_buf_r.resize(4096, 0.0f);
     }
@@ -77,6 +78,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "Subtle Width") { rate = 0.1f; depth = 0.3f; feedback = 0.1f; mix = 0.3f; }
         else if (name == "Deep Lush") { rate = 0.2f; depth = 0.7f; feedback = 0.3f; mix = 0.5f; }
         else if (name == "Vibrato Chorus") { rate = 0.8f; depth = 0.5f; feedback = 0.0f; mix = 0.7f; }

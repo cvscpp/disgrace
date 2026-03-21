@@ -10,6 +10,7 @@ namespace disgrace_ns
 class CompressorDSP : public disgrace_ns::DSP
 {
 public:
+    CompressorDSP() { m_current_preset = "Gentle Master"; }
     float threshold = 0.5f; // 0 to 1
     float ratio = 4.0f;     // 1 to 20
     float attack = 0.01f;   // seconds
@@ -78,6 +79,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "Gentle Master") { threshold = 0.8f; ratio = 2.0f; attack = 0.05f; release = 0.2f; makeup = 1.1f; }
         else if (name == "Punchy Drums") { threshold = 0.5f; ratio = 4.0f; attack = 0.01f; release = 0.1f; makeup = 1.2f; }
         else if (name == "Vocal Leveler") { threshold = 0.6f; ratio = 3.0f; attack = 0.02f; release = 0.3f; makeup = 1.1f; }

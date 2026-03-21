@@ -78,6 +78,7 @@ public:
     };
 
     CabinetDSP() {
+        m_current_preset = "4 x 12\"";
         m_filters.resize(3);
         update_filters();
     }
@@ -134,6 +135,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "1 x 12\"") { low_cut = 100; high_cut = 5000; peak_freq = 2500; peak_gain = 3; }
         else if (name == "2 x 12\"") { low_cut = 90; high_cut = 6000; peak_freq = 3000; peak_gain = 2; }
         else if (name == "4 x 12\"") { low_cut = 80; high_cut = 5000; peak_freq = 2000; peak_gain = 4; }

@@ -10,6 +10,7 @@ namespace disgrace_ns
 class GateDSP : public disgrace_ns::DSP
 {
 public:
+    GateDSP() { m_current_preset = "Noise Floor"; }
     float threshold = 0.1f; // 0 to 1
     float range = 0.0f;     // 0 to 1 (0 is total silence when closed)
     float attack = 0.01f;   // seconds
@@ -70,6 +71,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "Noise Floor") { threshold = 0.05f; range = 0.0f; attack = 0.01f; release = 0.1f; }
         else if (name == "Tight Drums") { threshold = 0.2f; range = 0.0f; attack = 0.001f; release = 0.05f; }
         else if (name == "Hard Cut") { threshold = 0.5f; range = 0.0f; attack = 0.001f; release = 0.01f; }

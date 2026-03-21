@@ -9,6 +9,7 @@ namespace disgrace_ns
 class ExciterDSP : public disgrace_ns::DSP
 {
 public:
+    ExciterDSP() { m_current_preset = "Master Polish"; }
     float threshold = 0.5f;
     float amount = 0.3f;
     float freq = 0.5f; // High-pass cutoff proxy
@@ -63,6 +64,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "Vocal Air") { amount = 0.4f; freq = 0.8f; }
         else if (name == "Drum Crisp") { amount = 0.6f; freq = 0.6f; }
         else if (name == "Master Polish") { amount = 0.2f; freq = 0.7f; }

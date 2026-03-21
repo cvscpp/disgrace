@@ -11,6 +11,7 @@ class FlangerDSP : public disgrace_ns::DSP
 {
 public:
     FlangerDSP() {
+        m_current_preset = "Classic Flange";
         m_buf_l.resize(2048, 0.0f);
         m_buf_r.resize(2048, 0.0f);
     }
@@ -72,6 +73,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "Classic Flange") { rate = 0.2f; depth = 0.5f; feedback = 0.5f; mix = 0.5f; }
         else if (name == "Deep Jet") { rate = 0.1f; depth = 0.9f; feedback = 0.8f; mix = 0.6f; }
         else if (name == "Metallic Wobble") { rate = 0.9f; depth = 0.2f; feedback = 0.9f; mix = 0.7f; }

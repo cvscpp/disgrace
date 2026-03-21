@@ -9,6 +9,7 @@ namespace disgrace_ns
 class RingModulatorDSP : public disgrace_ns::DSP
 {
 public:
+    RingModulatorDSP() { m_current_preset = "Metallic Ring"; }
     float freq = 0.2f; // Proxy for modulation frequency
     float mix = 1.0f;
 
@@ -54,6 +55,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "Robot Voice") { freq = 0.4f; mix = 1.0f; }
         else if (name == "Alien Bell") { freq = 0.8f; mix = 0.7f; }
         else if (name == "Metallic Ring") { freq = 0.2f; mix = 0.5f; }

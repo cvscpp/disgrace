@@ -10,6 +10,7 @@ class EchoDSP : public disgrace_ns::DSP
 {
 public:
     EchoDSP() {
+        m_current_preset = "Analog Echo";
         m_buf_l.resize(96000, 0.0f);
         m_buf_r.resize(96000, 0.0f);
     }
@@ -73,6 +74,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "Warm Slap") { time = 0.1f; feedback = 0.2f; damp = 0.5f; mix = 0.4f; }
         else if (name == "Analog Echo") { time = 0.4f; feedback = 0.6f; damp = 0.4f; mix = 0.3f; }
         else if (name == "Damped Repeats") { time = 0.3f; feedback = 0.8f; damp = 0.8f; mix = 0.5f; }

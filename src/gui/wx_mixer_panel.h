@@ -2,6 +2,7 @@
 
 #include <wx/panel.h>
 #include <wx/button.h>
+#include <wx/choice.h>
 #include <wx/slider.h>
 #include <wx/checkbox.h>
 #include <wx/listbox.h>
@@ -30,6 +31,7 @@ private:
     Engine& m_engine;
     int m_selected_track = -1;
     int m_selected_fx_slot = -1;
+    bool m_is_updating_ui = false;
 
     wxSplitterWindow* m_splitter;
     wxPanel* m_upper_pane;

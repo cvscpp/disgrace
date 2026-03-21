@@ -9,6 +9,7 @@ namespace disgrace_ns
 class DelayDSP : public disgrace_ns::DSP
 {
 public:
+    DelayDSP() { m_current_preset = "Default"; }
     static constexpr size_t MAX_DELAY = 48000;
 
     float feedback = 0.4f;
@@ -57,6 +58,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "Default") { feedback = 0.4f; mix = 0.3f; }
         else if (name == "Slapback") { feedback = 0.1f; mix = 0.5f; m_pos = (m_pos + MAX_DELAY - 2000) % MAX_DELAY; }
         else if (name == "Long Eco") { feedback = 0.6f; mix = 0.4f; }

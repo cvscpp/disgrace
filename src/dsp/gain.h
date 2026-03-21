@@ -8,6 +8,7 @@ namespace disgrace_ns
 class GainDSP : public disgrace_ns::DSP
 {
 public:
+    GainDSP() { m_current_preset = "Unity"; }
     float gain = 1.0f;
 
     std::string name() const override { return "Gain"; }
@@ -43,6 +44,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "Unity") gain = 1.0f;
         else if (name == "Silent") gain = 0.0f;
         else if (name == "Boost (+6dB)") gain = 2.0f;

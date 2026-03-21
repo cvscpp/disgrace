@@ -352,6 +352,7 @@ void MixerPanel::update_meters() {
 }
 
 void MixerPanel::update_effect_editor() {
+    m_is_updating_ui = true;
     m_fx_chain_group->DestroyChildren();
     m_fx_params_group->DestroyChildren();
 
@@ -450,6 +451,30 @@ void MixerPanel::update_effect_editor() {
         header->SetFont(font);
         params_sizer->Add(header, 0, wxALL, 5);
 
+        // Presets Dropdown
+        auto presets = dsp->get_presets();
+        wxChoice* p_choice = nullptr;
+        if (!presets.empty()) {
+            wxBoxSizer* p_row = new wxBoxSizer(wxHORIZONTAL);
+            p_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "Preset:", wxDefaultPosition, wxSize(80, -1)), 0, wxALL, 5);
+            p_choice = new wxChoice(m_fx_params_group, wxID_ANY, wxDefaultPosition, wxSize(200, -1));
+            for (const auto& p : presets) p_choice->Append(p);
+            p_choice->Append("Manual"); // Add manual entry
+            
+            const std::string& cur = dsp->current_preset();
+            if (!p_choice->SetStringSelection(cur)) {
+                p_choice->SetStringSelection("Manual");
+            }
+
+            p_choice->Bind(wxEVT_CHOICE, [this, dsp](wxCommandEvent& ev) {
+                if (m_is_updating_ui) return;
+                dsp->load_preset(ev.GetString().ToStdString());
+                update_effect_editor();
+            });
+            p_row->Add(p_choice, 1, wxEXPAND | wxALL, 5);
+            params_sizer->Add(p_row, 0, wxEXPAND | wxALL, 2);
+        }
+
         // Helper to add sliders
         auto add_slider = [&](const wxString& label, float min, float max, float val, std::function<void(float)> setter) {
             wxBoxSizer* s_row = new wxBoxSizer(wxHORIZONTAL);
@@ -461,10 +486,13 @@ void MixerPanel::update_effect_editor() {
             float normalized = (val - min) / (max - min);
             sl->SetValue((int)(normalized * steps));
             
-            sl->Bind(wxEVT_SLIDER, [min, max, steps, setter](wxCommandEvent& ev) {
+            sl->Bind(wxEVT_SLIDER, [this, dsp, p_choice, min, max, steps, setter](wxCommandEvent& ev) {
+                if (m_is_updating_ui) return;
                 float v = (float)ev.GetInt() / (float)steps; // 0..1
                 float final_val = min + v * (max - min);
                 setter(final_val);
+                dsp->set_current_preset("Manual");
+                if (p_choice) p_choice->SetStringSelection("Manual");
             });
             s_row->Add(sl, 1, wxEXPAND | wxALL, 5);
             params_sizer->Add(s_row, 0, wxEXPAND | wxALL, 2);
@@ -513,8 +541,11 @@ void MixerPanel::update_effect_editor() {
                 wxBoxSizer* band_sizer = new wxBoxSizer(wxVERTICAL);
                 wxSlider* s = new wxSlider(m_fx_params_group, wxID_ANY, 0, -120, 120, wxDefaultPosition, wxSize(-1, 100), wxSL_VERTICAL | wxSL_INVERSE);
                 s->SetValue((int)(geq->get_band_gain(b) * 10.0f));
-                s->Bind(wxEVT_SLIDER, [geq, b](wxCommandEvent& ev){
+                s->Bind(wxEVT_SLIDER, [this, dsp, geq, b, p_choice](wxCommandEvent& ev){
+                    if (m_is_updating_ui) return;
                     geq->set_band_gain(b, (float)ev.GetInt() / 10.0f);
+                    dsp->set_current_preset("Manual");
+                    if (p_choice) p_choice->SetStringSelection("Manual");
                 });
                 band_sizer->Add(s, 1, wxEXPAND | wxALL, 2);
                 
@@ -558,7 +589,9 @@ void MixerPanel::update_effect_editor() {
     }
 
     m_fx_params_group->SetSizer(params_sizer);
+    m_fx_params_group->Layout();
     m_fx_params_group->FitInside();
+    m_is_updating_ui = false;
 }
 
 void MixerPanel::on_master_gain(wxCommandEvent& event) {

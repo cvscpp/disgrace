@@ -10,6 +10,7 @@ namespace disgrace_ns
 class DistortionDSP : public disgrace_ns::DSP
 {
 public:
+    DistortionDSP() { m_current_preset = "Mild Overdrive"; }
     float drive = 0.5f; // 0 to 1
     float mix = 1.0f;   // 0 to 1
 
@@ -58,6 +59,7 @@ public:
     }
 
     void load_preset(const std::string& name) override {
+        m_current_preset = name;
         if (name == "Mild Overdrive") { drive = 0.2f; mix = 0.8f; }
         else if (name == "Crunch") { drive = 0.5f; mix = 1.0f; }
         else if (name == "Heavy Fuzz") { drive = 0.8f; mix = 1.0f; }

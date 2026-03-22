@@ -1,4 +1,5 @@
 #pragma once
+#include <map>
 #include "instrument.h"
 #include "../audio/sample_voice.h"
 
@@ -42,10 +43,21 @@ namespace disgrace_ns
         void set_selected_sample(size_t index) { m_selected_sample_index = index; }
         size_t selected_sample() const { return m_selected_sample_index; }
 
+        void push_undo(size_t index);
+        void undo(size_t index);
+        void redo(size_t index);
+        bool can_undo(size_t index) const;
+        bool can_redo(size_t index) const;
+
     protected:
         ::std::unique_ptr<disgrace_ns::Voice> create_voice() override;
 
     private:
+        struct UndoState {
+            std::vector<std::shared_ptr<disgrace_ns::SampleData>> undo_stack;
+            std::vector<std::shared_ptr<disgrace_ns::SampleData>> redo_stack;
+        };
+        std::map<size_t, UndoState> m_undo_states;
         std::vector<SampleEntry> m_samples;
         size_t m_selected_sample_index = 0;
         double m_engine_rate;

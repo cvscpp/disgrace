@@ -4,7 +4,7 @@
 namespace disgrace_ns
 {
 
-    disgrace_ns::SampleVoice::SampleVoice(disgrace_ns::SampleData* data,
+    disgrace_ns::SampleVoice::SampleVoice(std::shared_ptr<disgrace_ns::SampleData> data,
                              double engine_rate)
     : m_sample(data),
     m_engine_rate(engine_rate)

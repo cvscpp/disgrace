@@ -57,6 +57,14 @@ namespace disgrace_ns
             }
         }
 
+        void insert_silence(size_t pos, size_t len) {
+            pos = std::min(pos, left.size());
+            left.insert(left.begin() + pos, len, 0.0f);
+            if (!right.empty()) {
+                right.insert(right.begin() + pos, len, 0.0f);
+            }
+        }
+
         void fade_in(size_t start, size_t end, bool log) {
             end = std::min(end, left.size());
             size_t len = end - start;

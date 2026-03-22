@@ -102,12 +102,15 @@ private:
     wxButton* m_copy_btn;
     wxButton* m_paste_btn;
     wxButton* m_silence_btn;
+    wxButton* m_ins_sil_btn;
     wxButton* m_fade_in_lin_btn;
     wxButton* m_fade_in_log_btn;
     wxButton* m_fade_out_lin_btn;
     wxButton* m_fade_out_log_btn;
     wxButton* m_norm_btn;
     wxButton* m_vol_btn;
+    wxButton* m_undo_btn;
+    wxButton* m_redo_btn;
     wxSpinCtrlDouble* m_vol_input;
 
     wxButton* m_detach_btn;
@@ -141,12 +144,15 @@ private:
     void on_sample_fmt(wxCommandEvent& event);
 
     void on_silence(wxCommandEvent& event);
+    void on_insert_silence(wxCommandEvent& event);
     void on_fade_in_lin(wxCommandEvent& event);
     void on_fade_in_log(wxCommandEvent& event);
     void on_fade_out_lin(wxCommandEvent& event);
     void on_fade_out_log(wxCommandEvent& event);
     void on_normalize(wxCommandEvent& event);
     void on_adjust_vol(wxCommandEvent& event);
+    void on_undo(wxCommandEvent& event);
+    void on_redo(wxCommandEvent& event);
 
     void on_plugin_scan(wxCommandEvent& event);
     void on_plugin_select(wxCommandEvent& event);

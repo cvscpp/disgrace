@@ -28,7 +28,7 @@ namespace disgrace_ns
         float freq = 440.0f * powf(2.0f, (int(note) - 69) / 12.0f);
         disgrace_ns::Voice* v = allocate_voice(column_index);
         if (v) {
-            static_cast<disgrace_ns::SampleVoice*>(v)->set_sample(sample.data.get());
+            static_cast<disgrace_ns::SampleVoice*>(v)->set_sample(sample.data);
             v->start(note, velocity, freq, offset_samples);
         }
     }
@@ -72,17 +72,84 @@ namespace disgrace_ns
     {
         if (index < m_samples.size()) {
             m_samples.erase(m_samples.begin() + index);
+            // Re-index undo states
+            std::map<size_t, UndoState> next_states;
+            for (auto& pair : m_undo_states) {
+                if (pair.first < index) next_states[pair.first] = std::move(pair.second);
+                else if (pair.first > index) next_states[pair.first - 1] = std::move(pair.second);
+            }
+            m_undo_states = std::move(next_states);
         }
     }
 
     void disgrace_ns::SampleInstrument::move_sample(size_t from, size_t to)
     {
         if (from < m_samples.size() && to < m_samples.size() && from != to) {
-            auto it_from = m_samples.begin() + from;
-            SampleEntry entry = std::move(*it_from);
-            m_samples.erase(it_from);
+            SampleEntry entry = std::move(m_samples[from]);
+            m_samples.erase(m_samples.begin() + from);
             m_samples.insert(m_samples.begin() + to, std::move(entry));
+            
+            // Re-index undo states
+            std::map<size_t, UndoState> next_states;
+            UndoState moving = std::move(m_undo_states[from]);
+            m_undo_states.erase(from);
+            
+            for (auto& pair : m_undo_states) {
+                size_t idx = pair.first;
+                if (from < to) {
+                    if (idx > from && idx <= to) next_states[idx - 1] = std::move(pair.second);
+                    else next_states[idx] = std::move(pair.second);
+                } else {
+                    if (idx >= to && idx < from) next_states[idx + 1] = std::move(pair.second);
+                    else next_states[idx] = std::move(pair.second);
+                }
+            }
+            next_states[to] = std::move(moving);
+            m_undo_states = std::move(next_states);
         }
+    }
+
+    void SampleInstrument::push_undo(size_t index) {
+        if (index >= m_samples.size() || !m_samples[index].data) return;
+        auto& state = m_undo_states[index];
+        auto copy = std::make_shared<SampleData>(*m_samples[index].data);
+        state.undo_stack.push_back(copy);
+        if (state.undo_stack.size() > 10) state.undo_stack.erase(state.undo_stack.begin());
+        state.redo_stack.clear();
+    }
+
+    void SampleInstrument::undo(size_t index) {
+        if (index >= m_samples.size() || !m_samples[index].data) return;
+        auto& state = m_undo_states[index];
+        if (state.undo_stack.empty()) return;
+        
+        auto current = std::make_shared<SampleData>(*m_samples[index].data);
+        state.redo_stack.push_back(current);
+        
+        m_samples[index].data = state.undo_stack.back();
+        state.undo_stack.pop_back();
+    }
+
+    void SampleInstrument::redo(size_t index) {
+        if (index >= m_samples.size() || !m_samples[index].data) return;
+        auto& state = m_undo_states[index];
+        if (state.redo_stack.empty()) return;
+        
+        auto current = std::make_shared<SampleData>(*m_samples[index].data);
+        state.undo_stack.push_back(current);
+        
+        m_samples[index].data = state.redo_stack.back();
+        state.redo_stack.pop_back();
+    }
+
+    bool SampleInstrument::can_undo(size_t index) const {
+        auto it = m_undo_states.find(index);
+        return it != m_undo_states.end() && !it->second.undo_stack.empty();
+    }
+
+    bool SampleInstrument::can_redo(size_t index) const {
+        auto it = m_undo_states.find(index);
+        return it != m_undo_states.end() && !it->second.redo_stack.empty();
     }
 
     void disgrace_ns::SampleInstrument::set_sample_name(size_t index, const std::string& name)
@@ -95,14 +162,15 @@ namespace disgrace_ns
     void disgrace_ns::SampleInstrument::convert_sample_format(size_t index, SampleFormatAction action)
     {
         if (index >= m_samples.size() || !m_samples[index].data) return;
-        auto& data = *m_samples[index].data;
+        auto data_copy = std::make_shared<SampleData>(*m_samples[index].data);
         switch (action) {
             case SampleFormatAction::Stereo:          /* No change */ break;
-            case SampleFormatAction::StereoToMonoL:   data.to_mono_l(); break;
-            case SampleFormatAction::StereoToMonoR:   data.to_mono_r(); break;
-            case SampleFormatAction::StereoToMonoMix: data.to_mono_mix(); break;
-            case SampleFormatAction::MonoToStereo:    data.to_stereo(); break;
+            case SampleFormatAction::StereoToMonoL:   data_copy->to_mono_l(); break;
+            case SampleFormatAction::StereoToMonoR:   data_copy->to_mono_r(); break;
+            case SampleFormatAction::StereoToMonoMix: data_copy->to_mono_mix(); break;
+            case SampleFormatAction::MonoToStereo:    data_copy->to_stereo(); break;
         }
+        m_samples[index].data = data_copy;
     }
 
     ::std::unique_ptr<disgrace_ns::Voice>
@@ -110,7 +178,7 @@ namespace disgrace_ns
     {
         if (m_samples.empty() || m_selected_sample_index >= m_samples.size() || !m_samples[m_selected_sample_index].data) return nullptr;
         return ::std::make_unique<disgrace_ns::SampleVoice>(
-            m_samples[m_selected_sample_index].data.get(),
+            m_samples[m_selected_sample_index].data,
             m_engine_rate);
     }
 

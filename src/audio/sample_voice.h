@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include "voice.h"
 #include "sample_data.h"
 #include "adsr.h"
@@ -9,7 +10,7 @@ namespace disgrace_ns
     class SampleVoice : public Voice
     {
     public:
-        SampleVoice(disgrace_ns::SampleData* data,
+        SampleVoice(std::shared_ptr<disgrace_ns::SampleData> data,
                     double engine_rate);
 
         void start(uint8_t note,
@@ -22,7 +23,7 @@ namespace disgrace_ns
 
                    void set_pitch(float freq) override;
                    void set_volume(float vol) override;
-                   void set_sample(disgrace_ns::SampleData* data) { m_sample = data; }
+                   void set_sample(std::shared_ptr<disgrace_ns::SampleData> data) { m_sample = data; }
 
                    void process(float* out_l,
                                 float* out_r,
@@ -31,7 +32,7 @@ namespace disgrace_ns
                                 bool active() const override;
 
     private:
-        disgrace_ns::SampleData* m_sample;
+        std::shared_ptr<disgrace_ns::SampleData> m_sample;
         disgrace_ns::ADSR m_env;
 
         double m_engine_rate;

@@ -14,6 +14,7 @@
 #include <wx/textdlg.h>
 #include <wx/dir.h>
 #include <wx/filename.h>
+#include <wx/numdlg.h>
 #include <dlfcn.h>
 #include <algorithm>
 
@@ -90,6 +91,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     wxPanel* rec_panel = new wxPanel(m_sampler_editor, wxID_ANY);
     wxBoxSizer* rec_sizer = new wxBoxSizer(wxVERTICAL);
     
+    // Row 1: Playback and Undo/Redo
     wxBoxSizer* playback_sizer = new wxBoxSizer(wxHORIZONTAL);
     m_sample_play_btn = new wxButton(rec_panel, wxID_ANY, "Play", wxDefaultPosition, wxSize(60, 25));
     m_sample_play_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_sample_play, this);
@@ -97,40 +99,100 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_sample_stop_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_sample_stop, this);
     m_rec_btn = new wxToggleButton(rec_panel, wxID_ANY, "Record", wxDefaultPosition, wxSize(80, 25));
     m_rec_btn->Bind(wxEVT_TOGGLEBUTTON, &InstrumentPanel::on_record_sample, this);
-    playback_sizer->Add(m_sample_play_btn, 0, wxALL, 2);
-    playback_sizer->Add(m_sample_stop_btn, 0, wxALL, 2);
-    playback_sizer->Add(m_rec_btn, 0, wxALL, 2);
-    rec_sizer->Add(playback_sizer, 0, wxALL, 2);
+    
+    m_undo_btn = new wxButton(rec_panel, wxID_ANY, "Undo", wxDefaultPosition, wxSize(60, 25));
+    m_undo_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_undo, this);
+    m_redo_btn = new wxButton(rec_panel, wxID_ANY, "Redo", wxDefaultPosition, wxSize(60, 25));
+    m_redo_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_redo, this);
+    
+    playback_sizer->Add(m_sample_play_btn, 0, wxRIGHT, 2);
+    playback_sizer->Add(m_sample_stop_btn, 0, wxRIGHT, 2);
+    playback_sizer->Add(m_rec_btn, 0, wxRIGHT, 10);
+    playback_sizer->Add(m_undo_btn, 0, wxRIGHT, 2);
+    playback_sizer->Add(m_redo_btn, 0, wxRIGHT, 2);
+    rec_sizer->Add(playback_sizer, 0, wxTOP | wxBOTTOM, 4);
 
-    wxBoxSizer* rec_cfg_sizer = new wxBoxSizer(wxHORIZONTAL);
+    // Row 2: Input Selection and Mono
+    wxBoxSizer* input_sizer = new wxBoxSizer(wxHORIZONTAL);
+    m_rec_input_ch = new wxChoice(rec_panel, wxID_ANY, wxDefaultPosition, wxSize(150, -1));
+    m_mono_btn = new wxCheckBox(rec_panel, wxID_ANY, "Mono Input");
+    m_mono_btn->Bind(wxEVT_CHECKBOX, &InstrumentPanel::on_mono_toggle, this);
+    
+    input_sizer->Add(new wxStaticText(rec_panel, wxID_ANY, "Input:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    input_sizer->Add(m_rec_input_ch, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    input_sizer->Add(m_mono_btn, 0, wxALIGN_CENTER_VERTICAL);
+    rec_sizer->Add(input_sizer, 0, wxTOP | wxBOTTOM, 4);
+
+    // Row 3: Recording Mode
+    wxBoxSizer* mode_sizer = new wxBoxSizer(wxHORIZONTAL);
     m_rec_mode_ch = new wxChoice(rec_panel, wxID_ANY);
     m_rec_mode_ch->Append("Free"); m_rec_mode_ch->Append("Synced"); m_rec_mode_ch->SetSelection(0);
     
-    m_rec_input_ch = new wxChoice(rec_panel, wxID_ANY);
-    m_mono_btn = new wxCheckBox(rec_panel, wxID_ANY, "Mono");
-    m_mono_btn->Bind(wxEVT_CHECKBOX, &InstrumentPanel::on_mono_toggle, this);
-    
-    rec_cfg_sizer->Add(m_rec_mode_ch, 0, wxALL, 2);
-    rec_cfg_sizer->Add(m_rec_input_ch, 0, wxALL, 2);
-    rec_cfg_sizer->Add(m_mono_btn, 0, wxALL, 2);
-    rec_sizer->Add(rec_cfg_sizer, 0, wxALL, 2);
+    mode_sizer->Add(new wxStaticText(rec_panel, wxID_ANY, "Rec Mode:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    mode_sizer->Add(m_rec_mode_ch, 0, wxALIGN_CENTER_VERTICAL);
+    rec_sizer->Add(mode_sizer, 0, wxTOP | wxBOTTOM, 4);
 
-    m_sample_fmt_ch = new wxChoice(rec_panel, wxID_ANY);
-    m_sample_fmt_ch->Append("Stereo");
-    m_sample_fmt_ch->Append("Stereo -> Mono (L)");
-    m_sample_fmt_ch->Append("Stereo -> Mono (R)");
-    m_sample_fmt_ch->Append("Stereo -> Mono (Mix)");
-    m_sample_fmt_ch->Append("Mono -> Stereo");
-    m_sample_fmt_ch->SetSelection(0);
-    m_sample_fmt_ch->Bind(wxEVT_CHOICE, &InstrumentPanel::on_sample_fmt, this);
-    rec_sizer->Add(m_sample_fmt_ch, 0, wxALL, 2);
-
-    top_sampler_sizer->Add(rec_panel, 1, wxEXPAND | wxALL, 2);
+    rec_panel->SetSizer(rec_sizer);
+    top_sampler_sizer->Add(rec_panel, 1, wxEXPAND | wxLEFT, 10);
     sampler_sizer->Add(top_sampler_sizer, 0, wxEXPAND | wxALL, 2);
+
+    // Processing Controls - Row 1: Volume
+    wxBoxSizer* vol_sizer = new wxBoxSizer(wxHORIZONTAL);
+    m_norm_btn = new wxButton(m_sampler_editor, wxID_ANY, "Normalize");
+    m_norm_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_normalize, this);
+    m_vol_btn = new wxButton(m_sampler_editor, wxID_ANY, "Gain");
+    m_vol_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_adjust_vol, this);
+    m_vol_input = new wxSpinCtrlDouble(m_sampler_editor, wxID_ANY);
+    m_vol_input->SetRange(0.0, 10.0); m_vol_input->SetIncrement(0.1); m_vol_input->SetValue(1.0);
+    
+    vol_sizer->Add(new wxStaticText(m_sampler_editor, wxID_ANY, "Volume:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    vol_sizer->Add(m_norm_btn, 0, wxALL, 1);
+    vol_sizer->Add(m_vol_btn, 0, wxALL, 1);
+    vol_sizer->Add(m_vol_input, 0, wxALL, 1);
+    sampler_sizer->Add(vol_sizer, 0, wxEXPAND | wxALL, 2);
+
+    // Processing Controls - Row 2: Fades
+    wxBoxSizer* fade_sizer = new wxBoxSizer(wxHORIZONTAL);
+    m_fade_in_lin_btn = new wxButton(m_sampler_editor, wxID_ANY, "In Lin");
+    m_fade_in_lin_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_fade_in_lin, this);
+    m_fade_in_log_btn = new wxButton(m_sampler_editor, wxID_ANY, "In Log");
+    m_fade_in_log_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_fade_in_log, this);
+    m_fade_out_lin_btn = new wxButton(m_sampler_editor, wxID_ANY, "Out Lin");
+    m_fade_out_lin_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_fade_out_lin, this);
+    m_fade_out_log_btn = new wxButton(m_sampler_editor, wxID_ANY, "Out Log");
+    m_fade_out_log_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_fade_out_log, this);
+    
+    fade_sizer->Add(new wxStaticText(m_sampler_editor, wxID_ANY, "Fades:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    fade_sizer->Add(m_fade_in_lin_btn, 0, wxALL, 1);
+    fade_sizer->Add(m_fade_in_log_btn, 0, wxALL, 1);
+    fade_sizer->Add(m_fade_out_lin_btn, 0, wxALL, 1);
+    fade_sizer->Add(m_fade_out_log_btn, 0, wxALL, 1);
+    sampler_sizer->Add(fade_sizer, 0, wxEXPAND | wxALL, 2);
+
+    // Processing Controls - Row 3: Editing
+    wxBoxSizer* edit_sizer = new wxBoxSizer(wxHORIZONTAL);
+    m_silence_btn = new wxButton(m_sampler_editor, wxID_ANY, "Silence");
+    m_silence_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_silence, this);
+    m_ins_sil_btn = new wxButton(m_sampler_editor, wxID_ANY, "Insert Sil");
+    m_ins_sil_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_insert_silence, this);
+    m_cut_btn = new wxButton(m_sampler_editor, wxID_ANY, "Cut");
+    m_cut_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&){ cut(); });
+    m_copy_btn = new wxButton(m_sampler_editor, wxID_ANY, "Copy");
+    m_copy_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&){ copy(); });
+    m_paste_btn = new wxButton(m_sampler_editor, wxID_ANY, "Paste");
+    m_paste_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&){ paste(); });
+
+    edit_sizer->Add(new wxStaticText(m_sampler_editor, wxID_ANY, "Edit:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    edit_sizer->Add(m_silence_btn, 0, wxALL, 1);
+    edit_sizer->Add(m_ins_sil_btn, 0, wxALL, 1);
+    edit_sizer->Add(m_cut_btn, 0, wxALL, 1);
+    edit_sizer->Add(m_copy_btn, 0, wxALL, 1);
+    edit_sizer->Add(m_paste_btn, 0, wxALL, 1);
+    sampler_sizer->Add(edit_sizer, 0, wxEXPAND | wxALL, 2);
 
     // Waveform View
     m_waveform_view = new WaveformView(m_sampler_editor, wxID_ANY, m_engine);
-    m_waveform_view->SetMinSize(wxSize(-1, 250));
+    m_waveform_view->SetMinSize(wxSize(-1, 350));
     sampler_sizer->Add(m_waveform_view, 1, wxEXPAND | wxALL, 2);
 
     // Waveform Controls
@@ -156,51 +218,19 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     wf_ctrl_sizer->Add(m_view_mode_ch, 0, wxALL, 1);
     sampler_sizer->Add(wf_ctrl_sizer, 0, wxEXPAND | wxALL, 2);
 
-    // Processing Controls
-    wxBoxSizer* proc_sizer = new wxBoxSizer(wxHORIZONTAL);
-    m_silence_btn = new wxButton(m_sampler_editor, wxID_ANY, "Silence");
-    m_silence_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_silence, this);
-    m_norm_btn = new wxButton(m_sampler_editor, wxID_ANY, "Normalize");
-    m_norm_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_normalize, this);
-    m_vol_btn = new wxButton(m_sampler_editor, wxID_ANY, "Gain");
-    m_vol_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_adjust_vol, this);
-    
-    proc_sizer->Add(m_silence_btn, 0, wxALL, 1);
-    proc_sizer->Add(m_norm_btn, 0, wxALL, 1);
-    proc_sizer->Add(m_vol_btn, 0, wxALL, 1);
-    
-    m_fade_in_lin_btn = new wxButton(m_sampler_editor, wxID_ANY, "In Lin");
-    m_fade_in_lin_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_fade_in_lin, this);
-    m_fade_in_log_btn = new wxButton(m_sampler_editor, wxID_ANY, "In Log");
-    m_fade_in_log_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_fade_in_log, this);
-    m_fade_out_lin_btn = new wxButton(m_sampler_editor, wxID_ANY, "Out Lin");
-    m_fade_out_lin_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_fade_out_lin, this);
-    m_fade_out_log_btn = new wxButton(m_sampler_editor, wxID_ANY, "Out Log");
-    m_fade_out_log_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_fade_out_log, this);
-    
-    proc_sizer->Add(m_fade_in_lin_btn, 0, wxALL, 1);
-    proc_sizer->Add(m_fade_in_log_btn, 0, wxALL, 1);
-    proc_sizer->Add(m_fade_out_lin_btn, 0, wxALL, 1);
-    proc_sizer->Add(m_fade_out_log_btn, 0, wxALL, 1);
-
-    m_vol_input = new wxSpinCtrlDouble(m_sampler_editor, wxID_ANY);
-    m_vol_input->SetRange(0.0, 10.0); m_vol_input->SetIncrement(0.1); m_vol_input->SetValue(1.0);
-    proc_sizer->Add(m_vol_input, 0, wxALL, 1);
-
-    wxBoxSizer* clip_sizer = new wxBoxSizer(wxHORIZONTAL);
-    m_cut_btn = new wxButton(m_sampler_editor, wxID_ANY, "Cut");
-    m_cut_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&){ cut(); });
-    m_copy_btn = new wxButton(m_sampler_editor, wxID_ANY, "Copy");
-    m_copy_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&){ copy(); });
-    m_paste_btn = new wxButton(m_sampler_editor, wxID_ANY, "Paste");
-    m_paste_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&){ paste(); });
-
-    clip_sizer->Add(m_cut_btn, 0, wxALL, 1);
-    clip_sizer->Add(m_copy_btn, 0, wxALL, 1);
-    clip_sizer->Add(m_paste_btn, 0, wxALL, 1);
-
-    sampler_sizer->Add(clip_sizer, 0, wxEXPAND | wxALL, 2);
     m_sampler_editor->SetSizer(sampler_sizer);
+    
+    // Create m_sample_fmt_ch early so it can be used in update_editor
+    m_sample_fmt_ch = new wxChoice(m_sampler_editor, wxID_ANY);
+    m_sample_fmt_ch->Append("Stereo");
+    m_sample_fmt_ch->Append("Stereo -> Mono (L)");
+    m_sample_fmt_ch->Append("Stereo -> Mono (R)");
+    m_sample_fmt_ch->Append("Stereo -> Mono (Mix)");
+    m_sample_fmt_ch->Append("Mono -> Stereo");
+    m_sample_fmt_ch->SetSelection(0);
+    m_sample_fmt_ch->Bind(wxEVT_CHOICE, &InstrumentPanel::on_sample_fmt, this);
+    m_sample_fmt_ch->Hide(); // Will be shown in sample rows
+
     right_sizer->Add(m_sampler_editor, 1, wxEXPAND | wxALL, 2);
 
     // 2. SoundFont Editor
@@ -348,12 +378,12 @@ void InstrumentPanel::update_rec_inputs() {
     uint32_t num_ins = m_engine.m_num_ins;
     if (mono) {
         for (uint32_t i = 0; i < num_ins; ++i) {
-            m_rec_input_ch->Append(wxString::Format("Channel %u", i + 1));
+            m_rec_input_ch->Append(wxString::Format("Mono %u", i + 1));
         }
     } else {
         for (uint32_t i = 0; i < num_ins; i += 2) {
-            if (i + 1 < num_ins) m_rec_input_ch->Append(wxString::Format("Channels %u/%u", i + 1, i + 2));
-            else m_rec_input_ch->Append(wxString::Format("Channel %u (L)", i + 1));
+            if (i + 1 < num_ins) m_rec_input_ch->Append(wxString::Format("%u/%u", i + 1, i + 2));
+            else m_rec_input_ch->Append(wxString::Format("%u (L)", i + 1));
         }
     }
     if (m_rec_input_ch->GetCount() > 0) m_rec_input_ch->SetSelection(0);
@@ -429,6 +459,11 @@ void InstrumentPanel::update_editor() {
             m_sampler_editor->Show();
             SampleInstrument* sampler = static_cast<SampleInstrument*>(&inst);
             
+            // Safety: Reparent the format choice back to the editor before clearing the scroll panel
+            // to avoid it being destroyed when the rows are deleted.
+            m_sample_fmt_ch->Reparent(m_sampler_editor);
+            m_sample_fmt_ch->Hide();
+
             if (m_sample_scroll->GetSizer()) {
                 m_sample_scroll->GetSizer()->Clear(true);
             }
@@ -500,14 +535,36 @@ void InstrumentPanel::update_editor() {
                 });
                 rs->Add(rem, 0, wxALL, 0);
                 
+                if ((int)i == m_selected_sample) {
+                    m_sample_fmt_ch->Reparent(row);
+                    m_sample_fmt_ch->Show();
+                    rs->Add(m_sample_fmt_ch, 0, wxALL, 0);
+                }
+                
                 row->SetSizer(rs);
                 m_sample_scroll->GetSizer()->Add(row, 0, wxEXPAND | wxBOTTOM, 1);
             }
             m_sample_scroll->Layout();
             m_sample_scroll->FitInside();
 
+            // Update undo/redo button states
+            if (m_selected_sample >= 0) {
+                m_undo_btn->Enable(static_cast<SampleInstrument*>(&inst)->can_undo(m_selected_sample));
+                m_redo_btn->Enable(static_cast<SampleInstrument*>(&inst)->can_redo(m_selected_sample));
+                
+                // Update format choice based on current sample
+                auto const& sample = sampler->get_sample(m_selected_sample);
+                if (sample.data) {
+                    m_sample_fmt_ch->SetSelection(sample.data->right.empty() ? 1 : 0);
+                }
+            } else {
+                m_undo_btn->Disable();
+                m_redo_btn->Disable();
+            }
+
             m_waveform_view->set_color(m_engine.m_waveform_color);
             if (m_selected_sample >= 0 && m_selected_sample < (int)sampler->sample_count()) {
+                sampler->set_selected_sample(m_selected_sample);
                 m_waveform_view->set_sample(sampler->get_sample(m_selected_sample).data);
             } else {
                 m_waveform_view->set_sample(nullptr);
@@ -695,6 +752,7 @@ void InstrumentPanel::on_sample_fmt(wxCommandEvent& event) {
     if (m_selected_sample >= 0 && m_selected_instrument >= 0) {
         auto& inst = m_engine.instrument(m_selected_instrument);
         if (inst.type() == InstrumentType::Sampler) {
+             static_cast<SampleInstrument*>(&inst)->push_undo(m_selected_sample);
              static_cast<SampleInstrument*>(&inst)->convert_sample_format(m_selected_sample, (SampleFormatAction)event.GetSelection());
              update_editor();
         }
@@ -707,11 +765,33 @@ void InstrumentPanel::on_silence(wxCommandEvent& event) {
     if (inst.type() == InstrumentType::Sampler) {
         auto& sample = static_cast<SampleInstrument*>(&inst)->get_sample(m_selected_sample);
         if (sample.data) {
+            static_cast<SampleInstrument*>(&inst)->push_undo(m_selected_sample);
             size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
             if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
             else if (s1 > s2) std::swap(s1, s2);
             sample.data->silence(s1, s2);
             update_editor();
+        }
+    }
+}
+
+void InstrumentPanel::on_insert_silence(wxCommandEvent& event) {
+    if (m_selected_sample < 0 || !m_waveform_view) return;
+    auto& inst = m_engine.instrument(m_selected_instrument);
+    if (inst.type() == InstrumentType::Sampler) {
+        auto& sample = static_cast<SampleInstrument*>(&inst)->get_sample(m_selected_sample);
+        if (sample.data) {
+            wxString val = wxGetTextFromUser("Enter duration in seconds to insert:", "Insert Silence", "1.0", this);
+            if (!val.IsEmpty()) {
+                double seconds = 0;
+                if (val.ToDouble(&seconds) && seconds > 0) {
+                    static_cast<SampleInstrument*>(&inst)->push_undo(m_selected_sample);
+                    size_t num_samples = (size_t)(seconds * sample.data->sample_rate);
+                    size_t pos = m_waveform_view->selection_start();
+                    sample.data->insert_silence(pos, num_samples);
+                    update_editor();
+                }
+            }
         }
     }
 }
@@ -722,6 +802,7 @@ void InstrumentPanel::on_fade_in_lin(wxCommandEvent& event) {
     if (inst.type() == InstrumentType::Sampler) {
         auto& sample = static_cast<SampleInstrument*>(&inst)->get_sample(m_selected_sample);
         if (sample.data) {
+            static_cast<SampleInstrument*>(&inst)->push_undo(m_selected_sample);
             size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
             if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
             else if (s1 > s2) std::swap(s1, s2);
@@ -737,6 +818,7 @@ void InstrumentPanel::on_fade_in_log(wxCommandEvent& event) {
     if (inst.type() == InstrumentType::Sampler) {
         auto& sample = static_cast<SampleInstrument*>(&inst)->get_sample(m_selected_sample);
         if (sample.data) {
+            static_cast<SampleInstrument*>(&inst)->push_undo(m_selected_sample);
             size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
             if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
             else if (s1 > s2) std::swap(s1, s2);
@@ -752,6 +834,7 @@ void InstrumentPanel::on_fade_out_lin(wxCommandEvent& event) {
     if (inst.type() == InstrumentType::Sampler) {
         auto& sample = static_cast<SampleInstrument*>(&inst)->get_sample(m_selected_sample);
         if (sample.data) {
+            static_cast<SampleInstrument*>(&inst)->push_undo(m_selected_sample);
             size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
             if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
             else if (s1 > s2) std::swap(s1, s2);
@@ -767,6 +850,7 @@ void InstrumentPanel::on_fade_out_log(wxCommandEvent& event) {
     if (inst.type() == InstrumentType::Sampler) {
         auto& sample = static_cast<SampleInstrument*>(&inst)->get_sample(m_selected_sample);
         if (sample.data) {
+            static_cast<SampleInstrument*>(&inst)->push_undo(m_selected_sample);
             size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
             if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
             else if (s1 > s2) std::swap(s1, s2);
@@ -782,6 +866,7 @@ void InstrumentPanel::on_normalize(wxCommandEvent& event) {
         if (inst.type() == InstrumentType::Sampler) {
             auto& sample = static_cast<SampleInstrument*>(&inst)->get_sample(m_selected_sample);
             if (sample.data) {
+                static_cast<SampleInstrument*>(&inst)->push_undo(m_selected_sample);
                 size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
                 if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
                 else if (s1 > s2) std::swap(s1, s2);
@@ -799,6 +884,7 @@ void InstrumentPanel::on_adjust_vol(wxCommandEvent& event) {
         if (inst.type() == InstrumentType::Sampler) {
             auto& sample = static_cast<SampleInstrument*>(&inst)->get_sample(m_selected_sample);
             if (sample.data) {
+                static_cast<SampleInstrument*>(&inst)->push_undo(m_selected_sample);
                 size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
                 if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
                 else if (s1 > s2) std::swap(s1, s2);
@@ -809,12 +895,33 @@ void InstrumentPanel::on_adjust_vol(wxCommandEvent& event) {
     }
 }
 
+void InstrumentPanel::on_undo(wxCommandEvent& event) {
+    if (m_selected_sample >= 0) {
+        auto& inst = m_engine.instrument(m_selected_instrument);
+        if (inst.type() == InstrumentType::Sampler) {
+            static_cast<SampleInstrument*>(&inst)->undo(m_selected_sample);
+            update_editor();
+        }
+    }
+}
+
+void InstrumentPanel::on_redo(wxCommandEvent& event) {
+    if (m_selected_sample >= 0) {
+        auto& inst = m_engine.instrument(m_selected_instrument);
+        if (inst.type() == InstrumentType::Sampler) {
+            static_cast<SampleInstrument*>(&inst)->redo(m_selected_sample);
+            update_editor();
+        }
+    }
+}
+
 void InstrumentPanel::cut() {
     if (m_selected_sample >= 0 && m_waveform_view) {
         auto& inst = m_engine.instrument(m_selected_instrument);
         if (inst.type() == InstrumentType::Sampler) {
             auto& sample = static_cast<SampleInstrument*>(&inst)->get_sample(m_selected_sample);
             if (sample.data) {
+                static_cast<SampleInstrument*>(&inst)->push_undo(m_selected_sample);
                 size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
                 if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
                 else if (s1 > s2) std::swap(s1, s2);
@@ -826,6 +933,7 @@ void InstrumentPanel::cut() {
 }
 
 void InstrumentPanel::copy() {
+    // Copy doesn't need undo
     if (m_selected_sample >= 0 && m_waveform_view) {
         auto& inst = m_engine.instrument(m_selected_instrument);
         if (inst.type() == InstrumentType::Sampler) {
@@ -851,6 +959,7 @@ void InstrumentPanel::paste() {
         if (inst.type() == InstrumentType::Sampler) {
             auto& sample = static_cast<SampleInstrument*>(&inst)->get_sample(m_selected_sample);
             if (sample.data) {
+                static_cast<SampleInstrument*>(&inst)->push_undo(m_selected_sample);
                 sample.data->paste_at(m_waveform_view->selection_start(), *m_engine.sample_clipboard().data);
                 update_editor();
             }

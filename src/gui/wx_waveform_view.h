@@ -48,6 +48,7 @@ private:
     size_t m_offset = 0;
 
     ChannelMode m_mode = ChannelMode::Both;
+    bool m_is_selecting = false;
 
     wxDECLARE_EVENT_TABLE();
 };

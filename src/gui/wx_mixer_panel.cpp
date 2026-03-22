@@ -22,6 +22,7 @@
 #include <wx/sizer.h>
 #include <wx/statline.h>
 #include <wx/scrolwin.h>
+#include <wx/artprov.h>
 #include <algorithm>
 
 namespace disgrace_ns {
@@ -117,7 +118,8 @@ MixerPanel::MixerPanel(wxWindow* parent, Engine& engine)
     for (const auto& fx : fx_list) m_avail_fx_browser->Append(fx);
     avail_sizer->Add(m_avail_fx_browser, 1, wxEXPAND | wxALL, 2);
     
-    wxButton* add_btn = new wxButton(m_lower_pane, wxID_ANY, "Add Effect");
+    wxButton* add_btn = new wxButton(m_lower_pane, wxID_ANY, "Add Effect", wxDefaultPosition, wxSize(-1, 25));
+    add_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_PLUS, wxART_BUTTON, wxSize(16, 16)));
     add_btn->Bind(wxEVT_BUTTON, &MixerPanel::on_add_fx, this);
     avail_sizer->Add(add_btn, 0, wxEXPAND | wxALL, 2);
     lower_sizer->Add(avail_sizer, 0, wxEXPAND | wxALL, 2);
@@ -131,8 +133,10 @@ MixerPanel::MixerPanel(wxWindow* parent, Engine& engine)
     chain_sizer->Add(m_fx_chain_group, 1, wxEXPAND | wxALL, 2);
 
     wxBoxSizer* chain_btns = new wxBoxSizer(wxHORIZONTAL);
-    m_load_chain_btn = new wxButton(m_lower_pane, wxID_ANY, "Load Chain");
-    m_save_chain_btn = new wxButton(m_lower_pane, wxID_ANY, "Save Chain");
+    m_load_chain_btn = new wxButton(m_lower_pane, wxID_ANY, "Load", wxDefaultPosition, wxSize(-1, 25));
+    m_load_chain_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(16, 16)));
+    m_save_chain_btn = new wxButton(m_lower_pane, wxID_ANY, "Save", wxDefaultPosition, wxSize(-1, 25));
+    m_save_chain_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_SAVE, wxART_BUTTON, wxSize(16, 16)));
     chain_btns->Add(m_load_chain_btn, 1, wxALL, 2);
     chain_btns->Add(m_save_chain_btn, 1, wxALL, 2);
     chain_sizer->Add(chain_btns, 0, wxEXPAND | wxALL, 2);

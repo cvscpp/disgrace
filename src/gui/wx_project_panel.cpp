@@ -7,6 +7,7 @@
 #include <wx/msgdlg.h>
 #include <wx/filedlg.h>
 #include <wx/dir.h>
+#include <wx/artprov.h>
 
 namespace disgrace_ns {
 
@@ -56,20 +57,20 @@ ProjectPanel::ProjectPanel(wxWindow* parent, WxMainWindow* main_window, Engine& 
     update_file_list(".");
 
     wxBoxSizer* export_opts_sizer = new wxBoxSizer(wxHORIZONTAL);
-    export_opts_sizer->Add(new wxStaticText(m_left_panel, wxID_ANY, "Sample Rate:"), 0, wxALL, 2);
-    m_sample_rate_ch = new wxChoice(m_left_panel, wxID_ANY, wxDefaultPosition, wxSize(80, 25));
+    export_opts_sizer->Add(new wxStaticText(m_left_panel, wxID_ANY, "Sample Rate:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+    m_sample_rate_ch = new wxChoice(m_left_panel, wxID_ANY);
     m_sample_rate_ch->Append("44100");
     m_sample_rate_ch->Append("48000");
     m_sample_rate_ch->Append("96000");
     m_sample_rate_ch->Select(1);
-    export_opts_sizer->Add(m_sample_rate_ch, 0, wxALL, 2);
+    export_opts_sizer->Add(m_sample_rate_ch, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
     left_sizer->Add(export_opts_sizer, 0, wxEXPAND | wxALL, 2);
 
     wxBoxSizer* check_sizer = new wxBoxSizer(wxHORIZONTAL);
     m_separate_tracks_btn = new wxCheckBox(m_left_panel, wxID_ANY, "Separate Tracks");
     m_realtime_btn = new wxCheckBox(m_left_panel, wxID_ANY, "Realtime");
-    check_sizer->Add(m_separate_tracks_btn, 0, wxALL, 2);
-    check_sizer->Add(m_realtime_btn, 0, wxALL, 2);
+    check_sizer->Add(m_separate_tracks_btn, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+    check_sizer->Add(m_realtime_btn, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
     left_sizer->Add(check_sizer, 0, wxEXPAND | wxALL, 2);
 
     m_export_progress_bar = new wxGauge(m_left_panel, wxID_ANY, 100);
@@ -82,12 +83,14 @@ ProjectPanel::ProjectPanel(wxWindow* parent, WxMainWindow* main_window, Engine& 
     wxBoxSizer* right_sizer = new wxBoxSizer(wxVERTICAL);
 
     wxBoxSizer* track_btn_sizer = new wxBoxSizer(wxHORIZONTAL);
-    m_add_track_btn = new wxButton(m_right_panel, wxID_ANY, "Add Track", wxDefaultPosition, wxSize(80, 25));
-    m_add_bus_btn = new wxButton(m_right_panel, wxID_ANY, "Add Bus", wxDefaultPosition, wxSize(80, 25));
+    m_add_track_btn = new wxButton(m_right_panel, wxID_ANY, "Add Track", wxDefaultPosition, wxSize(-1, 25));
+    m_add_track_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_PLUS, wxART_BUTTON, wxSize(16, 16)));
+    m_add_bus_btn = new wxButton(m_right_panel, wxID_ANY, "Add Bus", wxDefaultPosition, wxSize(-1, 25));
+    m_add_bus_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_PLUS, wxART_BUTTON, wxSize(16, 16)));
     m_add_track_btn->Bind(wxEVT_BUTTON, &ProjectPanel::on_add_track, this);
     m_add_bus_btn->Bind(wxEVT_BUTTON, &ProjectPanel::on_add_bus, this);
-    track_btn_sizer->Add(m_add_track_btn, 0, wxALL, 2);
-    track_btn_sizer->Add(m_add_bus_btn, 0, wxALL, 2);
+    track_btn_sizer->Add(m_add_track_btn, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+    track_btn_sizer->Add(m_add_bus_btn, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
     right_sizer->Add(track_btn_sizer, 0, wxEXPAND | wxALL, 2);
 
     m_track_scroll = new wxScrolledWindow(m_right_panel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVSCROLL);
@@ -133,7 +136,7 @@ void ProjectPanel::update_track_list() {
         });
         row_sizer->Add(name_in, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
-        wxChoice* inst_ch = new wxChoice(track_row, wxID_ANY, wxDefaultPosition, wxSize(choice_w, 25));
+        wxChoice* inst_ch = new wxChoice(track_row, wxID_ANY);
         inst_ch->Append("None");
         for (size_t j = 0; j < num_insts; ++j) {
             inst_ch->Append(m_engine.instrument(j).name());
@@ -151,7 +154,7 @@ void ProjectPanel::update_track_list() {
         });
         row_sizer->Add(inst_ch, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
-        wxChoice* notation_ch = new wxChoice(track_row, wxID_ANY, wxDefaultPosition, wxSize(100, 25));
+        wxChoice* notation_ch = new wxChoice(track_row, wxID_ANY);
         notation_ch->Append("Violin");
         notation_ch->Append("Bass");
         notation_ch->Append("Violin+Bass");
@@ -171,7 +174,7 @@ void ProjectPanel::update_track_list() {
         }
         row_sizer->Add(notation_ch, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
-        wxChoice* out_ch = new wxChoice(track_row, wxID_ANY, wxDefaultPosition, wxSize(80, 25));
+        wxChoice* out_ch = new wxChoice(track_row, wxID_ANY);
         out_ch->Append("Master");
         for (size_t j = 0; j < num_buses; ++j) {
             wxString b_name;
@@ -185,6 +188,7 @@ void ProjectPanel::update_track_list() {
         row_sizer->Add(out_ch, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
         wxButton* up_btn = new wxButton(track_row, wxID_ANY, "^", wxDefaultPosition, wxSize(btn_w, 25));
+        up_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_UP, wxART_BUTTON, wxSize(14, 14)));
         up_btn->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
             if (i > 0) {
                 m_engine.move_track(i, i - 1);
@@ -194,6 +198,7 @@ void ProjectPanel::update_track_list() {
         row_sizer->Add(up_btn, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
         wxButton* down_btn = new wxButton(track_row, wxID_ANY, "v", wxDefaultPosition, wxSize(btn_w, 25));
+        down_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_DOWN, wxART_BUTTON, wxSize(14, 14)));
         down_btn->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
             if (i < m_engine.track_count() - 1) {
                 m_engine.move_track(i, i + 1);
@@ -202,13 +207,15 @@ void ProjectPanel::update_track_list() {
         });
         row_sizer->Add(down_btn, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
-        wxButton* del_btn = new wxButton(track_row, wxID_ANY, "X", wxDefaultPosition, wxSize(btn_w, 25));
-        del_btn->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
+        wxButton* rem_btn = new wxButton(track_row, wxID_ANY, "X", wxDefaultPosition, wxSize(btn_w, 25));
+        rem_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_DELETE, wxART_BUTTON, wxSize(14, 14)));
+        rem_btn->SetForegroundColour(*wxRED);
+        rem_btn->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
             m_engine.remove_track(i);
             update_track_list();
             if (m_main_window) m_main_window->update_all_uis();
         });
-        row_sizer->Add(del_btn, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+        row_sizer->Add(rem_btn, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
         track_row->SetSizer(row_sizer);
     }

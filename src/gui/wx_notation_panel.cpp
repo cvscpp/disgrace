@@ -50,8 +50,6 @@ NotationPanel::NotationPanel(wxWindow* parent, Engine& engine)
     main_sizer->Add(m_notation_view, 1, wxEXPAND | wxALL, 0);
 
     SetSizer(main_sizer);
-
-    m_notation_view->view_all();
 }
 
 void NotationPanel::update() {
@@ -63,10 +61,27 @@ void NotationPanel::on_zoom_out(wxCommandEvent& event) { m_notation_view->zoom_o
 void NotationPanel::on_view_all(wxCommandEvent& event) { m_notation_view->view_all(); }
 void NotationPanel::on_view_sel(wxCommandEvent& event) { m_notation_view->view_selection(); }
 
+wxBEGIN_EVENT_TABLE(NotationView, wxScrolledWindow)
+    EVT_PAINT(NotationView::OnPaint)
+    EVT_SIZE(NotationView::OnSize)
+    EVT_LEFT_DOWN(NotationView::OnMouseDown)
+    EVT_MOTION(NotationView::OnMouseDrag)
+    EVT_LEFT_UP(NotationView::OnMouseUp)
+    EVT_MOUSEWHEEL(NotationView::OnMouseWheel)
+wxEND_EVENT_TABLE()
+
 NotationView::NotationView(wxWindow* parent, wxWindowID id, Engine& engine)
     : wxScrolledWindow(parent, id), m_engine(engine), m_zoom(25.0) {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     SetScrollRate(1, 1);
+    m_needs_initial_view_all = true;
+}
+
+void NotationView::OnSize(wxSizeEvent& event) {
+    if (m_needs_initial_view_all && GetClientSize().x > 150) {
+        view_all();
+    }
+    event.Skip();
 }
 
 void NotationView::zoom_in() { m_zoom *= 1.5; update_view(); }
@@ -75,9 +90,12 @@ void NotationView::view_all() {
     int total = get_total_ticks();
     if (total > 0) {
         wxSize size = GetClientSize();
-        if (size.GetWidth() <= 0) size = GetParent()->GetClientSize();
-        m_zoom = (double)(size.GetWidth() - 140) / total;
-        if (m_zoom < 1.0) m_zoom = 1.0;
+        if (size.GetWidth() <= 150) size = GetParent()->GetClientSize();
+        if (size.GetWidth() > 150) {
+            m_zoom = (double)(size.GetWidth() - 140) / total;
+            if (m_zoom < 1.0) m_zoom = 1.0;
+            m_needs_initial_view_all = false;
+        }
     }
     update_view();
 }
@@ -345,13 +363,5 @@ void NotationView::OnMouseWheel(wxMouseEvent& event) {
         event.Skip();
     }
 }
-
-wxBEGIN_EVENT_TABLE(NotationView, wxScrolledWindow)
-    EVT_PAINT(NotationView::OnPaint)
-    EVT_LEFT_DOWN(NotationView::OnMouseDown)
-    EVT_MOTION(NotationView::OnMouseDrag)
-    EVT_LEFT_UP(NotationView::OnMouseUp)
-    EVT_MOUSEWHEEL(NotationView::OnMouseWheel)
-wxEND_EVENT_TABLE()
 
 } // namespace disgrace_ns

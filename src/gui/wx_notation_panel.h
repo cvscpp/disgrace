@@ -22,6 +22,7 @@ public:
     void OnMouseDrag(wxMouseEvent& event);
     void OnMouseUp(wxMouseEvent& event);
     void OnMouseWheel(wxMouseEvent& event);
+    void OnSize(wxSizeEvent& event);
     void draw(wxDC& dc);
 
 private:
@@ -38,6 +39,7 @@ private:
     int m_sel_start_tick = -1;
     int m_sel_end_tick = -1;
     bool m_is_selecting = false;
+    bool m_needs_initial_view_all = true;
 
     std::vector<wxButton*> m_preview_buttons;
 

@@ -74,8 +74,6 @@ TracksPanel::TracksPanel(wxWindow* parent, Engine& engine)
     main_sizer->Add(m_tracks_view, 1, wxEXPAND | wxALL, 0);
 
     SetSizer(main_sizer);
-
-    m_tracks_view->view_all();
 }
 
 void TracksPanel::update() {
@@ -89,6 +87,7 @@ void TracksPanel::on_view_sel(wxCommandEvent& event) { m_tracks_view->view_selec
 
 wxBEGIN_EVENT_TABLE(TracksView, wxScrolledWindow)
     EVT_PAINT(TracksView::OnPaint)
+    EVT_SIZE(TracksView::OnSize)
     EVT_LEFT_DOWN(TracksView::OnMouseDown)
     EVT_MOTION(TracksView::OnMouseDrag)
     EVT_LEFT_UP(TracksView::OnMouseUp)
@@ -101,6 +100,14 @@ TracksView::TracksView(wxWindow* parent, wxWindowID id, Engine& engine)
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     m_zoom = 10.0;
     SetScrollRate(1, 1);
+    m_needs_initial_view_all = true;
+}
+
+void TracksView::OnSize(wxSizeEvent& event) {
+    if (m_needs_initial_view_all && GetClientSize().x > 150) {
+        view_all();
+    }
+    event.Skip();
 }
 
 int TracksView::get_total_ticks() {
@@ -349,9 +356,13 @@ void TracksView::zoom_out() { m_zoom /= 1.5; if (m_zoom < 0.1) m_zoom = 0.1; upd
 void TracksView::view_all() {
     int total = get_total_ticks();
     if (total > 0) {
-        wxSize size = GetParent()->GetClientSize();
-        m_zoom = (double)(size.GetWidth() - 140) / total;
-        if (m_zoom < 0.1) m_zoom = 0.1;
+        wxSize size = GetClientSize();
+        if (size.GetWidth() <= 150) size = GetParent()->GetClientSize();
+        if (size.GetWidth() > 150) {
+            m_zoom = (double)(size.GetWidth() - 140) / total;
+            if (m_zoom < 0.1) m_zoom = 0.1;
+            m_needs_initial_view_all = false;
+        }
     }
     update_view();
 }

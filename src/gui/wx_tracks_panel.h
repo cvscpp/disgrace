@@ -45,6 +45,7 @@ public:
     void OnMouseDrag(wxMouseEvent& event);
     void OnMouseUp(wxMouseEvent& event);
     void OnMouseWheel(wxMouseEvent& event);
+    void OnSize(wxSizeEvent& event);
     void draw(wxDC& dc);
 
 private:
@@ -55,6 +56,7 @@ private:
     Engine& m_engine;
     double m_zoom = 10.0;
     int m_scroll_x = 0;
+    bool m_needs_initial_view_all = true;
 
     int m_sel_start_tick = -1;
     int m_sel_end_tick = -1;

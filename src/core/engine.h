@@ -92,8 +92,8 @@ public:
     void resize_pattern(size_t index, size_t new_rows);
     void process_commands();
 
-    ::std::vector<uint8_t> order_list() const;
-    void set_order(const ::std::vector<uint8_t>&);
+    ::std::vector<size_t> order_list() const;
+    void set_order(const ::std::vector<size_t>&);
 
     size_t add_pattern_to_order();
     void remove_pattern_from_order(size_t order_pos);

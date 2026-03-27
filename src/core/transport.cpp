@@ -8,7 +8,7 @@ Transport::Transport(Engine& engine)
     : m_engine(engine),
       m_tempo(120.0), // Default tempo
       m_transport(TransportState::Stopped),
-      m_loop_pattern(true)
+      m_loop_pattern(false)
 {
 }
 

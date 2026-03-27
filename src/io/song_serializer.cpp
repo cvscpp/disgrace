@@ -178,7 +178,7 @@ namespace disgrace_ns
 
         engine.set_tempo(j["tempo"]);
         engine.set_lpb(j["lpb"]);
-        engine.set_order(j["order"].get<::std::vector<uint8_t>>());
+        engine.set_order(j["order"].get<::std::vector<size_t>>());
 
         if (j.contains("master")) {
             engine.set_master_gain(j["master"].value("gain", 1.0f));

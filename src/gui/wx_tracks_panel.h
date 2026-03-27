@@ -35,6 +35,7 @@ class TracksView : public wxScrolledWindow {
 public:
     TracksView(wxWindow* parent, wxWindowID id, Engine& engine);
 
+    int get_total_ticks();
     void zoom_in();
     void zoom_out();
     void view_all();
@@ -49,7 +50,6 @@ public:
     void draw(wxDC& dc);
 
 private:
-    int get_total_ticks();
     int tick_to_x(int tick);
     int x_to_tick(int x);
 

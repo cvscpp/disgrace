@@ -169,7 +169,7 @@ void TrackerPanel::update_pattern_list() {
         m_order_buttons[i] = b;
 
         wxString pat_str;
-        pat_str.Printf("%02u", order[i]);
+        pat_str.Printf("%02zu", order[i]);
         wxStaticText* p = new wxStaticText(m_pattern_list_container, wxID_ANY, pat_str, wxPoint(start_x + 30, cur_y), wxSize(30, row_h));
         p->SetForegroundColour(wxColour(255, 255, 0));
 

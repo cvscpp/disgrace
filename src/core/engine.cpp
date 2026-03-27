@@ -613,12 +613,11 @@ void Engine::process_commands() {
     }
 }
 
-std::vector<uint8_t> Engine::order_list() const {
-    std::vector<uint8_t> o; for (auto v : m_order) o.push_back((uint8_t)v);
-    return o;
+std::vector<size_t> Engine::order_list() const {
+    return m_order;
 }
-void Engine::set_order(const std::vector<uint8_t>& o) {
-    m_order.clear(); for (auto v : o) m_order.push_back(v);
+void Engine::set_order(const std::vector<size_t>& o) {
+    m_order = o;
 }
 size_t Engine::add_pattern_to_order() { 
     size_t new_pat = create_pattern();
@@ -644,6 +643,7 @@ void Engine::toggle_metronome() { m_metronome_enabled = !m_metronome_enabled; }
 void Engine::set_metronome_enabled(bool e) { m_metronome_enabled = e; }
 void Engine::enable_record(bool e) { m_record_enabled = e; }
 TransportState Engine::transport_state() const { return transport().state(); }
+size_t Engine::current_order_pos() const { return m_order_pos.load(); }
 void Engine::set_loop(bool e) { transport().set_loop(e); }
 
 void Engine::set_master_gain(float g) { m_master.set_gain(g); }

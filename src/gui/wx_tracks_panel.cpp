@@ -11,27 +11,42 @@ namespace disgrace_ns {
 static void draw_waveform_helper(wxDC& dc, int x, int y, int w, int h, const SampleData& data, const wxColour& col) {
     if (data.left.empty() || w <= 0) return;
     dc.SetPen(wxPen(col));
-    int mid_y = y + h / 2;
-    double samples_per_pixel = (double)data.left.size() / w;
-    for (int i = 0; i < w; ++i) {
-        size_t start = (size_t)(i * samples_per_pixel);
-        size_t end = (size_t)((i + 1) * samples_per_pixel);
-        if (end > data.left.size()) end = data.left.size();
-        if (start >= end) {
-            if (start < data.left.size()) {
-                int amp = (int)(data.left[start] * (h / 2 - 2));
-                dc.DrawLine(x + i, mid_y - amp, x + i, mid_y + amp);
+    
+    bool is_stereo = !data.right.empty();
+    int ch_h = is_stereo ? h / 2 : h;
+
+    auto draw_channel = [&](const std::vector<float>& ch_data, int ch_y) {
+        int mid_y = ch_y + ch_h / 2;
+        double samples_per_pixel = (double)ch_data.size() / w;
+        for (int i = 0; i < w; ++i) {
+            size_t start = (size_t)(i * samples_per_pixel);
+            size_t end = (size_t)((i + 1) * samples_per_pixel);
+            if (end > ch_data.size()) end = ch_data.size();
+            if (start >= end) {
+                if (start < ch_data.size()) {
+                    int amp = (int)(ch_data[start] * (ch_h / 2 - 2));
+                    dc.DrawLine(x + i, mid_y - amp, x + i, mid_y + amp);
+                }
+                continue;
             }
-            continue;
+            float min_v = 1.0f, max_v = -1.0f;
+            for (size_t s = start; s < end; ++s) {
+                if (ch_data[s] < min_v) min_v = ch_data[s];
+                if (ch_data[s] > max_v) max_v = ch_data[s];
+            }
+            int y1 = mid_y + (int)(min_v * (ch_h / 2 - 2));
+            int y2 = mid_y + (int)(max_v * (ch_h / 2 - 2));
+            dc.DrawLine(x + i, y1, x + i, y2);
         }
-        float min_v = 1.0f, max_v = -1.0f;
-        for (size_t s = start; s < end; ++s) {
-            if (data.left[s] < min_v) min_v = data.left[s];
-            if (data.left[s] > max_v) max_v = data.left[s];
-        }
-        int y1 = mid_y + (int)(min_v * (h / 2 - 2));
-        int y2 = mid_y + (int)(max_v * (h / 2 - 2));
-        dc.DrawLine(x + i, y1, x + i, y2);
+    };
+
+    draw_channel(data.left, y);
+    if (is_stereo) {
+        draw_channel(data.right, y + ch_h);
+        // Draw a small divider line
+        dc.SetPen(wxPen(wxColour(100, 100, 100, 128)));
+        dc.DrawLine(x, y + ch_h, x + w, y + ch_h);
+        dc.SetPen(wxPen(col));
     }
 }
 
@@ -77,6 +92,12 @@ TracksPanel::TracksPanel(wxWindow* parent, Engine& engine)
 }
 
 void TracksPanel::update() {
+    static int last_total_ticks = -1;
+    int current_total = m_tracks_view->get_total_ticks();
+    if (current_total != last_total_ticks) {
+        m_tracks_view->update_view();
+        last_total_ticks = current_total;
+    }
     m_tracks_view->Refresh();
 }
 
@@ -150,10 +171,20 @@ void TracksView::draw(wxDC& dc) {
     dc.SetFont(header_font);
 
     int total_rows = 0;
+    size_t current_pos = m_engine.current_order_pos();
+    int play_tick = 0;
+
     for (size_t i = 0; i < order.size(); ++i) {
         auto& pat = m_engine.pattern(order[i]);
         int pat_rows = (int)pat.row_count();
         int px = header_w + tick_to_x(total_rows);
+
+        // Calculate playhead position
+        if (i < current_pos) {
+            play_tick += pat_rows;
+        } else if (i == current_pos) {
+            play_tick += (int)m_engine.current_row();
+        }
 
         // Pattern boundary
         dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_lpb_highlight)));
@@ -161,7 +192,7 @@ void TracksView::draw(wxDC& dc) {
 
         // Pattern label
         wxString buf;
-        buf.Printf("POS %zu (PAT %d)", i, order[i]);
+        buf.Printf("POS %zu (PAT %zu)", i, order[i]);
         dc.SetTextForeground(ThemeManager::toWxColour(m_engine.m_tracker_text));
         dc.DrawText(buf, px + 5, 2);
 
@@ -291,7 +322,6 @@ void TracksView::draw(wxDC& dc) {
 
     // Current Playback Marker
     if (m_engine.transport_state() != TransportState::Stopped) {
-        int play_tick = (int)m_engine.m_current_row;
         int play_x = header_w + tick_to_x(play_tick);
         dc.SetPen(wxPen(wxColour(255, 255, 255)));
         dc.DrawLine(play_x, 0, play_x, virtual_size.GetHeight());

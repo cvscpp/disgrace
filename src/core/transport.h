@@ -32,7 +32,7 @@ public:
     void set_play_position(size_t pattern,
                            size_t row);
 
-    ::std::atomic<bool> m_loop_pattern{true};
+    ::std::atomic<bool> m_loop_pattern{false};
 
 private:
     Engine& m_engine;

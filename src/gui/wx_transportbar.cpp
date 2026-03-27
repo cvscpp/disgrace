@@ -54,12 +54,20 @@ TransportBar::TransportBar(wxWindow* parent, wxWindowID id, Engine& engine)
     main_sizer->Add(m_record, 0, wxALL, btn_spacing);
 
     m_loop = new wxToggleButton(this, ID_LOOP, "Loop", wxDefaultPosition, wxSize(btn_w, btn_h));
-    m_loop->SetValue(true);
+    m_loop->SetValue(false);
     main_sizer->Add(m_loop, 0, wxALL, btn_spacing);
 
     m_metronome = new wxToggleButton(this, ID_METRONOME, "Metro", wxDefaultPosition, wxSize(btn_w + 10, btn_h));
-    m_metronome->SetValue(true);
+    m_metronome->SetValue(false);
     main_sizer->Add(m_metronome, 0, wxALL, btn_spacing);
+
+    m_metro_visual = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(15, 15), wxBORDER_SIMPLE);
+    m_metro_visual->SetBackgroundColour(*wxBLACK);
+    main_sizer->Add(m_metro_visual, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
+
+    m_metro_vol = new wxSlider(this, wxID_ANY, 40, 0, 100, wxDefaultPosition, wxSize(60, -1));
+    m_metro_vol->Bind(wxEVT_SLIDER, &TransportBar::on_metro_vol, this);
+    main_sizer->Add(m_metro_vol, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
 
     int counter_w = 100;
 
@@ -130,7 +138,7 @@ TransportBar::TransportBar(wxWindow* parent, wxWindowID id, Engine& engine)
     r_row->Add(m_meter_r, 1, wxEXPAND);
     meter_stack->Add(r_row, 1, wxEXPAND);
 
-    main_sizer->Add(meter_stack, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
+    main_sizer->Add(meter_stack, 1, wxEXPAND | wxALL, btn_spacing);
 
     m_clock_str = "00:00.000";
 
@@ -173,6 +181,10 @@ void TransportBar::on_step(wxSpinEvent& event) {
     m_engine.set_step_size(m_step_spin->GetValue());
 }
 
+void TransportBar::on_metro_vol(wxCommandEvent& event) {
+    m_engine.set_metronome_volume(m_metro_vol->GetValue() / 100.0f);
+}
+
 void TransportBar::update() {
     if (!m_tempo_spin->HasFocus()) m_tempo_spin->SetValue((int)m_engine.tempo());
     if (!m_lpb_spin->HasFocus()) m_lpb_spin->SetValue((int)m_engine.lpb());
@@ -210,6 +222,12 @@ void TransportBar::update() {
 
     if (m_meter_l) m_meter_l->level(m_engine.master_meter_l());
     if (m_meter_r) m_meter_r->level(m_engine.master_meter_r());
+
+    if (m_engine.is_playing() && m_engine.m_samples_until_next_beat < 1000) {
+        m_metro_visual->SetBackgroundColour(*wxGREEN);
+    } else {
+        m_metro_visual->SetBackgroundColour(*wxBLACK);
+    }
 
     Refresh();
 }

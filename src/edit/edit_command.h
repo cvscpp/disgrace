@@ -11,7 +11,7 @@ namespace disgrace_ns
         virtual ~EditCommand() = default;
 
         virtual void apply() = 0;
-        virtual void undo()  = 0;
+        virtual void undo() override = 0;
         void execute() override { apply(); } // IMPLEMENT EXECUTE
     };
 

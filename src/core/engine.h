@@ -160,12 +160,15 @@ public:
     void set_current_instrument(size_t index);
     void toggle_metronome();
     void set_metronome_enabled(bool enabled);
+    float metronome_volume() const { return m_metronome_volume; }
+    void set_metronome_volume(float v) { m_metronome_volume = v; m_metronome.set_volume(v); }
     disgrace_ns::TransportState transport_state() const;
 
     disgrace_ns::Metronome m_metronome;
 
     size_t m_samples_until_next_beat{0};
-    ::std::atomic<bool> m_metronome_enabled{true};
+    ::std::atomic<bool> m_metronome_enabled{false};
+    ::std::atomic<float> m_metronome_volume{0.4f};
 
     disgrace_ns::MasterBus m_master;
     disgrace_ns::RingBuffer<float, 4096> m_spectral_rb;

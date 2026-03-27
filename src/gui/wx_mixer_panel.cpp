@@ -185,11 +185,11 @@ MixerPanel::MixerPanel(wxWindow* parent, Engine& engine)
     wxBoxSizer* analog_sizer = new wxBoxSizer(wxHORIZONTAL);
     m_master_analog_l = new AnalogVUMeter(master_visuals, wxID_ANY, m_engine);
     m_master_analog_r = new AnalogVUMeter(master_visuals, wxID_ANY, m_engine);
-    m_master_analog_l->SetMinSize(wxSize(140, 110)); // Resized
-    m_master_analog_r->SetMinSize(wxSize(140, 110));
+    m_master_analog_l->SetMinSize(wxSize(140, 60)); 
+    m_master_analog_r->SetMinSize(wxSize(140, 60));
     analog_sizer->Add(m_master_analog_l, 1, wxEXPAND | wxALL, 2);
     analog_sizer->Add(m_master_analog_r, 1, wxEXPAND | wxALL, 2);
-    master_visuals_sizer->Add(analog_sizer, 1, wxEXPAND | wxALL, 2);
+    master_visuals_sizer->Add(analog_sizer, 0, wxEXPAND | wxALL, 2);
 
     // Down part: graphical spectrum analyzer
     m_master_spectral = new SpectralView(master_visuals, wxID_ANY, m_engine);

@@ -33,6 +33,7 @@ private:
     void on_lpb(wxSpinEvent& event);
     void on_octave(wxSpinEvent& event);
     void on_step(wxSpinEvent& event);
+    void on_metro_vol(wxCommandEvent& event);
 
     Engine& m_engine;
 
@@ -40,6 +41,8 @@ private:
     wxButton* m_stop;
     wxToggleButton* m_record;
     wxToggleButton* m_metronome;
+    wxPanel* m_metro_visual;
+    wxSlider* m_metro_vol;
     wxToggleButton* m_loop;
     wxSpinCtrl* m_tempo_spin;
     wxSpinCtrl* m_lpb_spin;

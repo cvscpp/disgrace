@@ -339,9 +339,6 @@ void Engine::handle_effect_row_start(size_t t, const TrackEvent& ev)
 
 void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float* out_l, float* out_r, size_t nframes)
 {
-    if (m_metronome_enabled && transport().state() != TransportState::Stopped)
-        m_metronome.process(m_mix_l, m_mix_r, nframes, m_samples_until_next_beat, m_timing.samples_per_beat());
-
     MidiMessage msg;
     while (m_midi_queue.pop(msg)) {
         uint8_t status = msg.status & 0xF0;
@@ -355,22 +352,25 @@ void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float*
 
     if (!transport().is_playing()) {
         render_block(out_l, out_r, nframes, in_bufs);
-        m_master.process(out_l, out_r, nframes);
-        
-        if (m_is_exporting.load()) {
-            for (size_t i = 0; i < nframes; ++i) { out_l[i] = 0.f; out_r[i] = 0.f; }
-        }
-
-        for (size_t i = 0; i < nframes; ++i) m_spectral_rb.push((out_l[i] + out_r[i]) * 0.5f);
-        return;
+    } else {
+        process_block(out_l, out_r, nframes, in_bufs);
     }
-    process_block(out_l, out_r, nframes, in_bufs);
+
+    m_master.process(out_l, out_r, nframes);
 
     if (m_is_exporting.load()) {
         for (size_t i = 0; i < nframes; ++i) { out_l[i] = 0.f; out_r[i] = 0.f; }
     }
 
     for (size_t i = 0; i < nframes; ++i) m_spectral_rb.push((out_l[i] + out_r[i]) * 0.5f);
+
+    if (m_metronome_enabled && transport().state() != TransportState::Stopped && !m_is_exporting.load()) {
+        float met_l[MAX_BLOCK], met_r[MAX_BLOCK];
+        size_t block = std::min(nframes, MAX_BLOCK);
+        for(size_t i=0; i<block; ++i) { met_l[i] = 0.f; met_r[i] = 0.f; }
+        m_metronome.process(met_l, met_r, block, m_samples_until_next_beat, m_timing.samples_per_beat());
+        for(size_t i=0; i<block; ++i) { out_l[i] += met_l[i]; out_r[i] += met_r[i]; }
+    }
 }
 
 void Engine::process_block(float* l, float* r, size_t nframes, const float* const* in_bufs) {

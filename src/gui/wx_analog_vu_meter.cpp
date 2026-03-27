@@ -50,10 +50,10 @@ void AnalogVUMeter::OnPaint(wxPaintEvent& event) {
     float norm = (db - db_min) / (db_max - db_min);
     norm = std::max(0.0f, std::min(1.0f, norm));
 
-    // Meter arc and scale - optimized for 180x130 or similar
+    // Meter arc and scale - adjusted for very compact height
     int centerX = w / 2;
-    int centerY = h - 15;
-    int radius = std::min(w / 2 - 10, h - 45);
+    int centerY = h * 1.3;
+    int radius = centerY - 5;
 
     dc.SetPen(wxPen(*wxBLACK, 2));
     dc.DrawEllipticArc(centerX - radius, centerY - radius, radius * 2, radius * 2, 45, 135);
@@ -61,7 +61,7 @@ void AnalogVUMeter::OnPaint(wxPaintEvent& event) {
     const float pi = 3.1415926535f;
 
     // Tick marks and Labels
-    float mark_dbs[] = { -40, -30, -20, -15, -10, -7, -5, -3, -1, 0, 1, 2, 3 };
+    float mark_dbs[] = { -40, -20, -10, -5, 0, 3 };
     for (float mdb : mark_dbs) {
         float m_norm = (mdb - db_min) / (db_max - db_min);
         float angle = 135.0f - (m_norm * 90.0f);
@@ -69,8 +69,8 @@ void AnalogVUMeter::OnPaint(wxPaintEvent& event) {
         
         int x1 = centerX + (int)(radius * cos(rad));
         int y1 = centerY - (int)(radius * sin(rad));
-        int x2 = centerX + (int)((radius - 12) * cos(rad));
-        int y2 = centerY - (int)((radius - 12) * sin(rad));
+        int x2 = centerX + (int)((radius - 10) * cos(rad));
+        int y2 = centerY - (int)((radius - 10) * sin(rad));
         
         if (mdb >= 0) dc.SetPen(wxPen(*wxRED, 2)); 
         else dc.SetPen(wxPen(*wxBLACK, 1));
@@ -78,16 +78,16 @@ void AnalogVUMeter::OnPaint(wxPaintEvent& event) {
         dc.DrawLine(x1, y1, x2, y2);
         
         // Labels for major marks (avoiding too much overlap)
-        if (mdb == -40 || mdb == -20 || mdb == -10 || mdb == 0 || mdb == 3) {
+        if (mdb == -40 || mdb == -10 || mdb == 0) {
             wxString lbl;
             if (mdb > 0) lbl.Printf("+%d", (int)mdb);
             else lbl.Printf("%d", (int)mdb);
             
             // Move labels further inside the arc
-            int tx = centerX + (int)((radius - 28) * cos(rad));
-            int ty = centerY - (int)((radius - 28) * sin(rad));
+            int tx = centerX + (int)((radius - 22) * cos(rad));
+            int ty = centerY - (int)((radius - 22) * sin(rad));
             
-            dc.SetFont(wxFont(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
+            dc.SetFont(wxFont(8, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
             wxSize tsize = dc.GetTextExtent(lbl);
             dc.DrawText(lbl, tx - tsize.x/2, ty - tsize.y/2);
         }
@@ -95,7 +95,7 @@ void AnalogVUMeter::OnPaint(wxPaintEvent& event) {
 
     // Minor ticks between major ones for more "analog" feel
     dc.SetPen(wxPen(*wxBLACK, 1));
-    for (float db_tick = -40; db_tick <= 3; db_tick += 1.0f) {
+    for (float db_tick = -40; db_tick <= 3; db_tick += 2.0f) {
         bool is_major = false;
         for (float mdb : mark_dbs) if (mdb == db_tick) is_major = true;
         if (is_major) continue;
@@ -118,18 +118,18 @@ void AnalogVUMeter::OnPaint(wxPaintEvent& event) {
     int needleX = centerX + (int)((radius - 2) * cos(rad));
     int needleY = centerY - (int)((radius - 2) * sin(rad));
 
-    dc.SetPen(wxPen(wxColour(230, 40, 0), 3)); // Slightly thicker needle
+    dc.SetPen(wxPen(wxColour(230, 40, 0), 2)); // Slightly thinner needle
     dc.DrawLine(centerX, centerY, needleX, needleY);
 
     // Center pivot
     dc.SetBrush(*wxBLACK_BRUSH);
     dc.SetPen(*wxBLACK_PEN);
-    dc.DrawCircle(centerX, centerY, 8);
+    dc.DrawCircle(centerX, centerY, 5);
     
     // "VU" text - repositioned
-    dc.SetFont(wxFont(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
+    dc.SetFont(wxFont(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
     wxSize vu_size = dc.GetTextExtent("VU");
-    dc.DrawText("VU", centerX - vu_size.x/2, centerY - (radius/2));
+    dc.DrawText("VU", centerX - vu_size.x/2, 5);
 }
 
 } // namespace disgrace_ns

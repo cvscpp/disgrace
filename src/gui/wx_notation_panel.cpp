@@ -3,6 +3,7 @@
 #include <wx/msgdlg.h>
 #include <wx/utils.h>
 #include "wx_notation_panel.h"
+#include "wx_detached_frame.h"
 #include "../core/engine.h"
 #include "../io/lilypond_exporter.h"
 #include "theme.h"
@@ -15,6 +16,7 @@ enum {
     ID_ZOOM_OUT,
     ID_VIEW_ALL,
     ID_VIEW_SEL,
+    ID_DETACH,
     ID_PREVIEW_BASE = 10200
 };
 
@@ -23,6 +25,7 @@ wxBEGIN_EVENT_TABLE(NotationPanel, wxPanel)
     EVT_BUTTON(ID_ZOOM_OUT, NotationPanel::on_zoom_out)
     EVT_BUTTON(ID_VIEW_ALL, NotationPanel::on_view_all)
     EVT_BUTTON(ID_VIEW_SEL, NotationPanel::on_view_sel)
+    EVT_BUTTON(ID_DETACH, NotationPanel::on_detach)
 wxEND_EVENT_TABLE()
 
 NotationPanel::NotationPanel(wxWindow* parent, Engine& engine)
@@ -38,11 +41,13 @@ NotationPanel::NotationPanel(wxWindow* parent, Engine& engine)
     m_zoom_out_btn = new wxButton(this, ID_ZOOM_OUT, "Zoom Out", wxDefaultPosition, wxSize(btn_w, btn_h));
     m_view_all_btn = new wxButton(this, ID_VIEW_ALL, "View All", wxDefaultPosition, wxSize(btn_w, btn_h));
     m_view_sel_btn = new wxButton(this, ID_VIEW_SEL, "View Sel", wxDefaultPosition, wxSize(btn_w, btn_h));
+    m_detach_btn = new wxButton(this, ID_DETACH, "[]", wxDefaultPosition, wxSize(30, btn_h));
 
     btn_sizer->Add(m_zoom_in_btn, 0, wxALL, 2);
     btn_sizer->Add(m_zoom_out_btn, 0, wxALL, 2);
     btn_sizer->Add(m_view_all_btn, 0, wxALL, 2);
     btn_sizer->Add(m_view_sel_btn, 0, wxALL, 2);
+    btn_sizer->Add(m_detach_btn, 0, wxALL, 2);
 
     main_sizer->Add(btn_sizer, 0, wxEXPAND | wxALL, 2);
 
@@ -60,6 +65,12 @@ void NotationPanel::on_zoom_in(wxCommandEvent& event) { m_notation_view->zoom_in
 void NotationPanel::on_zoom_out(wxCommandEvent& event) { m_notation_view->zoom_out(); }
 void NotationPanel::on_view_all(wxCommandEvent& event) { m_notation_view->view_all(); }
 void NotationPanel::on_view_sel(wxCommandEvent& event) { m_notation_view->view_selection(); }
+void NotationPanel::on_detach(wxCommandEvent& event) {
+    if (!m_detached_frame) {
+        Hide();
+        m_detached_frame = new DetachedFrame(this, "Notation", GetParent(), m_tab_index);
+    }
+}
 
 wxBEGIN_EVENT_TABLE(NotationView, wxScrolledWindow)
     EVT_PAINT(NotationView::OnPaint)

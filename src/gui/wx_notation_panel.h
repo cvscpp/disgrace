@@ -51,18 +51,25 @@ public:
     NotationPanel(wxWindow* parent, Engine& engine);
     void update();
 
+public:
+    void set_tab_index(int idx) { m_tab_index = idx; }
+
 private:
     void on_zoom_in(wxCommandEvent& event);
     void on_zoom_out(wxCommandEvent& event);
     void on_view_all(wxCommandEvent& event);
     void on_view_sel(wxCommandEvent& event);
+    void on_detach(wxCommandEvent& event);
 
     Engine& m_engine;
+    int m_tab_index = -1;
     wxButton* m_zoom_in_btn;
     wxButton* m_zoom_out_btn;
     wxButton* m_view_all_btn;
     wxButton* m_view_sel_btn;
+    wxButton* m_detach_btn;
     class NotationView* m_notation_view;
+    class DetachedFrame* m_detached_frame = nullptr;
 
     wxDECLARE_EVENT_TABLE();
 };

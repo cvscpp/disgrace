@@ -1,6 +1,7 @@
 #include <wx/app.h>
 #include <wx/dcclient.h>
 #include "wx_tracks_panel.h"
+#include "wx_detached_frame.h"
 #include "../core/engine.h"
 #include "../instrument/sample_instrument.h"
 #include "../instrument/soundfont_instrument.h"
@@ -54,7 +55,8 @@ enum {
     ID_ZOOM_IN = 10001,
     ID_ZOOM_OUT,
     ID_VIEW_ALL,
-    ID_VIEW_SEL
+    ID_VIEW_SEL,
+    ID_DETACH
 };
 
 wxBEGIN_EVENT_TABLE(TracksPanel, wxPanel)
@@ -62,6 +64,7 @@ wxBEGIN_EVENT_TABLE(TracksPanel, wxPanel)
     EVT_BUTTON(ID_ZOOM_OUT, TracksPanel::on_zoom_out)
     EVT_BUTTON(ID_VIEW_ALL, TracksPanel::on_view_all)
     EVT_BUTTON(ID_VIEW_SEL, TracksPanel::on_view_sel)
+    EVT_BUTTON(ID_DETACH, TracksPanel::on_detach)
 wxEND_EVENT_TABLE()
 
 TracksPanel::TracksPanel(wxWindow* parent, Engine& engine)
@@ -77,11 +80,13 @@ TracksPanel::TracksPanel(wxWindow* parent, Engine& engine)
     m_zoom_out_btn = new wxButton(this, ID_ZOOM_OUT, "Zoom Out", wxDefaultPosition, wxSize(btn_w, btn_h));
     m_view_all_btn = new wxButton(this, ID_VIEW_ALL, "View All", wxDefaultPosition, wxSize(btn_w, btn_h));
     m_view_sel_btn = new wxButton(this, ID_VIEW_SEL, "View Sel", wxDefaultPosition, wxSize(btn_w, btn_h));
+    m_detach_btn = new wxButton(this, ID_DETACH, "[]", wxDefaultPosition, wxSize(30, btn_h));
 
     btn_sizer->Add(m_zoom_in_btn, 0, wxALL, 2);
     btn_sizer->Add(m_zoom_out_btn, 0, wxALL, 2);
     btn_sizer->Add(m_view_all_btn, 0, wxALL, 2);
     btn_sizer->Add(m_view_sel_btn, 0, wxALL, 2);
+    btn_sizer->Add(m_detach_btn, 0, wxALL, 2);
 
     main_sizer->Add(btn_sizer, 0, wxEXPAND | wxALL, 2);
 
@@ -108,6 +113,12 @@ void TracksPanel::on_zoom_in(wxCommandEvent& event) { m_tracks_view->zoom_in(); 
 void TracksPanel::on_zoom_out(wxCommandEvent& event) { m_tracks_view->zoom_out(); }
 void TracksPanel::on_view_all(wxCommandEvent& event) { m_tracks_view->view_all(); }
 void TracksPanel::on_view_sel(wxCommandEvent& event) { m_tracks_view->view_selection(); }
+void TracksPanel::on_detach(wxCommandEvent& event) {
+    if (!m_detached_frame) {
+        Hide();
+        m_detached_frame = new DetachedFrame(this, "Tracks", GetParent(), m_tab_index);
+    }
+}
 
 wxBEGIN_EVENT_TABLE(TracksView, wxScrolledWindow)
     EVT_PAINT(TracksView::OnPaint)

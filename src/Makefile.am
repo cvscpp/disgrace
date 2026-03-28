@@ -20,6 +20,7 @@ disgrace_SOURCES = \
     dsp/reference_matcher.cpp \
     gui/wx_main_window.cpp \
     gui/wx_project_panel.cpp \
+    gui/wx_detached_frame.cpp \
     gui/wx_tracker_panel.cpp \
     gui/wx_tracker_view.cpp \
     gui/wx_tracks_panel.cpp \

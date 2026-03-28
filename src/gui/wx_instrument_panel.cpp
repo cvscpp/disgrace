@@ -1,6 +1,7 @@
 #include "wx_instrument_panel.h"
 #include "wx_waveform_view.h"
 #include "wx_main_window.h"
+#include "wx_detached_frame.h"
 #include "../core/engine.h"
 #include "../instrument/sample_instrument.h"
 #include "../instrument/soundfont_instrument.h"
@@ -1186,12 +1187,9 @@ void InstrumentPanel::on_zyn_next(wxCommandEvent& event) {
 
 void InstrumentPanel::on_detach(wxCommandEvent& event) {
     if (!m_detached_window) {
-        m_detached_window = new wxFrame(NULL, wxID_ANY, "Instruments", wxDefaultPosition, wxSize(800, 600));
-        m_detached_window->Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent& ev){
-            m_detached_window->Hide();
-        });
+        Hide();
+        m_detached_window = new DetachedFrame(this, "Instruments", GetParent(), m_tab_index);
     }
-    m_detached_window->Show();
 }
 
 } // namespace disgrace_ns

@@ -30,6 +30,7 @@ public:
 
 private:
     Engine& m_engine;
+    int m_tab_index = -1;
     int m_selected_track = -1;
     int m_selected_fx_slot = -1;
     bool m_is_updating_ui = false;
@@ -43,12 +44,14 @@ private:
     wxSlider* m_master_gain;
     wxCheckBox* m_master_mute;
     wxButton* m_master_sel_btn;
+    wxButton* m_detach_btn;
     class VUMeter* m_master_meter_l;
     class VUMeter* m_master_meter_r;
     class AnalogVUMeter* m_master_analog_l;
     class AnalogVUMeter* m_master_analog_r;
     class SpectralView* m_master_spectral;
     wxScrolledWindow* m_mastering_ctrl_panel;
+    class DetachedFrame* m_detached_frame = nullptr;
 
     std::vector<std::pair<class VUMeter*, class VUMeter*>> m_track_meters;
     std::vector<std::pair<class VUMeter*, class VUMeter*>> m_bus_meters;
@@ -58,6 +61,8 @@ private:
     wxScrolledWindow* m_fx_params_group;
     wxButton* m_load_chain_btn;
     wxButton* m_save_chain_btn;
+
+    void on_detach(wxCommandEvent& event);
 
     void on_master_gain(wxCommandEvent& event);
     void on_master_mute(wxCommandEvent& event);
@@ -79,6 +84,9 @@ private:
     void on_fx_bypass(wxCommandEvent& event);
     void on_save_chain(wxCommandEvent& event);
     void on_load_chain(wxCommandEvent& event);
+
+public:
+    void set_tab_index(int idx) { m_tab_index = idx; }
 
     wxDECLARE_EVENT_TABLE();
 };

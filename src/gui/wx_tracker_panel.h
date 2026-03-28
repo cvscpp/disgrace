@@ -45,6 +45,9 @@ public:
     void on_follow_playback(wxCommandEvent& event);
     void on_detach(wxCommandEvent& event);
 
+public:
+    void set_tab_index(int idx) { m_tab_index = idx; }
+
 private:
     void on_pattern_select(wxCommandEvent& event);
     void on_pattern_length(wxCommandEvent& event);
@@ -64,11 +67,13 @@ private:
     wxButton* m_detach_btn;
 
     int m_selected_order_idx = 0;
+    int m_tab_index = -1;
     size_t m_last_order_size = 0;
     size_t m_last_pattern_count = 0;
     bool m_follow_playback = false;
     std::unordered_map<long, wxWindow*> m_pattern_length_inputs;
     std::unordered_map<long, wxButton*> m_order_buttons;
+    class DetachedFrame* m_detached_frame = nullptr;
 
     wxDECLARE_EVENT_TABLE();
 };

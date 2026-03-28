@@ -2,6 +2,7 @@
 #include "wx_vu_meter.h"
 #include "wx_spectral_view.h"
 #include "wx_analog_vu_meter.h"
+#include "wx_detached_frame.h"
 #include "../core/engine.h"
 #include "../dsp/gain.h"
 #include "../dsp/delay.h"
@@ -174,6 +175,14 @@ MixerPanel::MixerPanel(wxWindow* parent, Engine& engine)
         });
     });
     master_strip_sizer->Add(m_master_sel_btn, 0, wxALIGN_CENTER | wxALL, 2);
+
+    // Detach Button
+    m_detach_btn = new wxButton(master_strip, wxID_ANY, "[]", wxDefaultPosition, wxSize(30, 25));
+    m_detach_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent& ev) {
+        this->on_detach(ev);
+    });
+    master_strip_sizer->Add(m_detach_btn, 0, wxALIGN_CENTER | wxALL, 2);
+
     master_strip->SetSizer(master_strip_sizer);
     master_top_row->Add(master_strip, 0, wxEXPAND | wxALL, 2);
 
@@ -953,6 +962,13 @@ void MixerPanel::on_load_chain(wxCommandEvent& event) {
         }
         m_selected_fx_slot = -1;
         update_effect_editor();
+    }
+}
+
+void MixerPanel::on_detach(wxCommandEvent& event) {
+    if (!m_detached_frame) {
+        Hide();
+        m_detached_frame = new DetachedFrame(this, "Mixer", GetParent(), m_tab_index);
     }
 }
 

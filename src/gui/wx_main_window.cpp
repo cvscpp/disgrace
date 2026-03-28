@@ -67,18 +67,23 @@ void WxMainWindow::init_panels() {
 
     m_tracker_panel = new TrackerPanel(m_tabs, m_engine);
     m_tabs->AddPage(m_tracker_panel, "Tracker");
+    m_tracker_panel->set_tab_index(1);
 
     m_tracks_panel = new TracksPanel(m_tabs, m_engine);
     m_tabs->AddPage(m_tracks_panel, "Tracks");
+    m_tracks_panel->set_tab_index(2);
 
     m_notation_panel = new NotationPanel(m_tabs, m_engine);
     m_tabs->AddPage(m_notation_panel, "Notation");
+    m_notation_panel->set_tab_index(3);
 
     m_instrument_panel = new InstrumentPanel(m_tabs, m_engine);
     m_tabs->AddPage(m_instrument_panel, "Instrument");
+    m_instrument_panel->set_tab_index(4);
 
     m_mixer_panel = new MixerPanel(m_tabs, m_engine);
     m_tabs->AddPage(m_mixer_panel, "Mixer");
+    m_mixer_panel->set_tab_index(5);
 
     m_settings_panel = new SettingsPanel(m_tabs, m_engine);
     m_tabs->AddPage(m_settings_panel, "Settings");

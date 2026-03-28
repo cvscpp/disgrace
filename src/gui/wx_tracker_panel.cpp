@@ -1,5 +1,6 @@
 #include "wx_tracker_panel.h"
 #include "wx_tracker_view.h"
+#include "wx_detached_frame.h"
 #include "../core/engine.h"
 
 #include <wx/sizer.h>
@@ -143,7 +144,10 @@ void TrackerPanel::on_follow_playback(wxCommandEvent& event) {
 }
 
 void TrackerPanel::on_detach(wxCommandEvent& event) {
-    Hide();
+    if (!m_detached_frame) {
+        Hide();
+        m_detached_frame = new DetachedFrame(this, "Tracker", GetParent(), m_tab_index);
+    }
 }
 
 void TrackerPanel::update_pattern_list() {

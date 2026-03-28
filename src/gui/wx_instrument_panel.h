@@ -41,6 +41,7 @@ public:
 
 private:
     Engine& m_engine;
+    int m_tab_index = -1;
     int m_selected_instrument = -1;
     int m_selected_sample = -1;
     std::map<int, PluginInfo> m_plugin_map;
@@ -114,7 +115,7 @@ private:
     wxSpinCtrlDouble* m_vol_input;
 
     wxButton* m_detach_btn;
-    wxFrame* m_detached_window = nullptr;
+    class DetachedFrame* m_detached_window = nullptr;
 
     void on_new(wxCommandEvent& event);
     void on_load(wxCommandEvent& event);
@@ -162,6 +163,9 @@ private:
     void on_zyn_preset(wxCommandEvent& event);
     void on_zyn_prev(wxCommandEvent& event);
     void on_zyn_next(wxCommandEvent& event);
+
+public:
+    void set_tab_index(int idx) { m_tab_index = idx; }
 };
 
 } // namespace disgrace_ns

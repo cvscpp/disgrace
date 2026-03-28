@@ -30,7 +30,7 @@ disgrace - simple digital audio workstation with tracker interface, description 
   * import standard midi files
   * save own format similar to renoise, tar.gz archive of samples, instruments, plugin definitions. etc., the song structure and required infos in xml or json format, decide based on what is easier but also more robust to implement  
 * gui
-  * fltk based
+  * wxWidgets based
   * tracker, audio editor, mixer, file io and settings in tabs
   * tracker, audio edirot and mixer should be detachable
   * key bindings schemas fast tracker 2, impuls tracker, renoise with the ability to change individual keys

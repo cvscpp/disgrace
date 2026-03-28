@@ -207,8 +207,8 @@ void TrackerPanel::cb_add_pattern(Fl_Widget*, void* data) {
 void TrackerPanel::cb_remove_pattern(Fl_Widget*, void* data) {
     TrackerPanel* self = static_cast<TrackerPanel*>(data);
     const auto& order = self->m_engine.order_list();
-    if (!order.empty()) {
-        self->m_engine.remove_pattern_from_order(order.size() - 1);
+    if (!order.empty() && self->m_selected_order_idx >= 0 && self->m_selected_order_idx < (int)order.size()) {
+        self->m_engine.remove_pattern_from_order(self->m_selected_order_idx);
         for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
             MainWindow* mw = dynamic_cast<MainWindow*>(win);
             if (mw) mw->request_update();
@@ -219,8 +219,8 @@ void TrackerPanel::cb_remove_pattern(Fl_Widget*, void* data) {
 void TrackerPanel::cb_copy_pattern(Fl_Widget*, void* data) {
     TrackerPanel* self = static_cast<TrackerPanel*>(data);
     const auto& order = self->m_engine.order_list();
-    if (!order.empty()) {
-        self->m_engine.copy_pattern_in_order(order.size() - 1);
+    if (!order.empty() && self->m_selected_order_idx >= 0 && self->m_selected_order_idx < (int)order.size()) {
+        self->m_engine.copy_pattern_in_order(self->m_selected_order_idx);
         for (Fl_Window* win = Fl::first_window(); win; win = Fl::next_window(win)) {
             MainWindow* mw = dynamic_cast<MainWindow*>(win);
             if (mw) mw->request_update();
@@ -230,7 +230,7 @@ void TrackerPanel::cb_copy_pattern(Fl_Widget*, void* data) {
 
 void TrackerPanel::cb_inc_pattern(Fl_Widget*, void* data) {
     TrackerPanel* self = static_cast<TrackerPanel*>(data);
-    size_t pos = self->m_engine.m_edit_order_pos.load();
+    size_t pos = self->m_selected_order_idx;
     auto order = self->m_engine.order_list();
     if (pos < order.size()) {
         if (order[pos] < self->m_engine.pattern_count() - 1) {
@@ -248,7 +248,7 @@ void TrackerPanel::cb_inc_pattern(Fl_Widget*, void* data) {
 
 void TrackerPanel::cb_dec_pattern(Fl_Widget*, void* data) {
     TrackerPanel* self = static_cast<TrackerPanel*>(data);
-    size_t pos = self->m_engine.m_edit_order_pos.load();
+    size_t pos = self->m_selected_order_idx;
     auto order = self->m_engine.order_list();
     if (pos < order.size()) {
         if (order[pos] > 0) {

@@ -9,13 +9,13 @@
 namespace disgrace_ns {
 
 wxBEGIN_EVENT_TABLE(TrackerPanel, wxPanel)
-    EVT_BUTTON(wxID_ANY, TrackerPanel::on_add_pattern)
-    EVT_BUTTON(wxID_ANY, TrackerPanel::on_remove_pattern)
-    EVT_BUTTON(wxID_ANY, TrackerPanel::on_copy_pattern)
-    EVT_BUTTON(wxID_ANY, TrackerPanel::on_inc_pattern)
-    EVT_BUTTON(wxID_ANY, TrackerPanel::on_dec_pattern)
-    EVT_TOGGLEBUTTON(wxID_ANY, TrackerPanel::on_follow_playback)
-    EVT_BUTTON(wxID_ANY, TrackerPanel::on_detach)
+    EVT_BUTTON(ID_ADD_PATTERN, TrackerPanel::on_add_pattern)
+    EVT_BUTTON(ID_REMOVE_PATTERN, TrackerPanel::on_remove_pattern)
+    EVT_BUTTON(ID_COPY_PATTERN, TrackerPanel::on_copy_pattern)
+    EVT_BUTTON(ID_INC_PATTERN, TrackerPanel::on_inc_pattern)
+    EVT_BUTTON(ID_DEC_PATTERN, TrackerPanel::on_dec_pattern)
+    EVT_TOGGLEBUTTON(ID_FOLLOW_PLAYBACK, TrackerPanel::on_follow_playback)
+    EVT_BUTTON(ID_DETACH, TrackerPanel::on_detach)
 wxEND_EVENT_TABLE()
 
 TrackerPanel::TrackerPanel(wxWindow* parent, Engine& engine)
@@ -27,28 +27,28 @@ TrackerPanel::TrackerPanel(wxWindow* parent, Engine& engine)
 
     wxBoxSizer* btn_sizer = new wxBoxSizer(wxHORIZONTAL);
 
-    m_detach_btn = new wxButton(this, wxID_ANY, "[]", wxDefaultPosition, wxSize(30, 20));
+    m_detach_btn = new wxButton(this, ID_DETACH, "[]", wxDefaultPosition, wxSize(30, 20));
     btn_sizer->Add(m_detach_btn, 0, wxALL, 2);
 
-    m_add_pattern_btn = new wxButton(this, wxID_ANY, "Add", wxDefaultPosition, wxSize(40, btn_h));
+    m_add_pattern_btn = new wxButton(this, ID_ADD_PATTERN, "Add", wxDefaultPosition, wxSize(40, btn_h));
     m_add_pattern_btn->SetWindowStyleFlag(wxBU_EXACTFIT);
     btn_sizer->Add(m_add_pattern_btn, 0, wxALL, 2);
 
-    m_remove_pattern_btn = new wxButton(this, wxID_ANY, "Rem", wxDefaultPosition, wxSize(40, btn_h));
+    m_remove_pattern_btn = new wxButton(this, ID_REMOVE_PATTERN, "Rem", wxDefaultPosition, wxSize(40, btn_h));
     m_remove_pattern_btn->SetWindowStyleFlag(wxBU_EXACTFIT);
     btn_sizer->Add(m_remove_pattern_btn, 0, wxALL, 2);
 
-    m_copy_pattern_btn = new wxButton(this, wxID_ANY, "Copy", wxDefaultPosition, wxSize(40, btn_h));
+    m_copy_pattern_btn = new wxButton(this, ID_COPY_PATTERN, "Copy", wxDefaultPosition, wxSize(40, btn_h));
     m_copy_pattern_btn->SetWindowStyleFlag(wxBU_EXACTFIT);
     btn_sizer->Add(m_copy_pattern_btn, 0, wxALL, 2);
 
-    m_dec_pattern_btn = new wxButton(this, wxID_ANY, "-", wxDefaultPosition, wxSize(60, btn_h));
+    m_dec_pattern_btn = new wxButton(this, ID_DEC_PATTERN, "-", wxDefaultPosition, wxSize(60, btn_h));
     btn_sizer->Add(m_dec_pattern_btn, 0, wxALL, 2);
 
-    m_inc_pattern_btn = new wxButton(this, wxID_ANY, "+", wxDefaultPosition, wxSize(60, btn_h));
+    m_inc_pattern_btn = new wxButton(this, ID_INC_PATTERN, "+", wxDefaultPosition, wxSize(60, btn_h));
     btn_sizer->Add(m_inc_pattern_btn, 0, wxALL, 2);
 
-    m_follow_btn = new wxToggleButton(this, wxID_ANY, "Follow", wxDefaultPosition, wxSize(120, btn_h));
+    m_follow_btn = new wxToggleButton(this, ID_FOLLOW_PLAYBACK, "Follow", wxDefaultPosition, wxSize(120, btn_h));
     m_follow_btn->SetValue(true);
     m_follow_playback = true;
     btn_sizer->Add(m_follow_btn, 0, wxALL, 2);
@@ -75,28 +75,43 @@ TrackerPanel::TrackerPanel(wxWindow* parent, Engine& engine)
 }
 
 void TrackerPanel::on_add_pattern(wxCommandEvent& event) {
-    m_engine.add_pattern_to_order();
+    size_t new_pos = m_engine.add_pattern_to_order();
+    m_selected_order_idx = (int)new_pos;
+    m_engine.m_edit_order_pos.store(new_pos);
+    m_engine.set_active_pattern(m_engine.order_list()[new_pos]);
     update_pattern_list();
 }
 
 void TrackerPanel::on_remove_pattern(wxCommandEvent& event) {
     const auto& order = m_engine.order_list();
-    if (!order.empty()) {
-        m_engine.remove_pattern_from_order(order.size() - 1);
+    if (m_selected_order_idx >= 0 && (size_t)m_selected_order_idx < order.size()) {
+        m_engine.remove_pattern_from_order((size_t)m_selected_order_idx);
+        if (m_selected_order_idx >= (int)m_engine.order_list().size()) {
+            m_selected_order_idx = (int)m_engine.order_list().size() - 1;
+        }
+        if (m_selected_order_idx < 0) m_selected_order_idx = 0;
+        
+        if (!m_engine.order_list().empty()) {
+            m_engine.m_edit_order_pos.store((size_t)m_selected_order_idx);
+            m_engine.set_active_pattern(m_engine.order_list()[m_selected_order_idx]);
+        }
         update_pattern_list();
     }
 }
 
 void TrackerPanel::on_copy_pattern(wxCommandEvent& event) {
     const auto& order = m_engine.order_list();
-    if (!order.empty()) {
-        m_engine.copy_pattern_in_order(order.size() - 1);
+    if (m_selected_order_idx >= 0 && (size_t)m_selected_order_idx < order.size()) {
+        size_t new_pos = m_engine.copy_pattern_in_order((size_t)m_selected_order_idx);
+        m_selected_order_idx = (int)new_pos;
+        m_engine.m_edit_order_pos.store(new_pos);
+        m_engine.set_active_pattern(m_engine.order_list()[new_pos]);
         update_pattern_list();
     }
 }
 
 void TrackerPanel::on_inc_pattern(wxCommandEvent& event) {
-    size_t pos = m_engine.m_edit_order_pos.load();
+    size_t pos = m_selected_order_idx;
     auto order = m_engine.order_list();
     if (pos < order.size()) {
         if (order[pos] < m_engine.pattern_count() - 1) {
@@ -110,7 +125,7 @@ void TrackerPanel::on_inc_pattern(wxCommandEvent& event) {
 }
 
 void TrackerPanel::on_dec_pattern(wxCommandEvent& event) {
-    size_t pos = m_engine.m_edit_order_pos.load();
+    size_t pos = m_selected_order_idx;
     auto order = m_engine.order_list();
     if (pos < order.size()) {
         if (order[pos] > 0) {

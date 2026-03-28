@@ -93,10 +93,13 @@ TracksPanel::TracksPanel(wxWindow* parent, Engine& engine)
 
 void TracksPanel::update() {
     static int last_total_ticks = -1;
+    static int last_track_count = -1;
     int current_total = m_tracks_view->get_total_ticks();
-    if (current_total != last_total_ticks) {
+    int current_tracks = (int)m_engine.track_count();
+    if (current_total != last_total_ticks || current_tracks != last_track_count) {
         m_tracks_view->update_view();
         last_total_ticks = current_total;
+        last_track_count = current_tracks;
     }
     m_tracks_view->Refresh();
 }
@@ -216,7 +219,6 @@ void TracksView::draw(wxDC& dc) {
     // Draw Tracks
     for (int t = 0; t < num_tracks; ++t) {
         int ty = 30 + t * track_h;
-        if (ty > virtual_size.GetHeight()) break;
 
         // Track Header
         dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_bg_color)));
@@ -226,12 +228,14 @@ void TracksView::draw(wxDC& dc) {
         auto& track_obj = m_engine.track(t);
         wxFont bold_font(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
         dc.SetFont(bold_font);
+        dc.SetTextForeground(*wxWHITE);
         wxString name = track_obj.name().substr(0, 15);
         dc.DrawText(name, 5, ty + 5);
 
         // Instrument Info
         wxFont normal_font(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
         dc.SetFont(normal_font);
+        dc.SetTextForeground(wxColour(200, 200, 200));
         Instrument* inst = track_obj.instrument();
         if (inst) {
             wxString inst_name = inst->name().substr(0, 20);

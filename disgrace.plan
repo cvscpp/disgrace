@@ -1,5 +1,5 @@
 Project Specification
-Minimal Tracker-Based DAW (JACK + FLTK)
+Minimal Tracker-Based DAW (JACK + wxWidgets)
 1. Design Philosophy
 
 This application is:
@@ -48,7 +48,7 @@ Sample & Audio Editor
 
 File Format & Import
 
-GUI Subsystem (FLTK)
+GUI Subsystem (wxWidgets)
 
 Infrastructure Utilities
 

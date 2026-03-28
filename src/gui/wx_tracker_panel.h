@@ -11,6 +11,16 @@
 
 #include "../core/key_bindings.h"
 
+enum {
+    ID_ADD_PATTERN = 100,
+    ID_REMOVE_PATTERN,
+    ID_COPY_PATTERN,
+    ID_DEC_PATTERN,
+    ID_INC_PATTERN,
+    ID_FOLLOW_PLAYBACK,
+    ID_DETACH
+};
+
 namespace disgrace_ns {
 
 class Engine;

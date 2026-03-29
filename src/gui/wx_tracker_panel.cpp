@@ -159,6 +159,8 @@ void TrackerPanel::update_pattern_list() {
     m_last_pattern_count = m_engine.pattern_count();
 
     m_pattern_list_container->DestroyChildren();
+    m_pattern_list_container->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_bg));
+    
     m_order_buttons.clear();
     m_pattern_length_inputs.clear();
 
@@ -171,10 +173,13 @@ void TrackerPanel::update_pattern_list() {
 
         wxString pos_str;
         pos_str.Printf("%02zu:", i);
-        wxButton* b = new wxButton(m_pattern_list_container, wxID_ANY, pos_str, wxPoint(start_x, cur_y), wxSize(30, row_h));
+        wxButton* b = new wxButton(m_pattern_list_container, wxID_ANY, pos_str, wxPoint(start_x, cur_y), wxSize(35, row_h));
         if (m_selected_order_idx == (int)i) {
             b->SetBackgroundColour(wxColour(0, 120, 215));
             b->SetForegroundColour(*wxWHITE);
+        } else {
+            b->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_bg_color));
+            b->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_fg_color));
         }
         b->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent& ev) {
             auto& eng = this->m_engine;
@@ -191,14 +196,17 @@ void TrackerPanel::update_pattern_list() {
 
         wxString pat_str;
         pat_str.Printf("%02zu", order[i]);
-        wxStaticText* p = new wxStaticText(m_pattern_list_container, wxID_ANY, pat_str, wxPoint(start_x + 30, cur_y), wxSize(30, row_h));
-        p->SetForegroundColour(wxColour(255, 255, 0));
+        wxStaticText* p = new wxStaticText(m_pattern_list_container, wxID_ANY, pat_str, wxPoint(start_x + 40, cur_y + 5), wxSize(25, row_h - 5));
+        p->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_tracker_note));
 
         int pat_idx = order[i];
         size_t len = m_engine.pattern(pat_idx).row_count();
         wxString len_str;
         len_str.Printf("%zu", len);
-        wxTextCtrl* len_inp = new wxTextCtrl(m_pattern_list_container, wxID_ANY, len_str, wxPoint(start_x + 65, cur_y + 2), wxSize(40, 20), wxTE_PROCESS_ENTER);
+        wxTextCtrl* len_inp = new wxTextCtrl(m_pattern_list_container, wxID_ANY, len_str, wxPoint(start_x + 70, cur_y + 2), wxSize(40, 20), wxTE_PROCESS_ENTER);
+        len_inp->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_bg));
+        len_inp->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_tracker_text));
+        
         len_inp->Bind(wxEVT_TEXT_ENTER, [this, pat_idx](wxCommandEvent& ev) {
             wxTextCtrl* inp = dynamic_cast<wxTextCtrl*>(ev.GetEventObject());
             if (inp) {

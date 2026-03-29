@@ -8,18 +8,9 @@
 namespace disgrace_ns {
 
 enum class ThemeType {
-    Light,
-    Dark,
-    Pastel,
-    PastelCyan,
-    PastelBlue,
-    PastelGreen,
-    PastelGray,
-    PastelRed,
+    ModernDark,
+    ModernLight,
     Classic,
-    Plastic,
-    GTK,
-    Gleam,
     Custom
 };
 

@@ -130,7 +130,8 @@ void SettingsPanel::init_gui_grp(int x, int y, int w, int h) {
     m_gui_btn_h->Append("20");
     m_gui_btn_h->Append("25");
     m_gui_btn_h->Append("30");
-    m_gui_btn_h->SetSelection(1);
+    m_gui_btn_h->SetSelection(m_engine.m_gui_button_height == 20 ? 0 : (m_engine.m_gui_button_height == 30 ? 2 : 1));
+    m_gui_btn_h->Bind(wxEVT_CHOICE, &SettingsPanel::on_gui_btn_h, this);
     row->Add(m_gui_btn_h, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
     sizer->Add(row, 0, wxEXPAND | wxALL, 2);
 
@@ -140,7 +141,8 @@ void SettingsPanel::init_gui_grp(int x, int y, int w, int h) {
     m_gui_font_size->Append("10");
     m_gui_font_size->Append("12");
     m_gui_font_size->Append("14");
-    m_gui_font_size->SetSelection(1);
+    m_gui_font_size->SetSelection(m_engine.m_gui_font_size == 10 ? 0 : (m_engine.m_gui_font_size == 14 ? 2 : 1));
+    m_gui_font_size->Bind(wxEVT_CHOICE, &SettingsPanel::on_gui_font_size, this);
     row->Add(m_gui_font_size, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
     sizer->Add(row, 0, wxEXPAND | wxALL, 2);
 
@@ -208,48 +210,79 @@ void SettingsPanel::init_misc_grp(int x, int y, int w, int h) {
 }
 
 void SettingsPanel::on_reinit_audio(wxCommandEvent& event) {
-    // In a real scenario we would re-init the audio backend
-    m_engine.m_num_ins = m_audio_ins->GetValue();
-    m_engine.m_num_outs = m_audio_outs->GetValue();
-    wxMessageBox("Audio settings updated (restart required for some changes).", "Info", wxOK | wxICON_INFORMATION);
+    m_engine.reinitialize_audio(m_audio_ins->GetValue(), m_audio_outs->GetValue(), m_midi_ins->GetValue(), m_midi_outs->GetValue());
+    m_engine.save_config();
+    wxMessageBox("Audio and MIDI settings updated. Some changes may require restarting the application or re-connecting to JACK.", "Info", wxOK | wxICON_INFORMATION);
 }
 
 void SettingsPanel::on_reinit_midi(wxCommandEvent& event) {
-    wxMessageBox("Reinitializing MIDI...", "Info", wxOK | wxICON_INFORMATION);
+    on_reinit_audio(event);
 }
 
 void SettingsPanel::on_gui_theme(wxCommandEvent& event) {
     int idx = event.GetSelection();
     if (idx != wxNOT_FOUND) {
-        ThemeManager::apply_theme((ThemeType)idx);
+        m_engine.m_gui_theme = (ThemeType)idx;
         ThemeManager::apply_theme_and_settings(m_engine);
+        m_engine.save_config();
+        
         // Refresh entire UI
         wxWindow* top = wxGetTopLevelParent(this);
-        if (top) top->Refresh();
+        if (top) {
+            top->Refresh();
+            // Force update of children if needed
+            top->Update();
+        }
     }
 }
 
-void SettingsPanel::on_gui_btn_h(wxCommandEvent& event) {}
-void SettingsPanel::on_gui_font_size(wxCommandEvent& event) {}
+void SettingsPanel::on_gui_btn_h(wxCommandEvent& event) {
+    int idx = event.GetSelection();
+    if (idx != wxNOT_FOUND) {
+        wxString s = m_gui_btn_h->GetString(idx);
+        long val;
+        if (s.ToLong(&val)) {
+            m_engine.m_gui_button_height = (int)val;
+            m_engine.save_config();
+        }
+    }
+}
+
+void SettingsPanel::on_gui_font_size(wxCommandEvent& event) {
+    int idx = event.GetSelection();
+    if (idx != wxNOT_FOUND) {
+        wxString s = m_gui_font_size->GetString(idx);
+        long val;
+        if (s.ToLong(&val)) {
+            m_engine.m_gui_font_size = (int)val;
+            m_engine.save_config();
+        }
+    }
+}
 
 void SettingsPanel::on_waveform_color(wxCommandEvent& event) {
     wxColourData data;
-    data.SetColour(wxColour(m_engine.m_waveform_color));
+    data.SetColour(ThemeManager::toWxColour(m_engine.m_waveform_color));
     wxColourDialog dlg(this, &data);
     if (dlg.ShowModal() == wxID_OK) {
         wxColour c = dlg.GetColourData().GetColour();
         m_engine.m_waveform_color = (c.Red() << 24) | (c.Green() << 16) | (c.Blue() << 8) | 255;
+        m_engine.save_config();
+        Refresh();
     }
 }
 
 void SettingsPanel::on_bg_color(wxCommandEvent& event) {
     wxColourData data;
-    data.SetColour(wxColour(m_engine.m_bg_color));
+    data.SetColour(ThemeManager::toWxColour(m_engine.m_bg_color));
     wxColourDialog dlg(this, &data);
     if (dlg.ShowModal() == wxID_OK) {
         wxColour c = dlg.GetColourData().GetColour();
         m_engine.m_bg_color = (c.Red() << 24) | (c.Green() << 16) | (c.Blue() << 8) | 255;
-        ThemeManager::apply_theme(Theme{}); // Switch to Custom
+        m_engine.m_gui_theme = ThemeType::Custom;
+        m_gui_theme->SetSelection((int)ThemeType::Custom);
+        m_engine.save_config();
+        
         wxWindow* top = wxGetTopLevelParent(this);
         if (top) top->Refresh();
     }
@@ -257,12 +290,15 @@ void SettingsPanel::on_bg_color(wxCommandEvent& event) {
 
 void SettingsPanel::on_fg_color(wxCommandEvent& event) {
     wxColourData data;
-    data.SetColour(wxColour(m_engine.m_fg_color));
+    data.SetColour(ThemeManager::toWxColour(m_engine.m_fg_color));
     wxColourDialog dlg(this, &data);
     if (dlg.ShowModal() == wxID_OK) {
         wxColour c = dlg.GetColourData().GetColour();
         m_engine.m_fg_color = (c.Red() << 24) | (c.Green() << 16) | (c.Blue() << 8) | 255;
-        ThemeManager::apply_theme(Theme{}); // Switch to Custom
+        m_engine.m_gui_theme = ThemeType::Custom;
+        m_gui_theme->SetSelection((int)ThemeType::Custom);
+        m_engine.save_config();
+        
         wxWindow* top = wxGetTopLevelParent(this);
         if (top) top->Refresh();
     }

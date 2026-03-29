@@ -62,9 +62,8 @@ NotationPanel::NotationPanel(wxWindow* parent, Engine& engine)
 }
 
 void NotationPanel::update() {
-    static size_t last_track_count = 0;
-    if (m_engine.track_count() != last_track_count) {
-        last_track_count = m_engine.track_count();
+    if (m_engine.track_count() != m_last_track_count) {
+        m_last_track_count = m_engine.track_count();
         m_notation_view->update_view();
     }
     m_notation_view->Refresh();

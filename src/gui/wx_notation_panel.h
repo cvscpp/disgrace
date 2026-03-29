@@ -66,6 +66,7 @@ private:
 
     Engine& m_engine;
     int m_tab_index = -1;
+    size_t m_last_track_count = 0;
     wxButton* m_zoom_in_btn;
     wxButton* m_zoom_out_btn;
     wxButton* m_view_all_btn;

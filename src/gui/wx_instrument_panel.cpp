@@ -429,6 +429,7 @@ void InstrumentPanel::update_instrument_list() {
     if (m_inst_scroll->GetSizer()) {
         m_inst_scroll->GetSizer()->Clear(true);
     }
+    m_inst_scroll->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_bg));
     
     for (size_t i = 0; i < m_engine.instrument_count(); ++i) {
         auto& inst = m_engine.instrument(i);
@@ -437,8 +438,11 @@ void InstrumentPanel::update_instrument_list() {
         
         wxButton* sel = new wxButton(row, wxID_ANY, wxString::Format("%zu:", i + 1), wxDefaultPosition, wxSize(40, 25), wxBORDER_NONE);
         if ((int)i == m_selected_instrument) {
-            sel->SetBackgroundColour(wxColour(255, 255, 0));
-            sel->SetForegroundColour(*wxBLACK);
+            sel->SetBackgroundColour(wxColour(0, 120, 215));
+            sel->SetForegroundColour(*wxWHITE);
+        } else {
+            sel->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_bg_color));
+            sel->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_fg_color));
         }
         sel->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&){ 
             this->CallAfter([this, i](){
@@ -448,6 +452,8 @@ void InstrumentPanel::update_instrument_list() {
         row_sizer->Add(sel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
         
         wxTextCtrl* name = new wxTextCtrl(row, wxID_ANY, inst.name(), wxDefaultPosition, wxSize(120, -1), wxTE_PROCESS_ENTER);
+        name->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_bg));
+        name->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_tracker_text));
         name->Bind(wxEVT_TEXT_ENTER, [this, i](wxCommandEvent& ev){
             m_engine.instrument(i).set_name(ev.GetString().ToStdString());
         });
@@ -503,6 +509,7 @@ void InstrumentPanel::update_editor() {
             if (m_sample_scroll->GetSizer()) {
                 m_sample_scroll->GetSizer()->Clear(true);
             }
+            m_sample_scroll->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_bg));
 
             for (size_t i = 0; i < sampler->sample_count(); ++i) {
                 const auto& entry = sampler->get_sample(i);
@@ -511,8 +518,11 @@ void InstrumentPanel::update_editor() {
                 
                 wxButton* sel = new wxButton(row, wxID_ANY, wxString::Format("%zu", i + 1), wxDefaultPosition, wxSize(25, 25), wxBORDER_NONE);
                 if ((int)i == m_selected_sample) {
-                    sel->SetBackgroundColour(wxColour(255, 255, 0));
-                    sel->SetForegroundColour(*wxBLACK);
+                    sel->SetBackgroundColour(wxColour(0, 120, 215));
+                    sel->SetForegroundColour(*wxWHITE);
+                } else {
+                    sel->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_bg_color));
+                    sel->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_fg_color));
                 }
                 sel->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&){
                     m_selected_sample = (int)i;
@@ -522,6 +532,8 @@ void InstrumentPanel::update_editor() {
                 rs->Add(sel, 0, wxALL, 1);
                 
                 wxTextCtrl* name = new wxTextCtrl(row, wxID_ANY, entry.name, wxDefaultPosition, wxSize(80, -1), wxTE_PROCESS_ENTER);
+                name->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_bg));
+                name->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_tracker_text));
                 name->Bind(wxEVT_TEXT_ENTER, [this, i](wxCommandEvent& ev){
                     static_cast<SampleInstrument*>(&m_engine.instrument(m_selected_instrument))->set_sample_name(i, ev.GetString().ToStdString());
                 });

@@ -10,52 +10,74 @@ bool ThemeManager::m_initialized = false;
 void ThemeManager::init_themes() {
     if (m_initialized) return;
     
-    m_themes.resize(13);
+    m_themes.resize(4);
     
-    m_themes[0].name = "Light";
-    m_themes[0].background = 0xFFFFFFFF;
-    m_themes[0].foreground = 0x000000FF;
-    m_themes[0].selection = 0x0000FFFF;
-    m_themes[0].inactive = 0xAAAAAAFF;
-    m_themes[0].button_color = 0xDDDDDDFF;
-    m_themes[0].input_background = 0xFFFFFFFF;
-    m_themes[0].text_color = 0x000000FF;
-    m_themes[0].label_color = 0x000000FF;
+    // Modern Dark
+    m_themes[0].name = "Modern Dark";
+    m_themes[0].background = 0x2D2D2DFF;
+    m_themes[0].foreground = 0xDCDCDCFF;
+    m_themes[0].selection = 0x4B4B4BFF;
+    m_themes[0].inactive = 0x646464FF;
+    m_themes[0].button_color = 0x3C3C3CFF;
+    m_themes[0].input_background = 0x1E1E1EFF;
+    m_themes[0].text_color = 0xDCDCDCFF;
+    m_themes[0].label_color = 0xAAAAAAFF;
     m_themes[0].scheme = "none";
-    m_themes[0].tracker_bg = 0xFFFFFFFF;
-    m_themes[0].tracker_text = 0x000000FF;
-    m_themes[0].tracker_cursor = 0xFF0000FF;
-    m_themes[0].tracker_row_highlight = 0xE0E0FFFF;
-    m_themes[0].tracker_lpb_highlight = 0xF0F0F0FF;
-    m_themes[0].tracker_note = 0x0000FFFF;
-    m_themes[0].tracker_sample = 0x00AA00FF;
-    m_themes[0].tracker_volume = 0xAAAAAAFF;
-    m_themes[0].tracker_effect = 0xAA5500FF;
+    m_themes[0].tracker_bg = 0x121212FF;
+    m_themes[0].tracker_text = 0xB0B0B0FF;
+    m_themes[0].tracker_cursor = 0x00A0FFFF;
+    m_themes[0].tracker_row_highlight = 0x242424FF;
+    m_themes[0].tracker_lpb_highlight = 0x1A1A1AFF;
+    m_themes[0].tracker_note = 0x569CD6FF;
+    m_themes[0].tracker_sample = 0x4EC9B0FF;
+    m_themes[0].tracker_volume = 0xCE9178FF;
+    m_themes[0].tracker_effect = 0xC586C0FF;
 
-    m_themes[1].name = "Dark";
-    m_themes[1].background = 0x1E1E1EFF;
-    m_themes[1].foreground = 0xC8C8C8FF;
-    m_themes[1].selection = 0x3C3C3CFF;
-    m_themes[1].inactive = 0x666666FF;
-    m_themes[1].button_color = 0x3C3C3CFF;
-    m_themes[1].input_background = 0x2D2D2DFF;
-    m_themes[1].text_color = 0xC8C8C8FF;
-    m_themes[1].label_color = 0xC8C8C8FF;
+    // Modern Light
+    m_themes[1].name = "Modern Light";
+    m_themes[1].background = 0xF3F3F3FF;
+    m_themes[1].foreground = 0x333333FF;
+    m_themes[1].selection = 0xADD6FFFF;
+    m_themes[1].inactive = 0xCCCCCCFF;
+    m_themes[1].button_color = 0xE5E5E5FF;
+    m_themes[1].input_background = 0xFFFFFFFF;
+    m_themes[1].text_color = 0x333333FF;
+    m_themes[1].label_color = 0x666666FF;
     m_themes[1].scheme = "none";
-    m_themes[1].tracker_bg = 0x1E1E1EFF;
-    m_themes[1].tracker_text = 0xC8C8C8FF;
-    m_themes[1].tracker_cursor = 0xFFFF00FF;
-    m_themes[1].tracker_row_highlight = 0x3C3C3CFF;
-    m_themes[1].tracker_lpb_highlight = 0x2D2D37FF;
-    m_themes[1].tracker_note = 0xB4B4FFFF;
-    m_themes[1].tracker_sample = 0xB4FFB4FF;
-    m_themes[1].tracker_volume = 0xFFFFB4FF;
-    m_themes[1].tracker_effect = 0xFFB4FFFF;
+    m_themes[1].tracker_bg = 0xFFFFFFFF;
+    m_themes[1].tracker_text = 0x333333FF;
+    m_themes[1].tracker_cursor = 0x007ACCFF;
+    m_themes[1].tracker_row_highlight = 0xF0F7FFFF;
+    m_themes[1].tracker_lpb_highlight = 0xF3F3F3FF;
+    m_themes[1].tracker_note = 0x0000FFFF;
+    m_themes[1].tracker_sample = 0x008000FF;
+    m_themes[1].tracker_volume = 0xA31515FF;
+    m_themes[1].tracker_effect = 0xAF5700FF;
 
-    for (int i = 2; i < 13; ++i) {
-        m_themes[i] = m_themes[1];
-        m_themes[i].name = "Theme" + std::to_string(i);
-    }
+    // Classic (FastTracker II inspired)
+    m_themes[2].name = "Classic";
+    m_themes[2].background = 0xCCCCCCFF;
+    m_themes[2].foreground = 0x000000FF;
+    m_themes[2].selection = 0x808080FF;
+    m_themes[2].inactive = 0xAAAAAAFF;
+    m_themes[2].button_color = 0xCCCCCCFF;
+    m_themes[2].input_background = 0xFFFFFFFF;
+    m_themes[2].text_color = 0x000000FF;
+    m_themes[2].label_color = 0x000000FF;
+    m_themes[2].scheme = "none";
+    m_themes[2].tracker_bg = 0x000000FF;
+    m_themes[2].tracker_text = 0xC0C0C0FF;
+    m_themes[2].tracker_cursor = 0xFFFF00FF;
+    m_themes[2].tracker_row_highlight = 0x404040FF;
+    m_themes[2].tracker_lpb_highlight = 0x202020FF;
+    m_themes[2].tracker_note = 0xFFFFFFFF;
+    m_themes[2].tracker_sample = 0x00FF00FF;
+    m_themes[2].tracker_volume = 0x00FFFFFF;
+    m_themes[2].tracker_effect = 0xFFFF00FF;
+
+    // Custom (Placeholder)
+    m_themes[3] = m_themes[0];
+    m_themes[3].name = "Custom";
     
     m_initialized = true;
 }
@@ -66,7 +88,10 @@ void ThemeManager::apply_theme(ThemeType type) {
 }
 
 void ThemeManager::apply_theme(const Theme& theme) {
+    init_themes();
     m_current_theme = ThemeType::Custom;
+    m_themes[3] = theme;
+    m_themes[3].name = "Custom";
 }
 
 void ThemeManager::apply_theme_and_settings(Engine& engine) {
@@ -78,6 +103,7 @@ void ThemeManager::apply_theme_and_settings(Engine& engine) {
     if (idx < m_themes.size()) {
         const Theme& theme = m_themes[idx];
         
+        engine.m_gui_theme = type;
         engine.m_bg_color = theme.background;
         engine.m_fg_color = theme.foreground;
         engine.m_button_color = theme.button_color;

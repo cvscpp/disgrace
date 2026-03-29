@@ -100,7 +100,10 @@ void WxMainWindow::init_panels() {
 void WxMainWindow::update_all_uis() {
     if (m_mixer_panel) m_mixer_panel->update_mixer_ui();
     if (m_tracker_panel) m_tracker_panel->update_pattern_list();
-    if (m_project_panel) m_project_panel->update_track_list();
+    if (m_project_panel) {
+        m_project_panel->update_track_list();
+        m_project_panel->update_metadata();
+    }
     if (m_instrument_panel) {
         m_instrument_panel->update_instrument_list();
         m_instrument_panel->update_editor();

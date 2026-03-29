@@ -16,6 +16,7 @@ enum {
     ID_ZOOM_OUT,
     ID_VIEW_ALL,
     ID_VIEW_SEL,
+    ID_PREVIEW_ALL,
     ID_DETACH,
     ID_PREVIEW_BASE = 10200
 };
@@ -25,6 +26,7 @@ wxBEGIN_EVENT_TABLE(NotationPanel, wxPanel)
     EVT_BUTTON(ID_ZOOM_OUT, NotationPanel::on_zoom_out)
     EVT_BUTTON(ID_VIEW_ALL, NotationPanel::on_view_all)
     EVT_BUTTON(ID_VIEW_SEL, NotationPanel::on_view_sel)
+    EVT_BUTTON(ID_PREVIEW_ALL, NotationPanel::on_preview_all)
     EVT_BUTTON(ID_DETACH, NotationPanel::on_detach)
 wxEND_EVENT_TABLE()
 
@@ -41,12 +43,14 @@ NotationPanel::NotationPanel(wxWindow* parent, Engine& engine)
     m_zoom_out_btn = new wxButton(this, ID_ZOOM_OUT, "Zoom Out", wxDefaultPosition, wxSize(btn_w, btn_h));
     m_view_all_btn = new wxButton(this, ID_VIEW_ALL, "View All", wxDefaultPosition, wxSize(btn_w, btn_h));
     m_view_sel_btn = new wxButton(this, ID_VIEW_SEL, "View Sel", wxDefaultPosition, wxSize(btn_w, btn_h));
+    m_preview_all_btn = new wxButton(this, ID_PREVIEW_ALL, "Preview All", wxDefaultPosition, wxSize(100, btn_h));
     m_detach_btn = new wxButton(this, ID_DETACH, "[]", wxDefaultPosition, wxSize(30, btn_h));
 
     btn_sizer->Add(m_zoom_in_btn, 0, wxALL, 2);
     btn_sizer->Add(m_zoom_out_btn, 0, wxALL, 2);
     btn_sizer->Add(m_view_all_btn, 0, wxALL, 2);
     btn_sizer->Add(m_view_sel_btn, 0, wxALL, 2);
+    btn_sizer->Add(m_preview_all_btn, 0, wxALL, 2);
     btn_sizer->Add(m_detach_btn, 0, wxALL, 2);
 
     main_sizer->Add(btn_sizer, 0, wxEXPAND | wxALL, 2);
@@ -58,6 +62,11 @@ NotationPanel::NotationPanel(wxWindow* parent, Engine& engine)
 }
 
 void NotationPanel::update() {
+    static size_t last_track_count = 0;
+    if (m_engine.track_count() != last_track_count) {
+        last_track_count = m_engine.track_count();
+        m_notation_view->update_view();
+    }
     m_notation_view->Refresh();
 }
 
@@ -65,6 +74,24 @@ void NotationPanel::on_zoom_in(wxCommandEvent& event) { m_notation_view->zoom_in
 void NotationPanel::on_zoom_out(wxCommandEvent& event) { m_notation_view->zoom_out(); }
 void NotationPanel::on_view_all(wxCommandEvent& event) { m_notation_view->view_all(); }
 void NotationPanel::on_view_sel(wxCommandEvent& event) { m_notation_view->view_selection(); }
+void NotationPanel::on_preview_all(wxCommandEvent& event) {
+    std::string ly_src = LilyPondExporter::generate_ly_source(m_engine, -1);
+    
+    std::string tmp_ly = "/tmp/disgrace_preview_all.ly";
+    std::string tmp_pdf = "/tmp/disgrace_preview_all.pdf";
+    std::ofstream f(tmp_ly);
+    if (f.is_open()) {
+        f << ly_src;
+        f.close();
+        
+        std::string cmd = "lilypond -o /tmp/disgrace_preview_all " + tmp_ly;
+        if (wxExecute(cmd, wxEXEC_SYNC) == 0) {
+            wxLaunchDefaultApplication(tmp_pdf);
+        } else {
+            wxMessageBox("LilyPond execution failed. Make sure 'lilypond' is installed and in your PATH.", "Error", wxOK | wxICON_ERROR);
+        }
+    }
+}
 void NotationPanel::on_detach(wxCommandEvent& event) {
     if (m_detached_frame) {
         return;
@@ -139,7 +166,10 @@ void NotationView::update_view() {
     int track_h = 120;
     for (int t = 0; t < (int)m_engine.track_count(); ++t) {
         auto& track_obj = m_engine.track(t);
-        if (track_obj.instrument()) {
+        Instrument* inst = track_obj.instrument();
+        if (inst && (inst->type() == InstrumentType::SoundFont || 
+                     inst->type() == InstrumentType::Plugin || 
+                     inst->type() == InstrumentType::Midi)) {
             int ty = 30 + t * track_h;
             wxButton* b = new wxButton(this, ID_PREVIEW_BASE + t, "Preview (LY)", wxPoint(5, ty + 70), wxSize(110, 25));
             wxFont btn_font(8, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
@@ -192,6 +222,54 @@ void NotationView::OnPaint(wxPaintEvent& event) {
     draw(dc);
 }
 
+void NotationView::draw_clef_treble(wxDC& dc, int x, int y) {
+    dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_text)));
+    dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_text)));
+    
+    int cx = x + 18;
+    int cy = y + 8;
+    int s = 10;
+    
+    dc.DrawLine(cx, cy, cx, cy + 6*s);
+    dc.DrawLine(cx - s, cy + 2*s, cx, cy + 2*s);
+    dc.DrawLine(cx - s, cy + 2*s, cx - s, cy + 5*s);
+    
+    dc.DrawEllipse(cx - 2, cy + 6*s - 2, 4, 4);
+    
+    wxPoint curve_pts[] = {
+        wxPoint(cx - 4, cy + 6*s),
+        wxPoint(cx - s - 2, cy + 5*s),
+        wxPoint(cx - s - 4, cy + 4*s),
+        wxPoint(cx - s + 2, cy + 4*s)
+    };
+    dc.DrawPolygon(4, curve_pts, 0, 0);
+    
+    for (int i = 0; i < 4; i++) {
+        curve_pts[i] = wxPoint(curve_pts[i].x + 2, curve_pts[i].y - s/2);
+    }
+    dc.DrawPolygon(4, curve_pts, 0, 0);
+}
+
+void NotationView::draw_clef_bass(wxDC& dc, int x, int y) {
+    dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_text)));
+    dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_text)));
+    
+    int cx = x + 16;
+    int cy = y + 16;
+    int s = 10;
+    
+    dc.DrawEllipse(cx - 6, cy + s/2, 14, s);
+    
+    dc.DrawLine(cx + 6, cy, cx + 10, cy - s/2);
+    dc.DrawLine(cx + 10, cy - s/2, cx + 10, cy + 3*s/2);
+    
+    dc.DrawLine(cx + 6, cy, cx + 10, cy + s/2);
+    dc.DrawLine(cx + 10, cy + s/2, cx + 10, cy + 3*s/2);
+    
+    dc.DrawCircle(cx + 12, cy + s, 2);
+    dc.DrawCircle(cx + 12, cy + 2*s, 2);
+}
+
 void NotationView::draw_staff(wxDC& dc, int tx, int ty, int tw, int type) {
     dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_text)));
     int line_spacing = 8;
@@ -205,31 +283,19 @@ void NotationView::draw_staff(wxDC& dc, int tx, int ty, int tw, int type) {
     if (type == 0 || type == 3) { // Violin or Drums
         draw_5_lines(ty + 20);
         if (type == 0) { // Treble Clef
-            wxFont clef_font(24, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
-            dc.SetFont(clef_font);
-            dc.DrawText("&", tx + 10, ty + 10); 
+            draw_clef_treble(dc, tx + 5, ty + 15);
         } else { // Drum Clef
             dc.DrawLine(tx + 10, ty + 28, tx + 10, ty + 44);
             dc.DrawLine(tx + 15, ty + 28, tx + 15, ty + 44);
         }
     } else if (type == 1) { // Bass Clef
         draw_5_lines(ty + 20);
-        wxFont clef_font(20, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
-        dc.SetFont(clef_font);
-        dc.DrawText("?", tx + 10, ty + 12);
-        dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_text)));
-        dc.DrawCircle(tx + 26, ty + 26, 1);
-        dc.DrawCircle(tx + 26, ty + 34, 1);
+        draw_clef_bass(dc, tx + 5, ty + 15);
     } else if (type == 2) { // Grand Staff
         draw_5_lines(ty + 10);
         draw_5_lines(ty + 10 + 6 * line_spacing);
-        wxFont clef_font(20, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
-        dc.SetFont(clef_font);
-        dc.DrawText("&", tx + 10, ty - 5);
-        dc.DrawText("?", tx + 10, ty - 5 + 6 * line_spacing);
-        dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_text)));
-        dc.DrawCircle(tx + 26, ty + 19 + 6 * line_spacing, 1);
-        dc.DrawCircle(tx + 26, ty + 27 + 6 * line_spacing, 1);
+        draw_clef_treble(dc, tx + 5, ty + 5);
+        draw_clef_bass(dc, tx + 5, ty + 5 + 6 * line_spacing);
         dc.DrawLine(tx, ty + 10, tx, ty + 10 + 10 * line_spacing);
     }
 }
@@ -292,10 +358,38 @@ void NotationView::draw(wxDC& dc) {
         dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_fg_color)));
         dc.DrawRectangle(0, ty, header_w, track_h - 1);
 
-        wxFont bold_font(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
+        wxFont bold_font(11, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
         dc.SetFont(bold_font);
-        wxString name = track_obj.name().substr(0, 15);
-        dc.DrawText(name, 5, ty + track_h / 2 - 10);
+        dc.SetTextForeground(*wxWHITE);
+        wxString name = track_obj.name().substr(0, 14);
+        dc.DrawText(name, 5, ty + 5);
+
+        wxFont normal_font(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
+        dc.SetFont(normal_font);
+        dc.SetTextForeground(wxColour(200, 200, 200));
+        wxString inst_name = inst->name().substr(0, 18);
+        dc.DrawText(inst_name, 5, ty + 20);
+        
+        const char* type_str = "";
+        switch(inst->type()) {
+            case InstrumentType::Sampler: type_str = "[Sampler]"; break;
+            case InstrumentType::SoundFont: type_str = "[SoundFont]"; break;
+            case InstrumentType::Plugin: type_str = "[Plugin]"; break;
+            case InstrumentType::Midi: type_str = "[MIDI]"; break;
+            default: type_str = "[None]"; break;
+        }
+        dc.DrawText(type_str, 5, ty + 33);
+
+        const char* clef_str = "";
+        int notation_type = (int)track_obj.notation();
+        switch(notation_type) {
+            case 0: clef_str = "Treble clef"; break;
+            case 1: clef_str = "Bass clef"; break;
+            case 2: clef_str = "Grand staff"; break;
+            case 3: clef_str = "Percussion"; break;
+            default: clef_str = "Unknown"; break;
+        }
+        dc.DrawText(clef_str, 5, ty + 46);
 
         int staff_type = (int)track_obj.notation();
         int staff_x = header_w;

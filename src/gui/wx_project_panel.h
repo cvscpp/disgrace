@@ -21,6 +21,7 @@ public:
     ProjectPanel(wxWindow* parent, WxMainWindow* main_window, Engine& engine);
 
     void update_track_list();
+    void update_metadata();
 
 private:
     WxMainWindow* m_main_window;
@@ -37,6 +38,11 @@ private:
     wxButton* m_export_ly_btn;
     wxDirPickerCtrl* m_dir_picker;
     wxListBox* m_file_list;
+
+    wxTextCtrl* m_title_in;
+    wxTextCtrl* m_artist_in;
+    wxTextCtrl* m_album_in;
+    wxTextCtrl* m_year_in;
 
     wxChoice* m_sample_rate_ch;
     wxCheckBox* m_separate_tracks_btn;

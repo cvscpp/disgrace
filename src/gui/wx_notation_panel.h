@@ -28,6 +28,8 @@ public:
 private:
     void draw_staff(wxDC& dc, int tx, int ty, int tw, int type);
     void draw_note(wxDC& dc, int nx, int ny, int note, int staff_type);
+    void draw_clef_treble(wxDC& dc, int x, int y);
+    void draw_clef_bass(wxDC& dc, int x, int y);
     void on_preview_track(wxCommandEvent& event);
 
     int get_total_ticks();
@@ -59,6 +61,7 @@ private:
     void on_zoom_out(wxCommandEvent& event);
     void on_view_all(wxCommandEvent& event);
     void on_view_sel(wxCommandEvent& event);
+    void on_preview_all(wxCommandEvent& event);
     void on_detach(wxCommandEvent& event);
 
     Engine& m_engine;
@@ -67,6 +70,7 @@ private:
     wxButton* m_zoom_out_btn;
     wxButton* m_view_all_btn;
     wxButton* m_view_sel_btn;
+    wxButton* m_preview_all_btn;
     wxButton* m_detach_btn;
     class NotationView* m_notation_view;
     class DetachedFrame* m_detached_frame = nullptr;

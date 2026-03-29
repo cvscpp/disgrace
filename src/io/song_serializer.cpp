@@ -37,6 +37,13 @@ namespace disgrace_ns
         j["lpb"]   = engine.lpb();
         j["order"] = engine.order_list();
 
+        json jmeta;
+        jmeta["title"]  = engine.project_title();
+        jmeta["artist"] = engine.project_artist();
+        jmeta["album"]  = engine.project_album();
+        jmeta["year"]   = engine.project_year();
+        j["metadata"] = jmeta;
+
         json jmaster;
         jmaster["gain"] = engine.master_gain();
         jmaster["muted"] = engine.m_master.muted();
@@ -179,6 +186,14 @@ namespace disgrace_ns
         engine.set_tempo(j["tempo"]);
         engine.set_lpb(j["lpb"]);
         engine.set_order(j["order"].get<::std::vector<size_t>>());
+
+        if (j.contains("metadata")) {
+            auto& jm = j["metadata"];
+            engine.set_project_title(jm.value("title", "Untitled Project"));
+            engine.set_project_artist(jm.value("artist", "Unknown Artist"));
+            engine.set_project_album(jm.value("album", ""));
+            engine.set_project_year(jm.value("year", ""));
+        }
 
         if (j.contains("master")) {
             engine.set_master_gain(j["master"].value("gain", 1.0f));

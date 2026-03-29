@@ -246,6 +246,15 @@ public:
     uint32_t step_size() const { return m_step_size; }
     void set_step_size(uint32_t s) { m_step_size = std::max(1u, std::min(64u, s)); }
 
+    const std::string& project_title() const { return m_project_title; }
+    void set_project_title(const std::string& t) { m_project_title = t; }
+    const std::string& project_artist() const { return m_project_artist; }
+    void set_project_artist(const std::string& a) { m_project_artist = a; }
+    const std::string& project_album() const { return m_project_album; }
+    void set_project_album(const std::string& a) { m_project_album = a; }
+    const std::string& project_year() const { return m_project_year; }
+    void set_project_year(const std::string& y) { m_project_year = y; }
+
     double get_current_time_seconds() const;
     double get_time_at_row(size_t row) const;
 
@@ -299,6 +308,11 @@ private:
     uint32_t m_sample_rate = 44100;
     int m_base_octave = 4;
     uint32_t m_step_size = 1;
+
+    std::string m_project_title = "Untitled Project";
+    std::string m_project_artist = "Unknown Artist";
+    std::string m_project_album = "";
+    std::string m_project_year = "";
 };
 
 } // namespace disgrace_ns

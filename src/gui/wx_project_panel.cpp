@@ -56,6 +56,27 @@ ProjectPanel::ProjectPanel(wxWindow* parent, WxMainWindow* main_window, Engine& 
 
     update_file_list(".");
 
+    // Project Metadata Fields
+    wxStaticBoxSizer* meta_sizer = new wxStaticBoxSizer(wxVERTICAL, m_left_panel, "Project Info");
+    
+    auto add_meta_field = [&](const wxString& label, wxTextCtrl** ctrl, const std::string& initial_val, auto setter) {
+        wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
+        row->Add(new wxStaticText(m_left_panel, wxID_ANY, label, wxDefaultPosition, wxSize(50, -1)), 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+        *ctrl = new wxTextCtrl(m_left_panel, wxID_ANY, initial_val);
+        (*ctrl)->Bind(wxEVT_TEXT, [this, setter, ctrl](wxCommandEvent&) {
+            (m_engine.*setter)((*ctrl)->GetValue().ToStdString());
+        });
+        row->Add(*ctrl, 1, wxEXPAND | wxALL, 2);
+        meta_sizer->Add(row, 0, wxEXPAND);
+    };
+
+    add_meta_field("Title:", &m_title_in, m_engine.project_title(), &Engine::set_project_title);
+    add_meta_field("Artist:", &m_artist_in, m_engine.project_artist(), &Engine::set_project_artist);
+    add_meta_field("Album:", &m_album_in, m_engine.project_album(), &Engine::set_project_album);
+    add_meta_field("Year:", &m_year_in, m_engine.project_year(), &Engine::set_project_year);
+
+    left_sizer->Add(meta_sizer, 0, wxEXPAND | wxALL, 5);
+
     wxBoxSizer* export_opts_sizer = new wxBoxSizer(wxHORIZONTAL);
     export_opts_sizer->Add(new wxStaticText(m_left_panel, wxID_ANY, "Sample Rate:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
     m_sample_rate_ch = new wxChoice(m_left_panel, wxID_ANY);
@@ -103,6 +124,13 @@ ProjectPanel::ProjectPanel(wxWindow* parent, WxMainWindow* main_window, Engine& 
     SetSizer(main_sizer);
 
     update_track_list();
+}
+
+void ProjectPanel::update_metadata() {
+    if (m_title_in) m_title_in->ChangeValue(m_engine.project_title());
+    if (m_artist_in) m_artist_in->ChangeValue(m_engine.project_artist());
+    if (m_album_in) m_album_in->ChangeValue(m_engine.project_album());
+    if (m_year_in) m_year_in->ChangeValue(m_engine.project_year());
 }
 
 void ProjectPanel::update_track_list() {

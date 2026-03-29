@@ -145,6 +145,11 @@ void Engine::new_project() {
     m_current_tick = 0;
     m_edit_order_pos.store(0);
     m_order_pos.store(0);
+
+    m_project_title = "Untitled Project";
+    m_project_artist = "Unknown Artist";
+    m_project_album = "";
+    m_project_year = "";
 }
 
 void Engine::reinitialize_audio(uint32_t num_ins, uint32_t num_outs, uint32_t num_midi_ins, uint32_t num_midi_outs) {

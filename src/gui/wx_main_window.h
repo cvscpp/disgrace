@@ -39,6 +39,7 @@ class InstrumentPanel;
 class MixerPanel;
 class SettingsPanel;
 class ProjectPanel;
+class HelpPanel;
 class Track;
 
 class WxMainWindow : public wxFrame {
@@ -75,6 +76,7 @@ private:
     InstrumentPanel* m_instrument_panel;
     MixerPanel* m_mixer_panel;
     SettingsPanel* m_settings_panel;
+    HelpPanel* m_help_panel;
 
     int m_selected_tab;
 

@@ -26,6 +26,7 @@
 #include "wx_instrument_panel.h"
 #include "wx_settings_panel.h"
 #include "wx_project_panel.h"
+#include "wx_help_panel.h"
 #include "../core/engine.h"
 
 namespace disgrace_ns {
@@ -50,6 +51,7 @@ WxMainWindow::WxMainWindow(int w, int h, const wxString& title, Engine& engine)
       m_instrument_panel(nullptr),
       m_mixer_panel(nullptr),
       m_settings_panel(nullptr),
+      m_help_panel(nullptr),
       m_selected_tab(0)
 {
     SetBackgroundStyle(wxBG_STYLE_SYSTEM);
@@ -105,6 +107,9 @@ void WxMainWindow::init_panels() {
 
     m_settings_panel = new SettingsPanel(m_tabs, m_engine);
     m_tabs->AddPage(m_settings_panel, "Settings");
+
+    m_help_panel = new HelpPanel(m_tabs, m_engine);
+    m_tabs->AddPage(m_help_panel, "Help");
 
     m_tabs->Bind(wxEVT_NOTEBOOK_PAGE_CHANGED, [this](wxBookCtrlEvent& event) {
         m_selected_tab = event.GetSelection();

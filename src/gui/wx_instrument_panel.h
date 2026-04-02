@@ -45,6 +45,7 @@ public:
     void update_instrument_list();
     void update_editor();
     void update_rec_inputs();
+    void update_midi_input_choice();
 
     void cut();
     void copy();
@@ -109,6 +110,7 @@ private:
     wxPanel* m_midi_editor;
     wxSpinCtrl* m_midi_channel;
     wxSpinCtrl* m_midi_program;
+    wxChoice* m_midi_input_choice;
 
     wxButton* m_zoom_in_btn;
     wxButton* m_zoom_out_btn;

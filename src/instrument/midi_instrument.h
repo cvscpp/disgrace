@@ -40,6 +40,10 @@ public:
     void set_program(int prog);
     int program() const { return m_program; }
 
+    // Audio Input support (for routing external audio through MIDI instrument bus)
+    void set_audio_input(int channel_l, int channel_r);
+    void get_audio_input(int& channel_l, int& channel_r) const;
+
 protected:
     std::unique_ptr<Voice> create_voice() override { return nullptr; }
 
@@ -48,6 +52,10 @@ private:
     int m_channel;
     int m_program;
     uint8_t m_last_note[16] = {0};
+    
+    // Audio Input
+    int m_audio_input_l = -1;
+    int m_audio_input_r = -1;
 };
 
 } // namespace disgrace_ns

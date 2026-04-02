@@ -412,6 +412,35 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_pg_sizer->Add(m_midi_program, 0, wxALL, 5);
     midi_sizer->Add(m_pg_sizer, 0, wxALL, 5);
 
+    // Audio Input Selection
+    wxBoxSizer* m_input_sizer = new wxBoxSizer(wxHORIZONTAL);
+    m_input_sizer->Add(new wxStaticText(m_midi_editor, wxID_ANY, "Audio Input:"), 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    m_midi_input_choice = new wxChoice(m_midi_editor, wxID_ANY);
+    m_midi_input_choice->Bind(wxEVT_CHOICE, [this](wxCommandEvent& ev) {
+        if (m_selected_instrument >= 0) {
+            auto& inst = m_engine.instrument(m_selected_instrument);
+            if (inst.type() == InstrumentType::Midi) {
+                MidiInstrument* midi = static_cast<MidiInstrument*>(&inst);
+                int sel = ev.GetSelection();
+                uint32_t num_ins = m_engine.m_num_ins;
+                
+                if (sel == 0) {
+                    // "Muted" / "Not Attached"
+                    midi->set_audio_input(-1, -1);
+                } else if (sel <= (int)num_ins) {
+                    // Mono channel sel-1
+                    midi->set_audio_input(sel - 1, -1);
+                } else {
+                    // Stereo pair
+                    int pair_idx = sel - (int)num_ins - 1;
+                    midi->set_audio_input(pair_idx * 2, pair_idx * 2 + 1);
+                }
+            }
+        }
+    });
+    m_input_sizer->Add(m_midi_input_choice, 1, wxEXPAND | wxALL, 5);
+    midi_sizer->Add(m_input_sizer, 0, wxEXPAND | wxALL, 5);
+
     m_midi_editor->SetSizer(midi_sizer);
     m_midi_editor->Hide();
     right_sizer->Add(m_midi_editor, 1, wxEXPAND | wxALL, 2);
@@ -422,6 +451,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     SetSizer(main_sizer);
 
     update_rec_inputs();
+    update_midi_input_choice();
     update_instrument_list();
     update_editor();
 }
@@ -442,6 +472,31 @@ void InstrumentPanel::update_rec_inputs() {
     }
     if (m_rec_input_ch->GetCount() > 0) m_rec_input_ch->SetSelection(0);
 }
+
+void InstrumentPanel::update_midi_input_choice() {
+    if (!m_midi_input_choice) return;
+    
+    m_midi_input_choice->Clear();
+    uint32_t num_ins = m_engine.m_num_ins;
+    
+    // Option 0: Muted / Not Attached
+    m_midi_input_choice->Append("Muted");
+    
+    // Mono channels
+    for (uint32_t i = 0; i < num_ins; ++i) {
+        m_midi_input_choice->Append(wxString::Format("Channel %u", i + 1));
+    }
+    
+    // Stereo pairs
+    for (uint32_t i = 0; i < num_ins; i += 2) {
+        if (i + 1 < num_ins) {
+            m_midi_input_choice->Append(wxString::Format("Stereo %u/%u", i + 1, i + 2));
+        }
+    }
+    
+    m_midi_input_choice->SetSelection(0);
+}
+
 
 void InstrumentPanel::update_instrument_list() {
     if (m_inst_scroll->GetSizer()) {
@@ -660,6 +715,23 @@ void InstrumentPanel::update_editor() {
             MidiInstrument* midi = static_cast<MidiInstrument*>(&inst);
             m_midi_channel->SetValue(midi->channel() + 1);
             m_midi_program->SetValue(midi->program());
+            
+            // Update audio input choice
+            int in_l, in_r;
+            midi->get_audio_input(in_l, in_r);
+            uint32_t num_ins = m_engine.m_num_ins;
+            
+            if (in_l < 0) {
+                m_midi_input_choice->SetSelection(0); // Muted
+            } else if (in_r < 0) {
+                // Mono input
+                m_midi_input_choice->SetSelection(in_l + 1);
+            } else {
+                // Stereo pair input
+                int pair_idx = in_l / 2;
+                m_midi_input_choice->SetSelection(num_ins + 1 + pair_idx);
+            }
+            
             m_midi_editor->Layout();
         }
         else if (inst.type() == InstrumentType::Plugin) {

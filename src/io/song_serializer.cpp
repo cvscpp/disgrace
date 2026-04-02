@@ -117,6 +117,11 @@ namespace disgrace_ns
                 const auto& midi = static_cast<const MidiInstrument&>(inst);
                 jinst["channel"] = midi.channel();
                 jinst["program"] = midi.program();
+                // Audio input routing
+                int in_l, in_r;
+                midi.get_audio_input(in_l, in_r);
+                jinst["audio_input_l"] = in_l;
+                jinst["audio_input_r"] = in_r;
             } else if (inst.type() == InstrumentType::Plugin) {
                 try {
                     const auto& dssi = static_cast<const DSSIInstrument&>(inst);
@@ -255,6 +260,11 @@ namespace disgrace_ns
                     MidiInstrument& midi = static_cast<MidiInstrument&>(inst);
                     midi.set_channel(ji.value("channel", 0));
                     midi.set_program(ji.value("program", 0));
+                    // Audio input routing
+                    midi.set_audio_input(
+                        ji.value("audio_input_l", -1),
+                        ji.value("audio_input_r", -1)
+                    );
                 } else if (type == InstrumentType::Plugin && (ji.contains("plugin_path") || ji.contains("plugin_name"))) {
                     DSSIInstrument& dssi = static_cast<DSSIInstrument&>(inst);
                     std::string path = ji.value("plugin_path", "");

@@ -18,6 +18,7 @@
 
 #include "midi_instrument.h"
 #include "../core/engine.h"
+#include <algorithm>
 
 namespace disgrace_ns {
 
@@ -70,11 +71,21 @@ void MidiInstrument::set_pitch(float freq) {
 }
 
 void MidiInstrument::process(float* l, float* r, size_t nframes) {
-    // External MIDI output doesn't generate local audio.
-    for (size_t i = 0; i < nframes; ++i) {
-        l[i] = 0.0f;
-        r[i] = 0.0f;
-    }
+    // MIDI instruments don't generate audio themselves.
+    // Audio inputs (if attached to the track) are mixed in by the Track after this call.
+    // We output silence; the track will handle audio input routing.
+    std::fill(l, l + nframes, 0.0f);
+    std::fill(r, r + nframes, 0.0f);
+}
+
+void MidiInstrument::set_audio_input(int channel_l, int channel_r) {
+    m_audio_input_l = channel_l;
+    m_audio_input_r = channel_r;
+}
+
+void MidiInstrument::get_audio_input(int& channel_l, int& channel_r) const {
+    channel_l = m_audio_input_l;
+    channel_r = m_audio_input_r;
 }
 
 void MidiInstrument::set_channel(int ch) {

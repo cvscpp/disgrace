@@ -244,7 +244,12 @@ void ProjectPanel::update_track_list() {
         rem_btn->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
             m_engine.remove_track(i);
             update_track_list();
-            if (m_main_window) m_main_window->update_all_uis();
+            // Defer UI update to avoid issues with widget destruction
+            if (m_main_window) {
+                m_main_window->CallAfter([this]() {
+                    if (m_main_window) m_main_window->update_all_uis();
+                });
+            }
         });
         row_sizer->Add(rem_btn, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
@@ -300,7 +305,12 @@ void ProjectPanel::update_track_list() {
         rem_btn->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
             m_engine.remove_bus(i);
             update_track_list();
-            if (m_main_window) m_main_window->update_all_uis();
+            // Defer UI update to avoid issues with widget destruction
+            if (m_main_window) {
+                m_main_window->CallAfter([this]() {
+                    if (m_main_window) m_main_window->update_all_uis();
+                });
+            }
         });
         row_sizer->Add(rem_btn, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 

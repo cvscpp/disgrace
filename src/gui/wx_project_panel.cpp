@@ -147,10 +147,13 @@ void ProjectPanel::update_track_list() {
     size_t num_insts = m_engine.instrument_count();
     size_t num_buses = m_engine.bus_count();
 
+    int current_row = 0;
+
+    // Display tracks
     for (size_t i = 0; i < num_tracks; ++i) {
         auto& track_obj = m_engine.track(i);
 
-        wxPanel* track_row = new wxPanel(m_track_container, wxID_ANY, wxPoint(2, start_y + (int)i * row_h), wxSize(700, row_h));
+        wxPanel* track_row = new wxPanel(m_track_container, wxID_ANY, wxPoint(2, start_y + current_row * row_h), wxSize(700, row_h));
         wxBoxSizer* row_sizer = new wxBoxSizer(wxHORIZONTAL);
 
         wxString idx_str;
@@ -246,9 +249,79 @@ void ProjectPanel::update_track_list() {
         row_sizer->Add(rem_btn, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
         track_row->SetSizer(row_sizer);
+        current_row++;
     }
 
-    int total_h = std::max((int)num_tracks * row_h + 10, 200);
+    // Display buses
+    for (size_t i = 0; i < num_buses; ++i) {
+        auto& bus_obj = m_engine.bus(i);
+
+        wxPanel* bus_row = new wxPanel(m_track_container, wxID_ANY, wxPoint(2, start_y + current_row * row_h), wxSize(700, row_h));
+        wxBoxSizer* row_sizer = new wxBoxSizer(wxHORIZONTAL);
+
+        wxString idx_str;
+        idx_str.Printf("BUS %zu:", i + 1);
+        wxStaticText* label = new wxStaticText(bus_row, wxID_ANY, idx_str, wxDefaultPosition, wxSize(label_w, 25));
+        row_sizer->Add(label, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+
+        wxTextCtrl* name_in = new wxTextCtrl(bus_row, wxID_ANY, bus_obj.name(), wxDefaultPosition, wxSize(input_w, 25));
+        name_in->Bind(wxEVT_TEXT, [this, i, name_in](wxCommandEvent&) {
+            m_engine.bus(i).set_name(name_in->GetValue().ToStdString());
+        });
+        row_sizer->Add(name_in, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+
+        // Bus output routing (can route to master or other buses)
+        wxChoice* out_ch = new wxChoice(bus_row, wxID_ANY);
+        out_ch->Append("Master");
+        for (size_t j = 0; j < num_buses; ++j) {
+            if (i != j) { // Prevent a bus from routing to itself
+                wxString b_name;
+                b_name.Printf("Bus %zu", j + 1);
+                out_ch->Append(b_name);
+            }
+        }
+        int current_output = bus_obj.output_bus();
+        out_ch->Select(current_output + 1);
+        out_ch->Bind(wxEVT_CHOICE, [this, i, out_ch](wxCommandEvent&) {
+            m_engine.bus(i).set_output_bus(out_ch->GetSelection() - 1);
+        });
+        row_sizer->Add(out_ch, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+
+        wxButton* up_btn = new wxButton(bus_row, wxID_ANY, "^", wxDefaultPosition, wxSize(btn_w, 25));
+        up_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_UP, wxART_BUTTON, wxSize(14, 14)));
+        up_btn->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
+            if (i > 0) {
+                m_engine.move_bus(i, i - 1);
+                update_track_list();
+            }
+        });
+        row_sizer->Add(up_btn, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+
+        wxButton* down_btn = new wxButton(bus_row, wxID_ANY, "v", wxDefaultPosition, wxSize(btn_w, 25));
+        down_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_DOWN, wxART_BUTTON, wxSize(14, 14)));
+        down_btn->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
+            if (i < m_engine.bus_count() - 1) {
+                m_engine.move_bus(i, i + 1);
+                update_track_list();
+            }
+        });
+        row_sizer->Add(down_btn, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+
+        wxButton* rem_btn = new wxButton(bus_row, wxID_ANY, "X", wxDefaultPosition, wxSize(btn_w, 25));
+        rem_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_DELETE, wxART_BUTTON, wxSize(14, 14)));
+        rem_btn->SetForegroundColour(*wxRED);
+        rem_btn->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
+            m_engine.remove_bus(i);
+            update_track_list();
+            if (m_main_window) m_main_window->update_all_uis();
+        });
+        row_sizer->Add(rem_btn, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+
+        bus_row->SetSizer(row_sizer);
+        current_row++;
+    }
+
+    int total_h = std::max(current_row * row_h + 10, 200);
     m_track_container->SetSize(wxSize(720, total_h));
     m_track_scroll->SetVirtualSize(720, total_h);
 }

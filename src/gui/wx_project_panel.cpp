@@ -207,9 +207,9 @@ void ProjectPanel::update_track_list() {
 
         wxChoice* out_ch = new wxChoice(track_row, wxID_ANY);
         out_ch->Append("Master");
-        for (size_t j = 0; j < num_buses; ++j) {
+        for (size_t j = 1; j < num_buses; ++j) {
             wxString b_name;
-            b_name.Printf("Bus %zu", j + 1);
+            b_name.Printf("Bus %zu", j);
             out_ch->Append(b_name);
         }
         out_ch->Select(track_obj.output_bus() + 1);
@@ -252,15 +252,15 @@ void ProjectPanel::update_track_list() {
         current_row++;
     }
 
-    // Display buses
-    for (size_t i = 0; i < num_buses; ++i) {
+    // Display buses (skip master bus at index 0)
+    for (size_t i = 1; i < num_buses; ++i) {
         auto& bus_obj = m_engine.bus(i);
 
         wxPanel* bus_row = new wxPanel(m_track_container, wxID_ANY, wxPoint(2, start_y + current_row * row_h), wxSize(700, row_h));
         wxBoxSizer* row_sizer = new wxBoxSizer(wxHORIZONTAL);
 
         wxString idx_str;
-        idx_str.Printf("BUS %zu:", i + 1);
+        idx_str.Printf("BUS %zu:", i);  // Display bus index as-is (1-based for user buses)
         wxStaticText* label = new wxStaticText(bus_row, wxID_ANY, idx_str, wxDefaultPosition, wxSize(label_w, 25));
         row_sizer->Add(label, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
@@ -273,10 +273,10 @@ void ProjectPanel::update_track_list() {
         // Bus output routing (can route to master or other buses)
         wxChoice* out_ch = new wxChoice(bus_row, wxID_ANY);
         out_ch->Append("Master");
-        for (size_t j = 0; j < num_buses; ++j) {
+        for (size_t j = 1; j < num_buses; ++j) {
             if (i != j) { // Prevent a bus from routing to itself
                 wxString b_name;
-                b_name.Printf("Bus %zu", j + 1);
+                b_name.Printf("Bus %zu", j);
                 out_ch->Append(b_name);
             }
         }
@@ -290,7 +290,7 @@ void ProjectPanel::update_track_list() {
         wxButton* up_btn = new wxButton(bus_row, wxID_ANY, "^", wxDefaultPosition, wxSize(btn_w, 25));
         up_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_UP, wxART_BUTTON, wxSize(14, 14)));
         up_btn->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
-            if (i > 0) {
+            if (i > 1) {  // Can only move up if not adjacent to master bus
                 m_engine.move_bus(i, i - 1);
                 update_track_list();
             }

@@ -144,6 +144,10 @@ void Engine::new_project() {
     m_patterns.clear();
     m_order.clear();
     
+    // Add master bus as the first bus (index 0) - permanent, not removable
+    m_buses.emplace_back();
+    m_buses[0].set_name("Master");
+    
     // Add one default instrument
     add_instrument();
     
@@ -554,9 +558,17 @@ size_t Engine::bus_count() const { return m_buses.size(); }
 MixerBus& Engine::bus(size_t index) { return m_buses[index]; }
 const MixerBus& Engine::bus(size_t index) const { return m_buses[index]; }
 void Engine::add_bus() { m_buses.emplace_back(); }
-void Engine::remove_bus(size_t index) { if (index < m_buses.size()) m_buses.erase(m_buses.begin() + index); }
+void Engine::remove_bus(size_t index) { 
+    // Prevent removal of master bus (index 0)
+    if (index > 0 && index < m_buses.size()) {
+        m_buses.erase(m_buses.begin() + index);
+    }
+}
 void Engine::move_bus(size_t from, size_t to) {
-    if (from < m_buses.size() && to < m_buses.size()) std::swap(m_buses[from], m_buses[to]);
+    // Prevent moving master bus (index 0)
+    if (from > 0 && to > 0 && from < m_buses.size() && to < m_buses.size()) {
+        std::swap(m_buses[from], m_buses[to]);
+    }
 }
 
 size_t Engine::track_count() const { return m_tracks.size(); }

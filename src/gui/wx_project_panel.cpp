@@ -260,7 +260,7 @@ void ProjectPanel::update_track_list() {
         wxBoxSizer* row_sizer = new wxBoxSizer(wxHORIZONTAL);
 
         wxString idx_str;
-        idx_str.Printf("BUS %zu:", i);  // Display bus index as-is (1-based for user buses)
+        idx_str.Printf("BUS %zu:", i);
         wxStaticText* label = new wxStaticText(bus_row, wxID_ANY, idx_str, wxDefaultPosition, wxSize(label_w, 25));
         row_sizer->Add(label, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
@@ -270,27 +270,14 @@ void ProjectPanel::update_track_list() {
         });
         row_sizer->Add(name_in, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
-        // Bus output routing (can route to master or other buses)
-        wxChoice* out_ch = new wxChoice(bus_row, wxID_ANY);
-        out_ch->Append("Master");
-        for (size_t j = 1; j < num_buses; ++j) {
-            if (i != j) { // Prevent a bus from routing to itself
-                wxString b_name;
-                b_name.Printf("Bus %zu", j);
-                out_ch->Append(b_name);
-            }
-        }
-        int current_output = bus_obj.output_bus();
-        out_ch->Select(current_output + 1);
-        out_ch->Bind(wxEVT_CHOICE, [this, i, out_ch](wxCommandEvent&) {
-            m_engine.bus(i).set_output_bus(out_ch->GetSelection() - 1);
-        });
-        row_sizer->Add(out_ch, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+        // Add spacer to align buttons with track row
+        wxPanel* spacer = new wxPanel(bus_row, wxID_ANY);
+        row_sizer->Add(spacer, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
         wxButton* up_btn = new wxButton(bus_row, wxID_ANY, "^", wxDefaultPosition, wxSize(btn_w, 25));
         up_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_UP, wxART_BUTTON, wxSize(14, 14)));
         up_btn->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&) {
-            if (i > 1) {  // Can only move up if not adjacent to master bus
+            if (i > 1) {
                 m_engine.move_bus(i, i - 1);
                 update_track_list();
             }

@@ -162,12 +162,12 @@ namespace disgrace_ns
         }
 
         j["buses"] = json::array();
-        for (size_t b = 0; b < engine.bus_count(); ++b) {
+        // Skip master bus (index 0) when saving - only save user buses
+        for (size_t b = 1; b < engine.bus_count(); ++b) {
             json jb;
             jb["name"] = engine.bus(b).name();
             jb["volume"] = engine.bus(b).volume();
             jb["pan"] = engine.bus(b).pan();
-            jb["output_bus"] = engine.bus(b).output_bus();
             jb["muted"] = engine.bus(b).muted();
 
             json jchain;
@@ -276,14 +276,19 @@ namespace disgrace_ns
         }
 
         if (j.contains("buses")) {
-            engine.m_buses.clear();
+            // Don't clear buses - master bus (index 0) must be preserved
+            // Only remove user buses (1+)
+            while (engine.bus_count() > 1) {
+                engine.remove_bus(engine.bus_count() - 1);
+            }
+            
             for (auto& jb : j["buses"]) {
                 engine.add_bus();
                 MixerBus& bus = engine.bus(engine.bus_count() - 1);
                 bus.set_name(jb["name"]);
                 bus.set_volume(jb["volume"]);
                 bus.set_pan(jb["pan"]);
-                bus.set_output_bus(jb["output_bus"]);
+                // Don't load output_bus - buses always output to master
                 bus.set_mute(jb.value("muted", false));
                 if (jb.contains("dsp_chain")) {
                     bus.chain().from_json(&jb["dsp_chain"]);

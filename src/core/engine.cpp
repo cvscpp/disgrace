@@ -499,24 +499,10 @@ void Engine::render_block(float* out_l, float* out_r, size_t frames, const float
     for (size_t b = 0; b < m_buses.size() && b < MAX_BUSES_INTERNAL; ++b) {
         m_buses[b].process(m_bus_l[b], m_bus_r[b], frames);
         
-        int out_idx = m_buses[b].output_bus();
-        if (out_idx >= 0 && (size_t)out_idx < m_buses.size() && (size_t)out_idx < MAX_BUSES_INTERNAL) {
-            if ((size_t)out_idx > b) {
-                for (size_t i = 0; i < frames; ++i) {
-                    m_bus_l[out_idx][i] += m_bus_l[b][i];
-                    m_bus_r[out_idx][i] += m_bus_r[b][i];
-                }
-            } else {
-                for (size_t i = 0; i < frames; ++i) {
-                    out_l[i] += m_bus_l[b][i];
-                    out_r[i] += m_bus_r[b][i];
-                }
-            }
-        } else {
-            for (size_t i = 0; i < frames; ++i) {
-                out_l[i] += m_bus_l[b][i];
-                out_r[i] += m_bus_r[b][i];
-            }
+        // All buses route to master output
+        for (size_t i = 0; i < frames; ++i) {
+            out_l[i] += m_bus_l[b][i];
+            out_r[i] += m_bus_r[b][i];
         }
     }
 }

@@ -406,13 +406,13 @@ void MixerPanel::update_mixer_ui() {
         tracks_sizer->Add(track_panel, 0, wxEXPAND | wxALL, 2);
     }
 
-    // --- Buses ---
-    for (size_t i = 0; i < num_buses; ++i) {
+    // --- Buses (skip master bus at index 0) ---
+    for (size_t i = 1; i < num_buses; ++i) {
         wxPanel* bus_panel = new wxPanel(m_track_group, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
         wxBoxSizer* bus_sizer = new wxBoxSizer(wxVERTICAL);
 
         wxString bus_name;
-        bus_name.Printf("Bus %zu", i + 1);
+        bus_name.Printf("Bus %zu", i);
         wxStaticText* label = new wxStaticText(bus_panel, wxID_ANY, bus_name);
         bus_sizer->Add(label, 0, wxALIGN_CENTER | wxALL, 2);
 

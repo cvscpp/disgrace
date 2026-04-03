@@ -112,6 +112,9 @@ private:
     wxSpinCtrl* m_midi_program;
     wxChoice* m_midi_input_choice;
 
+    wxPanel* m_voice_editor;
+    wxChoice* m_voice_tts_mode_ch;
+
     wxButton* m_zoom_in_btn;
     wxButton* m_zoom_out_btn;
     wxButton* m_view_all_btn;

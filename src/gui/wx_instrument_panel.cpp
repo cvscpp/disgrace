@@ -25,6 +25,7 @@
 #include "../instrument/soundfont_instrument.h"
 #include "../instrument/dssi_instrument.h"
 #include "../instrument/midi_instrument.h"
+#include "../instrument/voice_instrument.h"
 #include "../io/audio_file.h"
 
 #include <wx/sizer.h>
@@ -445,6 +446,34 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_midi_editor->Hide();
     right_sizer->Add(m_midi_editor, 1, wxEXPAND | wxALL, 2);
 
+    // Voice Instrument Editor
+    m_voice_editor = new wxPanel(m_right_panel, wxID_ANY);
+    wxBoxSizer* voice_sizer = new wxBoxSizer(wxVERTICAL);
+    
+    wxBoxSizer* voice_tts_sizer = new wxBoxSizer(wxHORIZONTAL);
+    voice_tts_sizer->Add(new wxStaticText(m_voice_editor, wxID_ANY, "TTS Mode:"), 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    m_voice_tts_mode_ch = new wxChoice(m_voice_editor, wxID_ANY);
+    m_voice_tts_mode_ch->Append("Real-time (espeak-ng)");
+    m_voice_tts_mode_ch->Append("Offline (Festival)");
+    m_voice_tts_mode_ch->SetSelection(0);
+    m_voice_tts_mode_ch->Bind(wxEVT_CHOICE, [this](wxCommandEvent& ev) {
+        if (m_selected_instrument >= 0) {
+            auto& inst = m_engine.instrument(m_selected_instrument);
+            if (inst.type() == InstrumentType::Voice) {
+                VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
+                int sel = ev.GetSelection();
+                TTSMode mode = (sel == 0) ? TTSMode::RealTimeEspeak : TTSMode::OfflineFestival;
+                voice->set_tts_mode(mode);
+            }
+        }
+    });
+    voice_tts_sizer->Add(m_voice_tts_mode_ch, 1, wxEXPAND | wxALL, 5);
+    voice_sizer->Add(voice_tts_sizer, 0, wxEXPAND | wxALL, 5);
+    
+    m_voice_editor->SetSizer(voice_sizer);
+    m_voice_editor->Hide();
+    right_sizer->Add(m_voice_editor, 1, wxEXPAND | wxALL, 2);
+
     m_right_panel->SetSizer(right_sizer);
     main_sizer->Add(m_right_panel, 1, wxEXPAND | wxALL, 2);
 
@@ -566,6 +595,7 @@ void InstrumentPanel::update_editor() {
     m_sfont_editor->Hide();
     m_plugin_editor->Hide();
     m_midi_editor->Hide();
+    m_voice_editor->Hide();
 
     if (m_selected_instrument >= 0 && m_selected_instrument < (int)m_engine.instrument_count()) {
         auto& inst = m_engine.instrument(m_selected_instrument);
@@ -733,6 +763,13 @@ void InstrumentPanel::update_editor() {
             }
             
             m_midi_editor->Layout();
+        }
+        else if (inst.type() == InstrumentType::Voice) {
+            m_voice_editor->Show();
+            VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
+            TTSMode mode = voice->tts_mode();
+            m_voice_tts_mode_ch->SetSelection((mode == TTSMode::RealTimeEspeak) ? 0 : 1);
+            m_voice_editor->Layout();
         }
         else if (inst.type() == InstrumentType::Plugin) {
             m_plugin_editor->Show();

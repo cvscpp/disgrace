@@ -25,6 +25,7 @@
 namespace disgrace_ns {
 
 class Engine;
+class VoiceSynthesisWorker;
 
 enum class TTSMode {
     RealTimeEspeak,  // Fast, ~100-200ms per phrase
@@ -53,6 +54,11 @@ public:
     bool synthesize_text(const std::string& text, float base_freq);
     void clear_cache();
     size_t cache_size() const { return m_audio_cache.size(); }
+    
+    // Worker thread for batch synthesis
+    VoiceSynthesisWorker* get_worker() { return m_worker; }
+    void start_synthesis_worker();
+    void stop_synthesis_worker();
 
 protected:
     std::unique_ptr<Voice> create_voice() override { return nullptr; }
@@ -62,6 +68,9 @@ private:
     TTSMode m_tts_mode = TTSMode::RealTimeEspeak;
     float m_volume = 1.0f;
     float m_current_pitch = 1.0f;
+    
+    // Worker thread (raw pointer, created/destroyed in start/stop)
+    VoiceSynthesisWorker* m_worker = nullptr;
     
     // Text storage per column
     std::array<std::string, 16> m_column_text;

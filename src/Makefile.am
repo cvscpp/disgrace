@@ -44,6 +44,7 @@ disgrace_SOURCES = \
     instrument/lv2_instrument.cpp \
     instrument/midi_instrument.cpp \
     instrument/voice_instrument.cpp \
+    instrument/voice_synthesis_worker.cpp \
     io/audio_file.cpp \
     io/lilypond_exporter.cpp \
     io/project_archive.cpp \

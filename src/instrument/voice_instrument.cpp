@@ -17,6 +17,7 @@
  */
 
 #include "voice_instrument.h"
+#include "voice_synthesis_worker.h"
 #include <cstdlib>
 #include <cstring>
 #include <sndfile.h>
@@ -291,6 +292,21 @@ void VoiceInstrument::clear_cache() {
     m_current_audio = {std::vector<float>(), std::vector<float>()};
     m_playback_pos = 0;
     m_playing = false;
+}
+
+void VoiceInstrument::start_synthesis_worker() {
+    if (!m_worker) {
+        m_worker = new VoiceSynthesisWorker(this);
+    }
+    m_worker->start();
+}
+
+void VoiceInstrument::stop_synthesis_worker() {
+    if (m_worker) {
+        m_worker->stop();
+        delete m_worker;
+        m_worker = nullptr;
+    }
 }
 
 } // namespace disgrace_ns

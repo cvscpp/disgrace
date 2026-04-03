@@ -26,6 +26,7 @@
 #include "../instrument/dssi_instrument.h"
 #include "../instrument/midi_instrument.h"
 #include "../instrument/voice_instrument.h"
+#include "../instrument/voice_synthesis_worker.h"
 #include "../io/audio_file.h"
 
 #include <wx/sizer.h>
@@ -479,6 +480,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
             auto& inst = m_engine.instrument(m_selected_instrument);
             if (inst.type() == InstrumentType::Voice) {
                 VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
+                
                 // Scan all texts from this voice instrument
                 std::set<std::string> unique_texts;
                 for (size_t col = 0; col < 16; ++col) {
@@ -488,19 +490,59 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
                     }
                 }
                 
-                // Pre-render all texts
-                if (!unique_texts.empty()) {
-                    wxProgressDialog dlg("Pre-rendering Voice Audio", "Synthesizing phrases...", unique_texts.size(), this,
-                        wxPD_APP_MODAL | wxPD_AUTO_HIDE);
-                    size_t count = 0;
-                    for (const auto& text : unique_texts) {
-                        dlg.Update(count++);
-                        voice->synthesize_text(text, 440.0f);
-                    }
-                    wxMessageBox(wxString::Format("Pre-rendered %zu unique phrases", unique_texts.size()), "Complete");
-                } else {
+                if (unique_texts.empty()) {
                     wxMessageBox("No text found in this voice instrument", "Info");
+                    return;
                 }
+                
+                // Start worker thread
+                voice->start_synthesis_worker();
+                auto* worker = voice->get_worker();
+                
+                if (!worker) return;
+                
+                // Queue all texts for synthesis
+                for (const auto& text : unique_texts) {
+                    worker->queue_synthesis(text, 440.0f);
+                }
+                
+                // Create progress dialog with timer
+                wxProgressDialog* dlg = new wxProgressDialog(
+                    "Pre-rendering Voice Audio", 
+                    "Synthesizing phrases...",
+                    unique_texts.size(), 
+                    this,
+                    wxPD_APP_MODAL | wxPD_CAN_ABORT
+                );
+                
+                // Timer to update progress
+                wxTimer* timer = new wxTimer();
+                timer->Bind(wxEVT_TIMER, [dlg, worker, unique_texts, timer, voice](wxTimerEvent&) {
+                    size_t completed = worker->get_completed();
+                    float progress = worker->get_progress();
+                    
+                    // Check if synthesis is complete
+                    if (worker->is_queue_empty() && completed >= unique_texts.size()) {
+                        timer->Stop();
+                        delete timer;
+                        voice->stop_synthesis_worker();
+                        dlg->Update(completed);
+                        dlg->Destroy();
+                        wxMessageBox(wxString::Format("Pre-rendered %zu unique phrases", completed), "Complete");
+                        return;
+                    }
+                    
+                    // Update dialog
+                    if (!dlg->Update(completed)) {
+                        // User clicked cancel
+                        timer->Stop();
+                        delete timer;
+                        voice->stop_synthesis_worker();
+                        dlg->Destroy();
+                    }
+                });
+                
+                timer->Start(100);  // Update every 100ms
             }
         }
     });

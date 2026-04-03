@@ -677,7 +677,11 @@ void TracksView::do_cut() {
     int start_tick = std::min(m_sel_start_tick, m_sel_end_tick);
     int end_tick = std::max(m_sel_start_tick, m_sel_end_tick);
     
-    if (start_tick >= end_tick) return;
+    // Allow single point or range
+    if (start_tick > end_tick) return;
+    if (start_tick == end_tick) {
+        end_tick = start_tick + 1;  // Minimum 1 sample range
+    }
     
     size_t start_sample = (size_t)start_tick;
     size_t end_sample = (size_t)end_tick;
@@ -700,7 +704,11 @@ void TracksView::do_copy() {
     int start_tick = std::min(m_sel_start_tick, m_sel_end_tick);
     int end_tick = std::max(m_sel_start_tick, m_sel_end_tick);
     
-    if (start_tick >= end_tick) return;
+    // Allow single point or range
+    if (start_tick > end_tick) return;
+    if (start_tick == end_tick) {
+        end_tick = start_tick + 1;  // Minimum 1 sample range
+    }
     
     size_t start_sample = (size_t)start_tick;
     size_t end_sample = (size_t)end_tick;
@@ -738,7 +746,11 @@ void TracksView::do_silence() {
     int start_tick = std::min(m_sel_start_tick, m_sel_end_tick);
     int end_tick = std::max(m_sel_start_tick, m_sel_end_tick);
     
-    if (start_tick >= end_tick) return;
+    // Allow single point or range
+    if (start_tick > end_tick) return;
+    if (start_tick == end_tick) {
+        end_tick = start_tick + 1;  // Minimum 1 sample range
+    }
     
     size_t start_sample = (size_t)start_tick;
     size_t end_sample = (size_t)end_tick;

@@ -81,6 +81,7 @@ private:
     
     // TTS synthesis helpers
     bool synthesize_with_espeak(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r);
+    bool synthesize_with_festival(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r);
     bool load_wav_from_file(const std::string& filepath, std::vector<float>& out_l, std::vector<float>& out_r);
 };
 

@@ -158,8 +158,10 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq) 
             }
             break;
         case TTSMode::OfflineFestival:
-            // Festival not implemented yet
-            return synthesize_with_espeak(text, out_l, out_r);
+            if (!synthesize_with_festival(text, out_l, out_r)) {
+                return false;
+            }
+            break;
     }
     
     if (out_l.empty()) {
@@ -199,6 +201,46 @@ bool VoiceInstrument::synthesize_with_espeak(const std::string& text, std::vecto
     }
     
     // Clean up
+    remove(tmp_wav);
+    
+    return true;
+}
+
+bool VoiceInstrument::synthesize_with_festival(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r) {
+    // Create temp file paths
+    const char* tmp_scm = "/tmp/disgrace_voice.scm";
+    const char* tmp_wav = "/tmp/disgrace_voice.wav";
+    
+    // Create Festival Scheme script to synthesize
+    // Festival uses (say "text") to generate speech
+    FILE* scm_file = fopen(tmp_scm, "w");
+    if (!scm_file) {
+        return false;
+    }
+    
+    // Write Festival Scheme code
+    fprintf(scm_file, "(voice_default)\n");
+    fprintf(scm_file, "(utt.save.wave (utt.synth (eval (list 'Utterance 'Text \"%s\"))) \"%s\" 'riff)\n",
+            text.c_str(), tmp_wav);
+    fclose(scm_file);
+    
+    // Run Festival with the script
+    std::string cmd = "festival --script \"" + std::string(tmp_scm) + "\" 2>/dev/null";
+    int ret = system(cmd.c_str());
+    
+    // Clean up script file
+    remove(tmp_scm);
+    
+    if (ret != 0) {
+        return false;
+    }
+    
+    // Load WAV file
+    if (!load_wav_from_file(tmp_wav, out_l, out_r)) {
+        return false;
+    }
+    
+    // Clean up WAV file
     remove(tmp_wav);
     
     return true;

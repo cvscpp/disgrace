@@ -75,6 +75,23 @@ public:
     void set_cache_dir(const std::string& dir) { m_cache_dir = dir; }
     std::string get_cache_dir() const { return m_cache_dir; }
     
+    // Performance metrics
+    struct PerfMetrics {
+        size_t total_synthesized = 0;  // Total TTS synthesis calls
+        size_t cache_hits = 0;          // Memory cache hits
+        size_t disk_cache_hits = 0;     // Disk cache hits
+        size_t total_lookups = 0;       // Total cache lookups
+        size_t evictions = 0;           // LRU evictions
+        
+        double cache_hit_rate() const {
+            if (total_lookups == 0) return 0.0;
+            return 100.0 * (cache_hits + disk_cache_hits) / total_lookups;
+        }
+    };
+    
+    const PerfMetrics& get_perf_metrics() const { return m_perf_metrics; }
+    void reset_perf_metrics() { m_perf_metrics = PerfMetrics(); }
+    
     // Worker thread for batch synthesis
     VoiceSynthesisWorker* get_worker() { return m_worker; }
     void start_synthesis_worker();
@@ -141,6 +158,9 @@ private:
     size_t m_playback_pos = 0;
     bool m_playing = false;
     std::string m_cache_dir;  // Disk cache directory
+    
+    // Performance metrics
+    PerfMetrics m_perf_metrics;
     
     // TTS synthesis helpers
     bool synthesize_with_espeak(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r);

@@ -133,11 +133,15 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq) 
     // Create cache key with pitch
     std::string cache_key = make_cache_key(text, pitch_factor);
     
+    // Increment lookup counter
+    m_perf_metrics.total_lookups++;
+    
     // Check memory cache first
     auto cache_it = m_audio_cache.find(cache_key);
     if (cache_it != m_audio_cache.end()) {
         m_current_audio = cache_it->second;
         update_lru(cache_key);
+        m_perf_metrics.cache_hits++;
         return true;
     }
     
@@ -150,10 +154,12 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq) 
         m_memory_used += audio_size;
         update_lru(cache_key);
         m_current_audio = disk_audio;
+        m_perf_metrics.disk_cache_hits++;
         return true;
     }
     
     // Synthesize base text (at 440 Hz)
+    m_perf_metrics.total_synthesized++;  // Count TTS synthesis
     std::vector<float> out_l, out_r;
     
     switch (m_tts_mode) {
@@ -443,6 +449,7 @@ void VoiceInstrument::evict_lru_if_needed(size_t new_size) {
         if (cache_it != m_audio_cache.end()) {
             m_memory_used -= cache_it->second.size_bytes();
             m_audio_cache.erase(cache_it);
+            m_perf_metrics.evictions++;  // Count eviction
         }
     }
 }

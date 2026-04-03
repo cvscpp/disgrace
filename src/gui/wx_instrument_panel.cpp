@@ -473,6 +473,54 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     voice_tts_sizer->Add(m_voice_tts_mode_ch, 1, wxEXPAND | wxALL, 5);
     voice_sizer->Add(voice_tts_sizer, 0, wxEXPAND | wxALL, 5);
     
+    // Voice selection slider
+    wxBoxSizer* voice_voice_sizer = new wxBoxSizer(wxHORIZONTAL);
+    voice_voice_sizer->Add(new wxStaticText(m_voice_editor, wxID_ANY, "Voice:"), 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    m_voice_voice_slider = new wxSlider(m_voice_editor, wxID_ANY, 0, 0, 4, wxDefaultPosition, wxSize(150, -1));
+    m_voice_voice_slider->Bind(wxEVT_SLIDER, [this](wxCommandEvent& ev) {
+        if (m_selected_instrument >= 0) {
+            auto& inst = m_engine.instrument(m_selected_instrument);
+            if (inst.type() == InstrumentType::Voice) {
+                VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
+                voice->set_voice(ev.GetInt());
+            }
+        }
+    });
+    voice_voice_sizer->Add(m_voice_voice_slider, 1, wxEXPAND | wxALL, 5);
+    voice_sizer->Add(voice_voice_sizer, 0, wxEXPAND | wxALL, 5);
+    
+    // Speed slider (0.5x to 2.0x)
+    wxBoxSizer* voice_speed_sizer = new wxBoxSizer(wxHORIZONTAL);
+    voice_speed_sizer->Add(new wxStaticText(m_voice_editor, wxID_ANY, "Speed:"), 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    m_voice_speed_slider = new wxSlider(m_voice_editor, wxID_ANY, 50, 25, 100, wxDefaultPosition, wxSize(150, -1));
+    m_voice_speed_slider->Bind(wxEVT_SLIDER, [this](wxCommandEvent& ev) {
+        if (m_selected_instrument >= 0) {
+            auto& inst = m_engine.instrument(m_selected_instrument);
+            if (inst.type() == InstrumentType::Voice) {
+                VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
+                voice->set_speed(ev.GetInt() / 50.0f);  // 50=1.0x
+            }
+        }
+    });
+    voice_speed_sizer->Add(m_voice_speed_slider, 1, wxEXPAND | wxALL, 5);
+    voice_sizer->Add(voice_speed_sizer, 0, wxEXPAND | wxALL, 5);
+    
+    // Pitch accent slider (0.0 to 1.0)
+    wxBoxSizer* voice_accent_sizer = new wxBoxSizer(wxHORIZONTAL);
+    voice_accent_sizer->Add(new wxStaticText(m_voice_editor, wxID_ANY, "Accent:"), 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    m_voice_accent_slider = new wxSlider(m_voice_editor, wxID_ANY, 50, 0, 100, wxDefaultPosition, wxSize(150, -1));
+    m_voice_accent_slider->Bind(wxEVT_SLIDER, [this](wxCommandEvent& ev) {
+        if (m_selected_instrument >= 0) {
+            auto& inst = m_engine.instrument(m_selected_instrument);
+            if (inst.type() == InstrumentType::Voice) {
+                VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
+                voice->set_pitch_accent(ev.GetInt() / 100.0f);
+            }
+        }
+    });
+    voice_accent_sizer->Add(m_voice_accent_slider, 1, wxEXPAND | wxALL, 5);
+    voice_sizer->Add(voice_accent_sizer, 0, wxEXPAND | wxALL, 5);
+    
     // Process button
     m_voice_process_btn = new wxButton(m_voice_editor, wxID_ANY, "Pre-render Voice Audio");
     m_voice_process_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent& ev) {
@@ -847,6 +895,9 @@ void InstrumentPanel::update_editor() {
             VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
             TTSMode mode = voice->tts_mode();
             m_voice_tts_mode_ch->SetSelection((mode == TTSMode::RealTimeEspeak) ? 0 : 1);
+            m_voice_voice_slider->SetValue(voice->get_voice());
+            m_voice_speed_slider->SetValue((int)(voice->get_speed() * 50.0f));
+            m_voice_accent_slider->SetValue((int)(voice->get_pitch_accent() * 100.0f));
             m_voice_editor->Layout();
         }
         else if (inst.type() == InstrumentType::Plugin) {

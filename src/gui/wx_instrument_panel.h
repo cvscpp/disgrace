@@ -114,6 +114,9 @@ private:
 
     wxPanel* m_voice_editor;
     wxChoice* m_voice_tts_mode_ch;
+    wxSlider* m_voice_voice_slider;
+    wxSlider* m_voice_speed_slider;
+    wxSlider* m_voice_accent_slider;
     wxButton* m_voice_process_btn;
 
     wxButton* m_zoom_in_btn;

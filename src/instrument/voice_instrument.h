@@ -50,6 +50,16 @@ public:
     void set_tts_mode(TTSMode mode) { m_tts_mode = mode; }
     TTSMode tts_mode() const { return m_tts_mode; }
     
+    // TTS enhancements
+    void set_voice(int voice_index) { m_voice_index = voice_index; }  // 0=default, 1=voice2, etc
+    int get_voice() const { return m_voice_index; }
+    
+    void set_speed(float speed) { m_speed = std::max(0.5f, std::min(2.0f, speed)); }  // 0.5x to 2.0x
+    float get_speed() const { return m_speed; }
+    
+    void set_pitch_accent(float accent) { m_pitch_accent = std::max(0.0f, std::min(1.0f, accent)); }  // 0.0 to 1.0
+    float get_pitch_accent() const { return m_pitch_accent; }
+    
     // Synthesis
     bool synthesize_text(const std::string& text, float base_freq);
     void clear_cache();
@@ -68,6 +78,11 @@ private:
     TTSMode m_tts_mode = TTSMode::RealTimeEspeak;
     float m_volume = 1.0f;
     float m_current_pitch = 1.0f;
+    
+    // TTS parameters
+    int m_voice_index = 0;        // 0=default, 1=voice2, etc
+    float m_speed = 1.0f;          // 0.5-2.0 playback speed
+    float m_pitch_accent = 0.5f;   // 0.0-1.0 pitch accent (for Festival)
     
     // Worker thread (raw pointer, created/destroyed in start/stop)
     VoiceSynthesisWorker* m_worker = nullptr;

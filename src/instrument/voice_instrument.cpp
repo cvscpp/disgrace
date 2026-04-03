@@ -188,8 +188,20 @@ bool VoiceInstrument::synthesize_with_espeak(const std::string& text, std::vecto
         pos += 2;
     }
     
-    // Build espeak command: espeak-ng -w output.wav "text"
-    std::string cmd = "espeak-ng -w \"" + std::string(tmp_wav) + "\" \"" + escaped_text + "\" 2>/dev/null";
+    // Build espeak command with parameters
+    std::string cmd = "espeak-ng";
+    
+    // Add voice selection
+    if (m_voice_index > 0) {
+        cmd += " -v +m" + std::to_string(m_voice_index);
+    }
+    
+    // Add speed parameter (espeak uses -s for speed)
+    int speed = (int)(m_speed * 175.0f);  // 175 is default, scale with our speed factor
+    cmd += " -s " + std::to_string(speed);
+    
+    // Add output file and text
+    cmd += " -w \"" + std::string(tmp_wav) + "\" \"" + escaped_text + "\" 2>/dev/null";
     
     int ret = system(cmd.c_str());
     if (ret != 0) {
@@ -213,14 +225,32 @@ bool VoiceInstrument::synthesize_with_festival(const std::string& text, std::vec
     const char* tmp_wav = "/tmp/disgrace_voice.wav";
     
     // Create Festival Scheme script to synthesize
-    // Festival uses (say "text") to generate speech
     FILE* scm_file = fopen(tmp_scm, "w");
     if (!scm_file) {
         return false;
     }
     
-    // Write Festival Scheme code
-    fprintf(scm_file, "(voice_default)\n");
+    // Select voice based on voice_index
+    if (m_voice_index == 0) {
+        fprintf(scm_file, "(voice_default)\n");
+    } else {
+        // Voices: 1=kal_diphone, 2=rms_diphone, 3=awb_diphone, etc
+        fprintf(scm_file, "(voice_kal_diphone)\n");  // Default fallback
+    }
+    
+    // Set pitch accent/intonation (Festival par.pd_targets controls pitch)
+    if (m_pitch_accent != 0.5f) {
+        fprintf(scm_file, "(set! (Parameter.evaluate par.pd_targets) %.2f)\n", 
+                0.5f + m_pitch_accent);
+    }
+    
+    // Set speech rate (duration stretch)
+    if (m_speed != 1.0f) {
+        fprintf(scm_file, "(set! (Parameter.evaluate Duration_Stretch) %.2f)\n", 
+                1.0f / m_speed);  // Inverse because stretch >1 is slower
+    }
+    
+    // Synthesize
     fprintf(scm_file, "(utt.save.wave (utt.synth (eval (list 'Utterance 'Text \"%s\"))) \"%s\" 'riff)\n",
             text.c_str(), tmp_wav);
     fclose(scm_file);

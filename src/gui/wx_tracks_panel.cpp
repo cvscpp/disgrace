@@ -464,22 +464,36 @@ void TracksView::draw(wxDC& dc) {
         dc.DrawLine(play_x, 0, play_x, virtual_size.GetHeight());
     }
 
-    // Selection
-    if (m_sel_start_tick != -1 && m_sel_end_tick != -1) {
+    // Selection - only on the selected track
+    if (m_selected_track >= 0 && m_selected_track < num_tracks && 
+        m_sel_start_tick != -1 && m_sel_end_tick != -1) {
         int s1 = std::min(m_sel_start_tick, m_sel_end_tick);
         int s2 = std::max(m_sel_start_tick, m_sel_end_tick);
         int sx1 = header_w + tick_to_x(s1);
         int sx2 = header_w + tick_to_x(s2);
         
-        // Use a semi-transparent selection if possible, or just lines for now to match FLTK
-        dc.SetPen(wxPen(wxColour(0, 120, 215), 2));
-        dc.DrawLine(sx1, 20, sx1, virtual_size.GetHeight());
-        dc.DrawLine(sx2, 20, sx2, virtual_size.GetHeight());
+        // Calculate track position
+        int cur_y = 30;
+        for (int t = 0; t < m_selected_track; ++t) {
+            auto& t_obj = m_engine.track(t);
+            int t_h = t_obj.is_minimized() ? 20 : 80;
+            cur_y += t_h;
+        }
         
-        // Better selection look:
+        auto& sel_track = m_engine.track(m_selected_track);
+        int sel_track_h = sel_track.is_minimized() ? 20 : 80;
+        int track_top = cur_y;
+        int track_bottom = cur_y + sel_track_h;
+        
+        // Draw selection on this track only
         dc.SetBrush(wxBrush(wxColour(0, 120, 215, 64))); // Semi-transparent blue
         dc.SetPen(*wxTRANSPARENT_PEN);
-        dc.DrawRectangle(sx1, 20, sx2 - sx1, virtual_size.GetHeight() - 20);
+        dc.DrawRectangle(sx1, track_top, sx2 - sx1, sel_track_h);
+        
+        // Border lines
+        dc.SetPen(wxPen(wxColour(0, 120, 215), 2));
+        dc.DrawLine(sx1, track_top, sx1, track_bottom);
+        dc.DrawLine(sx2, track_top, sx2, track_bottom);
     }
 }
 
@@ -488,31 +502,32 @@ void TracksView::OnMouseDown(wxMouseEvent& event) {
     CalcUnscrolledPosition(event.GetX(), event.GetY(), &x, &y);
     int header_w = 120;
     
-    // Check for minimize button clicks (in header area)
-    if (x < header_w) {
-        // Calculate which track was clicked
-        int num_tracks = (int)m_engine.track_count();
-        int cur_y = 30;
-        for (int t = 0; t < num_tracks; ++t) {
-            auto& track_obj = m_engine.track(t);
-            int track_h = track_obj.is_minimized() ? 20 : 80;
-            int ty = cur_y;
+    // Determine which track was clicked
+    int num_tracks = (int)m_engine.track_count();
+    int cur_y = 30;
+    int clicked_track = -1;
+    
+    for (int t = 0; t < num_tracks; ++t) {
+        auto& track_obj = m_engine.track(t);
+        int track_h = track_obj.is_minimized() ? 20 : 80;
+        int ty = cur_y;
+        
+        if (y >= ty && y < ty + track_h) {
+            clicked_track = t;
             
-            if (y >= ty && y < ty + track_h) {
-                // Check if minimize button was clicked (5-25 pixels from left)
-                if (x >= 5 && x <= 25) {
-                    toggle_track_minimize(t);
-                    return;
-                }
-                break;
+            // Check if minimize button was clicked (5-25 pixels from left, in header)
+            if (x < header_w && x >= 5 && x <= 25) {
+                toggle_track_minimize(t);
+                return;
             }
-            cur_y += track_h;
+            break;
         }
-        return;
+        cur_y += track_h;
     }
     
-    // Track content selection
-    if (x > header_w) {
+    // Track content selection - only in non-header area
+    if (x > header_w && clicked_track >= 0) {
+        m_selected_track = clicked_track;
         m_is_selecting = true;
         m_sel_start_tick = x_to_tick(x - header_w);
         m_sel_end_tick = m_sel_start_tick;
@@ -652,12 +667,12 @@ void TracksView::OnKeyDown(wxKeyEvent& event) {
 }
 
 void TracksView::do_cut() {
-    if (m_sel_start_tick == -1 || m_sel_end_tick == -1) {
+    if (m_sel_start_tick == -1 || m_sel_end_tick == -1 || m_selected_track < 0) {
         return;
     }
     
     int num_tracks = (int)m_engine.track_count();
-    if (num_tracks == 0) return;
+    if (m_selected_track >= num_tracks) return;
     
     int start_tick = std::min(m_sel_start_tick, m_sel_end_tick);
     int end_tick = std::max(m_sel_start_tick, m_sel_end_tick);
@@ -667,7 +682,7 @@ void TracksView::do_cut() {
     size_t start_sample = (size_t)start_tick;
     size_t end_sample = (size_t)end_tick;
     
-    auto& track = m_engine.track(0);
+    auto& track = m_engine.track(m_selected_track);
     auto cmd = std::make_unique<disgrace_ns::TrackCutCommand>(track, m_engine, start_sample, end_sample);
     m_engine.undo_stack().execute(std::move(cmd));
     
@@ -675,12 +690,12 @@ void TracksView::do_cut() {
 }
 
 void TracksView::do_copy() {
-    if (m_sel_start_tick == -1 || m_sel_end_tick == -1) {
+    if (m_sel_start_tick == -1 || m_sel_end_tick == -1 || m_selected_track < 0) {
         return;
     }
     
     int num_tracks = (int)m_engine.track_count();
-    if (num_tracks == 0) return;
+    if (m_selected_track >= num_tracks) return;
     
     int start_tick = std::min(m_sel_start_tick, m_sel_end_tick);
     int end_tick = std::max(m_sel_start_tick, m_sel_end_tick);
@@ -690,22 +705,22 @@ void TracksView::do_copy() {
     size_t start_sample = (size_t)start_tick;
     size_t end_sample = (size_t)end_tick;
     
-    auto& track = m_engine.track(0);
+    auto& track = m_engine.track(m_selected_track);
     auto cmd = std::make_unique<disgrace_ns::TrackCopyCommand>(track, m_engine, start_sample, end_sample);
     m_engine.undo_stack().execute(std::move(cmd));
 }
 
 void TracksView::do_paste() {
-    if (m_sel_start_tick == -1) {
+    if (m_sel_start_tick == -1 || m_selected_track < 0) {
         return;
     }
     
     int num_tracks = (int)m_engine.track_count();
-    if (num_tracks == 0) return;
+    if (m_selected_track >= num_tracks) return;
     
     size_t insert_sample = (size_t)m_sel_start_tick;
     
-    auto& track = m_engine.track(0);
+    auto& track = m_engine.track(m_selected_track);
     auto cmd = std::make_unique<disgrace_ns::TrackPasteCommand>(track, m_engine, insert_sample);
     m_engine.undo_stack().execute(std::move(cmd));
     
@@ -713,12 +728,12 @@ void TracksView::do_paste() {
 }
 
 void TracksView::do_silence() {
-    if (m_sel_start_tick == -1 || m_sel_end_tick == -1) {
+    if (m_sel_start_tick == -1 || m_sel_end_tick == -1 || m_selected_track < 0) {
         return;
     }
     
     int num_tracks = (int)m_engine.track_count();
-    if (num_tracks == 0) return;
+    if (m_selected_track >= num_tracks) return;
     
     int start_tick = std::min(m_sel_start_tick, m_sel_end_tick);
     int end_tick = std::max(m_sel_start_tick, m_sel_end_tick);
@@ -728,7 +743,7 @@ void TracksView::do_silence() {
     size_t start_sample = (size_t)start_tick;
     size_t end_sample = (size_t)end_tick;
     
-    auto& track = m_engine.track(0);
+    auto& track = m_engine.track(m_selected_track);
     auto cmd = std::make_unique<disgrace_ns::TrackSilenceCommand>(track, start_sample, end_sample);
     m_engine.undo_stack().execute(std::move(cmd));
     
@@ -736,12 +751,12 @@ void TracksView::do_silence() {
 }
 
 void TracksView::do_insert_silence() {
-    if (m_sel_start_tick == -1) {
+    if (m_sel_start_tick == -1 || m_selected_track < 0) {
         return;
     }
     
     int num_tracks = (int)m_engine.track_count();
-    if (num_tracks == 0) return;
+    if (m_selected_track >= num_tracks) return;
     
     size_t insert_sample = (size_t)m_sel_start_tick;
     size_t duration = 4410;
@@ -750,7 +765,7 @@ void TracksView::do_insert_silence() {
         duration = std::abs(m_sel_end_tick - m_sel_start_tick);
     }
     
-    auto& track = m_engine.track(0);
+    auto& track = m_engine.track(m_selected_track);
     auto cmd = std::make_unique<disgrace_ns::TrackInsertSilenceCommand>(track, insert_sample, duration);
     m_engine.undo_stack().execute(std::move(cmd));
     

@@ -115,6 +115,7 @@ private:
 
     int m_sel_start_tick = -1;
     int m_sel_end_tick = -1;
+    int m_selected_track = -1;
     bool m_is_selecting = false;
 
     wxDECLARE_EVENT_TABLE();

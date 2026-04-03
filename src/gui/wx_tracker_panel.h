@@ -88,6 +88,13 @@ private:
 
     wxTextCtrl* m_voice_text_field;  // For Voice instrument text editing
     int m_last_voice_col = -1;       // Track which column was last displayed
+    
+    wxButton* m_voice_copy_btn;
+    wxButton* m_voice_paste_btn;
+    wxButton* m_voice_search_btn;
+    
+    std::string m_voice_clipboard;   // Clipboard for voice text
+    std::string m_voice_search_term; // Current search term
 
     int m_selected_order_idx = 0;
     int m_tab_index = -1;

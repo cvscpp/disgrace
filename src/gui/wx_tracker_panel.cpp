@@ -25,6 +25,8 @@
 #include <wx/sizer.h>
 #include <wx/textctrl.h>
 #include <wx/dialog.h>
+#include <wx/textdlg.h>
+#include <wx/msgdlg.h>
 
 namespace disgrace_ns {
 
@@ -108,6 +110,69 @@ TrackerPanel::TrackerPanel(wxWindow* parent, Engine& engine)
     });
     m_voice_text_field->Hide();
     voice_sizer->Add(m_voice_text_field, 1, wxEXPAND | wxALL, 2);
+    
+    // Copy/Paste/Search buttons
+    m_voice_copy_btn = new wxButton(this, wxID_ANY, "Copy", wxDefaultPosition, wxSize(50, 24));
+    m_voice_copy_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        if (m_last_voice_col >= 0) {
+            size_t current_track = m_engine.m_record_track;
+            if (current_track < m_engine.track_count()) {
+                auto* inst = m_engine.track(current_track).instrument();
+                if (inst && inst->type() == InstrumentType::Voice) {
+                    VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
+                    m_voice_clipboard = voice->get_text(m_last_voice_col);
+                }
+            }
+        }
+    });
+    m_voice_copy_btn->Hide();
+    voice_sizer->Add(m_voice_copy_btn, 0, wxALL, 2);
+    
+    m_voice_paste_btn = new wxButton(this, wxID_ANY, "Paste", wxDefaultPosition, wxSize(55, 24));
+    m_voice_paste_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        if (m_last_voice_col >= 0 && !m_voice_clipboard.empty()) {
+            size_t current_track = m_engine.m_record_track;
+            if (current_track < m_engine.track_count()) {
+                auto* inst = m_engine.track(current_track).instrument();
+                if (inst && inst->type() == InstrumentType::Voice) {
+                    VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
+                    voice->set_text(m_voice_clipboard, m_last_voice_col);
+                    m_voice_text_field->SetValue(wxString::FromUTF8(m_voice_clipboard));
+                }
+            }
+        }
+    });
+    m_voice_paste_btn->Hide();
+    voice_sizer->Add(m_voice_paste_btn, 0, wxALL, 2);
+    
+    m_voice_search_btn = new wxButton(this, wxID_ANY, "Find", wxDefaultPosition, wxSize(45, 24));
+    m_voice_search_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        wxString search = wxGetTextFromUser("Search for text:", "Find in Voice Instrument");
+        if (!search.IsEmpty()) {
+            m_voice_search_term = search.ToStdString();
+            size_t current_track = m_engine.m_record_track;
+            if (current_track < m_engine.track_count()) {
+                auto* inst = m_engine.track(current_track).instrument();
+                if (inst && inst->type() == InstrumentType::Voice) {
+                    VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
+                    // Find next occurrence
+                    for (int i = (m_last_voice_col + 1) % 16; i != m_last_voice_col; i = (i + 1) % 16) {
+                        std::string text = voice->get_text(i);
+                        if (text.find(m_voice_search_term) != std::string::npos) {
+                            m_last_voice_col = i;
+                            m_voice_text_field->SetValue(wxString::FromUTF8(text));
+                            wxMessageBox(wxString::Format("Found '%s' in column %d", search, i), "Found");
+                            return;
+                        }
+                    }
+                    wxMessageBox("Text not found", "Not Found");
+                }
+            }
+        }
+    });
+    m_voice_search_btn->Hide();
+    voice_sizer->Add(m_voice_search_btn, 0, wxALL, 2);
+    
     main_sizer->Add(voice_sizer, 0, wxEXPAND | wxALL, 0);
 
     SetSizer(main_sizer);
@@ -335,14 +400,20 @@ void TrackerPanel::update_voice_text_field() {
                 m_voice_text_field->SetValue(wxString::FromUTF8(text));
                 m_last_voice_col = voice_col;
                 m_voice_text_field->Show();
+                m_voice_copy_btn->Show();
+                m_voice_paste_btn->Show();
+                m_voice_search_btn->Show();
                 m_voice_text_field->GetParent()->Layout();
                 return;
             }
         }
     }
     
-    // Hide field if not a Voice track
+    // Hide field and buttons if not a Voice track
     m_voice_text_field->Hide();
+    m_voice_copy_btn->Hide();
+    m_voice_paste_btn->Hide();
+    m_voice_search_btn->Hide();
     m_last_voice_col = -1;
     m_voice_text_field->GetParent()->Layout();
 }

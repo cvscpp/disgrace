@@ -18,6 +18,11 @@ disgrace_SOURCES = \
     dsp/dsp_chain.cpp \
     dsp/reference_analyzer.cpp \
     dsp/reference_matcher.cpp \
+    edit/cmd_track_cut.cpp \
+    edit/cmd_track_copy.cpp \
+    edit/cmd_track_paste.cpp \
+    edit/cmd_track_silence.cpp \
+    edit/cmd_track_insert_silence.cpp \
     gui/wx_main_window.cpp \
     gui/wx_project_panel.cpp \
     gui/wx_detached_frame.cpp \

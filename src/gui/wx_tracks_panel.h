@@ -27,6 +27,7 @@
 namespace disgrace_ns {
 
 class Engine;
+class SampleInstrument;
 
 class TracksPanel : public wxPanel {
 public:
@@ -58,6 +59,12 @@ private:
 
 class TracksView : public wxScrolledWindow {
 public:
+    struct AudioRegion {
+        size_t start_sample;
+        size_t end_sample;
+        bool is_overlapping;
+    };
+
     TracksView(wxWindow* parent, wxWindowID id, Engine& engine);
 
     int get_total_ticks();
@@ -80,6 +87,7 @@ private:
     int x_to_tick(int x);
     int get_track_height(int track_idx) const;
     void toggle_track_minimize(int track_idx);
+    std::vector<AudioRegion> detect_overlaps(const SampleInstrument* sampler);
     
     void do_cut();
     void do_copy();

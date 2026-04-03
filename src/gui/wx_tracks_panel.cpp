@@ -368,12 +368,28 @@ void TracksView::draw(wxDC& dc) {
                                     if (s_idx < sampler->sample_count()) {
                                         auto& sample = sampler->get_sample(s_idx);
                                         if (sample.data) {
+                                            // Detect overlaps
+                                            auto overlaps = detect_overlaps(sampler);
+                                            bool is_overlapping = (s_idx < overlaps.size()) && overlaps[s_idx].is_overlapping;
+                                            
                                             // Draw sample background
-                                            dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_lpb_highlight)));
-                                            dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_lpb_highlight)));
+                                            if (is_overlapping) {
+                                                dc.SetBrush(wxBrush(wxColour(255, 200, 0, 128)));
+                                                dc.SetPen(wxPen(wxColour(255, 150, 0)));
+                                            } else {
+                                                dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_lpb_highlight)));
+                                                dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_lpb_highlight)));
+                                            }
                                             dc.DrawRectangle(nx, ty + 5, nw, track_h_actual - 10);
+                                            
                                             // Draw waveform
                                             draw_waveform_helper(dc, nx, ty + 5, nw, track_h_actual - 10, *sample.data, ThemeManager::toWxColour(m_engine.m_tracker_note));
+                                            
+                                            // Draw overlap indicator if needed
+                                            if (is_overlapping) {
+                                                dc.SetPen(wxPen(wxColour(255, 100, 0), 2));
+                                                dc.DrawRectangle(nx, ty + 5, nw, track_h_actual - 10);
+                                            }
                                         }
                                     }
                                 } else {
@@ -681,6 +697,37 @@ void TracksView::do_undo() {
 void TracksView::do_redo() {
     m_engine.undo_stack().redo();
     Refresh();
+}
+
+std::vector<TracksView::AudioRegion> TracksView::detect_overlaps(const SampleInstrument* sampler) {
+    std::vector<AudioRegion> regions;
+    
+    if (!sampler || sampler->sample_count() == 0) {
+        return regions;
+    }
+    
+    for (size_t i = 0; i < sampler->sample_count(); ++i) {
+        auto& sample = sampler->get_sample(i);
+        if (sample.data && !sample.data->left.empty()) {
+            AudioRegion region;
+            region.start_sample = 0;
+            region.end_sample = sample.data->left.size();
+            region.is_overlapping = false;
+            regions.push_back(region);
+        }
+    }
+    
+    for (size_t i = 0; i < regions.size(); ++i) {
+        for (size_t j = i + 1; j < regions.size(); ++j) {
+            if (regions[i].start_sample < regions[j].end_sample &&
+                regions[j].start_sample < regions[i].end_sample) {
+                regions[i].is_overlapping = true;
+                regions[j].is_overlapping = true;
+            }
+        }
+    }
+    
+    return regions;
 }
 
 } // namespace disgrace_ns

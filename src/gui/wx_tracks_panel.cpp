@@ -168,11 +168,11 @@ void TracksPanel::on_zoom_in(wxCommandEvent& event) { m_tracks_view->zoom_in(); 
 void TracksPanel::on_zoom_out(wxCommandEvent& event) { m_tracks_view->zoom_out(); }
 void TracksPanel::on_view_all(wxCommandEvent& event) { m_tracks_view->view_all(); }
 void TracksPanel::on_view_sel(wxCommandEvent& event) { m_tracks_view->view_selection(); }
-void TracksPanel::on_cut(wxCommandEvent& event) { fprintf(stderr, "on_cut button clicked\n"); m_tracks_view->do_cut(); }
-void TracksPanel::on_copy(wxCommandEvent& event) { fprintf(stderr, "on_copy button clicked\n"); m_tracks_view->do_copy(); }
-void TracksPanel::on_paste(wxCommandEvent& event) { fprintf(stderr, "on_paste button clicked\n"); m_tracks_view->do_paste(); }
-void TracksPanel::on_silence(wxCommandEvent& event) { fprintf(stderr, "on_silence button clicked\n"); m_tracks_view->do_silence(); }
-void TracksPanel::on_insert_silence(wxCommandEvent& event) { fprintf(stderr, "on_insert_silence button clicked\n"); m_tracks_view->do_insert_silence(); }
+void TracksPanel::on_cut(wxCommandEvent& event) { m_tracks_view->do_cut(); }
+void TracksPanel::on_copy(wxCommandEvent& event) { m_tracks_view->do_copy(); }
+void TracksPanel::on_paste(wxCommandEvent& event) { m_tracks_view->do_paste(); }
+void TracksPanel::on_silence(wxCommandEvent& event) { m_tracks_view->do_silence(); }
+void TracksPanel::on_insert_silence(wxCommandEvent& event) { m_tracks_view->do_insert_silence(); }
 void TracksPanel::on_detach(wxCommandEvent& event) {
     if (m_detached_frame) {
         return;
@@ -470,8 +470,11 @@ void TracksView::draw(wxDC& dc) {
         m_sel_start_tick != -1 && m_sel_end_tick != -1) {
         int s1 = std::min(m_sel_start_tick, m_sel_end_tick);
         int s2 = std::max(m_sel_start_tick, m_sel_end_tick);
+        if (s1 == s2) s2 = s1 + 1;  // Minimum 1 tick width for visibility
+        
         int sx1 = header_w + tick_to_x(s1);
         int sx2 = header_w + tick_to_x(s2);
+        if (sx2 == sx1) sx2 = sx1 + 2;  // Minimum 2 pixels for visibility
         
         // Calculate track position
         int cur_y = 30;
@@ -503,8 +506,6 @@ void TracksView::OnMouseDown(wxMouseEvent& event) {
     CalcUnscrolledPosition(event.GetX(), event.GetY(), &x, &y);
     int header_w = 120;
     
-    fprintf(stderr, "OnMouseDown: x=%d, y=%d (unscrolled)\n", x, y);
-    
     // Determine which track was clicked
     int num_tracks = (int)m_engine.track_count();
     int cur_y = 30;
@@ -517,7 +518,6 @@ void TracksView::OnMouseDown(wxMouseEvent& event) {
         
         if (y >= ty && y < ty + track_h) {
             clicked_track = t;
-            fprintf(stderr, "OnMouseDown: clicked_track=%d\n", clicked_track);
             
             // Check if minimize button was clicked (5-25 pixels from left, in header)
             if (x < header_w && x >= 5 && x <= 25) {
@@ -535,7 +535,6 @@ void TracksView::OnMouseDown(wxMouseEvent& event) {
         m_is_selecting = true;
         m_sel_start_tick = x_to_tick(x - header_w);
         m_sel_end_tick = m_sel_start_tick;
-        fprintf(stderr, "OnMouseDown: Selection start - track=%d, start_tick=%d\n", m_selected_track, m_sel_start_tick);
         Refresh();
     }
 }
@@ -546,15 +545,11 @@ void TracksView::OnMouseDrag(wxMouseEvent& event) {
         CalcUnscrolledPosition(event.GetX(), event.GetY(), &x, &y);
         int header_w = 120;
         m_sel_end_tick = x_to_tick(x - header_w);
-        fprintf(stderr, "OnMouseDrag: end_tick=%d\n", m_sel_end_tick);
         Refresh();
     }
 }
 
 void TracksView::OnMouseUp(wxMouseEvent& event) {
-    if (m_is_selecting) {
-        fprintf(stderr, "OnMouseUp: selection complete - start_tick=%d, end_tick=%d\n", m_sel_start_tick, m_sel_end_tick);
-    }
     m_is_selecting = false;
 }
 
@@ -677,21 +672,16 @@ void TracksView::OnKeyDown(wxKeyEvent& event) {
 
 void TracksView::do_cut() {
     if (m_sel_start_tick == -1 || m_sel_end_tick == -1 || m_selected_track < 0) {
-        fprintf(stderr, "do_cut: Invalid selection\n");
         return;
     }
     
     // Get selected track
     int num_tracks = (int)m_engine.track_count();
-    if (m_selected_track >= num_tracks) {
-        fprintf(stderr, "do_cut: Invalid track %d (max %d)\n", m_selected_track, num_tracks);
-        return;
-    }
+    if (m_selected_track >= num_tracks) return;
     
     auto& track = m_engine.track(m_selected_track);
     auto inst = track.instrument();
     if (!inst || inst->type() != InstrumentType::Sampler) {
-        fprintf(stderr, "do_cut: Track not a sampler (type=%d)\n", inst ? (int)inst->type() : -1);
         return;
     }
     
@@ -704,20 +694,14 @@ void TracksView::do_cut() {
         end_row = start_row + 1;  // Minimum 1 row
     }
     
-    fprintf(stderr, "do_cut: start_row=%d, end_row=%d, selected_track=%d\n", start_row, end_row, m_selected_track);
-    
     // Collect all note events in this time range from the pattern
     auto order = m_engine.order_list();
     int current_pattern_row = 0;
     std::vector<std::pair<int, int>> notes_to_cut;  // (pattern_index, row)
     
-    fprintf(stderr, "do_cut: order.size()=%zu\n", order.size());
-    
     for (size_t pat_idx = 0; pat_idx < order.size(); ++pat_idx) {
         auto& pattern = m_engine.pattern(order[pat_idx]);
         size_t pat_rows = pattern.row_count();
-        
-        fprintf(stderr, "do_cut: pattern[%zu] (pat_id=%zu) has %zu rows (current_pattern_row=%d)\n", pat_idx, order[pat_idx], pat_rows, current_pattern_row);
         
         for (size_t row = 0; row < pat_rows; ++row) {
             int global_row = current_pattern_row + row;
@@ -725,10 +709,8 @@ void TracksView::do_cut() {
             if (global_row >= start_row && global_row < end_row) {
                 // Check for note events in this row for our track
                 auto& event = pattern.event(m_selected_track, row, 0);
-                fprintf(stderr, "do_cut: global_row=%d, note=%d\n", global_row, (int)event.note);
                 if (event.note != 255) {  // 255 = empty/no note
                     notes_to_cut.push_back({(int)pat_idx, (int)row});
-                    fprintf(stderr, "  -> Will cut note from pattern[%zu] row=%zu\n", pat_idx, row);
                 }
             }
             
@@ -739,22 +721,16 @@ void TracksView::do_cut() {
         if (current_pattern_row >= end_row) break;
     }
     
-    fprintf(stderr, "do_cut: Found %zu notes to cut\n", notes_to_cut.size());
-    
     if (notes_to_cut.empty()) {
-        fprintf(stderr, "do_cut: Nothing to cut, returning\n");
         return;  // Nothing to cut
     }
     
     // For now, just clear these note events from the pattern
     for (auto& [pat_idx, row] : notes_to_cut) {
         auto& pattern = m_engine.pattern(order[pat_idx]);
-        fprintf(stderr, "do_cut: Before clear - note=%d\n", (int)pattern.event(m_selected_track, row, 0).note);
         pattern.event(m_selected_track, row, 0).note = 255;  // Clear note
-        fprintf(stderr, "do_cut: After clear - note=%d\n", (int)pattern.event(m_selected_track, row, 0).note);
     }
     
-    fprintf(stderr, "do_cut: All notes cleared, calling Refresh()\n");
     Refresh();
 }
 

@@ -25,6 +25,7 @@
 #include <wx/sizer.h>
 #include <wx/tglbtn.h>
 #include <wx/stattext.h>
+#include <wx/textctrl.h>
 #include <unordered_map>
 
 #include "../core/key_bindings.h"
@@ -62,6 +63,7 @@ public:
     void on_dec_pattern(wxCommandEvent& event);
     void on_follow_playback(wxCommandEvent& event);
     void on_detach(wxCommandEvent& event);
+    void update_voice_text_field();
 
 public:
     void set_tab_index(int idx) { m_tab_index = idx; }
@@ -83,6 +85,9 @@ private:
     wxButton* m_inc_pattern_btn;
     wxToggleButton* m_follow_btn;
     wxButton* m_detach_btn;
+
+    wxTextCtrl* m_voice_text_field;  // For Voice instrument text editing
+    int m_last_voice_col = -1;       // Track which column was last displayed
 
     int m_selected_order_idx = 0;
     int m_tab_index = -1;

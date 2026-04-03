@@ -20,6 +20,7 @@
 #include "wx_tracker_view.h"
 #include "wx_detached_frame.h"
 #include "../core/engine.h"
+#include "../instrument/voice_instrument.h"
 
 #include <wx/sizer.h>
 #include <wx/textctrl.h>
@@ -87,6 +88,27 @@ TrackerPanel::TrackerPanel(wxWindow* parent, Engine& engine)
     content_sizer->Add(m_tracker, 1, wxEXPAND | wxALL, 2);
 
     main_sizer->Add(content_sizer, 1, wxEXPAND | wxALL, 0);
+
+    // Voice text editor (shown only for Voice instrument tracks)
+    wxBoxSizer* voice_sizer = new wxBoxSizer(wxHORIZONTAL);
+    voice_sizer->Add(new wxStaticText(this, wxID_ANY, "Text:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    m_voice_text_field = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 24));
+    m_voice_text_field->Bind(wxEVT_TEXT, [this](wxCommandEvent& ev) {
+        if (m_voice_text_field && m_last_voice_col >= 0) {
+            // Get current track and instrument
+            size_t current_track = m_engine.m_record_track;
+            if (current_track < m_engine.track_count()) {
+                auto* inst = m_engine.track(current_track).instrument();
+                if (inst && inst->type() == InstrumentType::Voice) {
+                    VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
+                    voice->set_text(m_voice_text_field->GetValue().ToStdString(), m_last_voice_col);
+                }
+            }
+        }
+    });
+    m_voice_text_field->Hide();
+    voice_sizer->Add(m_voice_text_field, 1, wxEXPAND | wxALL, 2);
+    main_sizer->Add(voice_sizer, 0, wxEXPAND | wxALL, 0);
 
     SetSizer(main_sizer);
 
@@ -273,6 +295,7 @@ void TrackerPanel::update() {
             m_tracker->ensure_cursor_visible();
         }
         m_tracker->Refresh();
+        update_voice_text_field();  // Update voice text field based on cursor position
     }
 }
 
@@ -291,6 +314,37 @@ void TrackerPanel::handle_note_action(Action action) {
     if (m_tracker) {
         m_tracker->handle_action(action);
     }
+}
+
+void TrackerPanel::update_voice_text_field() {
+    if (!m_tracker || !m_voice_text_field) return;
+    
+    size_t current_track = m_engine.m_record_track;
+    int cursor_col = m_tracker->get_cursor_track();
+    
+    // Check if current track uses Voice instrument
+    if (current_track < m_engine.track_count()) {
+        auto* inst = m_engine.track(current_track).instrument();
+        if (inst && inst->type() == InstrumentType::Voice) {
+            VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
+            
+            // Map cursor column to voice text column (0-15)
+            int voice_col = cursor_col % 16;
+            if (voice_col >= 0 && voice_col < 16) {
+                std::string text = voice->get_text(voice_col);
+                m_voice_text_field->SetValue(wxString::FromUTF8(text));
+                m_last_voice_col = voice_col;
+                m_voice_text_field->Show();
+                m_voice_text_field->GetParent()->Layout();
+                return;
+            }
+        }
+    }
+    
+    // Hide field if not a Voice track
+    m_voice_text_field->Hide();
+    m_last_voice_col = -1;
+    m_voice_text_field->GetParent()->Layout();
 }
 
 } // namespace disgrace_ns

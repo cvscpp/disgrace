@@ -384,8 +384,8 @@ void TrackerPanel::handle_note_action(Action action) {
 void TrackerPanel::update_voice_text_field() {
     if (!m_tracker || !m_voice_text_field) return;
     
-    size_t current_track = m_engine.m_record_track;
-    int cursor_col = m_tracker->get_cursor_track();
+    size_t current_track = m_tracker->get_cursor_track();
+    int cursor_col = m_tracker->get_cursor_col();
     
     // Check if current track uses Voice instrument
     if (current_track < m_engine.track_count()) {

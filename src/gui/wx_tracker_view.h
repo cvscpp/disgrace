@@ -44,6 +44,8 @@ public:
     void set_current_row(int row);
     int get_cursor_row() const { return m_cursor_row; }
     int get_cursor_track() const { return m_cursor_track; }
+    int get_cursor_col() const { return m_cursor_col; }
+    int get_cursor_field() const { return m_cursor_field; }
     void set_cursor_track(int track) { m_cursor_track = track; clamp_cursor(); }
     void set_pattern(Pattern& pattern);
     void recalculate_size();

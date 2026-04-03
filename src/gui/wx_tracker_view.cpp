@@ -20,6 +20,7 @@
 #include "theme.h"
 #include "../core/engine.h"
 #include "../edit/cmd_edit_block.h"
+#include "../instrument/voice_instrument.h"
 
 #include <wx/dcclient.h>
 #include <wx/msgdlg.h>
@@ -257,7 +258,7 @@ void TrackerView::draw(wxDC& dc) {
                 else if (ev.note == 254) dc.DrawText("OFF", f_x, ry + 2);
                 else dc.DrawText(wxString::Format("%s%d", note_names[ev.note % 12], ev.note / 12), f_x, ry + 2);
 
-                // Sample
+                // Sample / Text (for Voice instruments)
                 f_idx = c * 3 + 1;
                 f_x = get_field_x(t, f_idx, f_w);
                 if (is_selected(f_idx)) {
@@ -275,8 +276,26 @@ void TrackerView::draw(wxDC& dc) {
                     if (!is_sampler) s_col = wxColour(s_col.Red() / 3, s_col.Green() / 3, s_col.Blue() / 3);
                     dc.SetTextForeground(s_col);
                 }
-                if (ev.sample_idx == 0) dc.DrawText("..", f_x, ry + 2);
-                else dc.DrawText(wxString::Format("%02X", ev.sample_idx), f_x, ry + 2);
+                
+                // Check if this is a voice instrument track
+                bool is_voice = (track_obj.instrument() && track_obj.instrument()->type() == InstrumentType::Voice);
+                
+                if (is_voice) {
+                    // Display text for voice instruments
+                    VoiceInstrument* voice = static_cast<VoiceInstrument*>(track_obj.instrument());
+                    std::string text = voice->get_text(c);
+                    wxString display_text = wxString::FromUTF8(text);
+                    if (display_text.empty()) display_text = "...";
+                    // Truncate to fit field width
+                    while (display_text.length() > 4) {
+                        display_text = display_text.SubString(0, display_text.length() - 2);
+                    }
+                    dc.DrawText(display_text, f_x, ry + 2);
+                } else {
+                    // Display sample index for sampler instruments
+                    if (ev.sample_idx == 0) dc.DrawText("..", f_x, ry + 2);
+                    else dc.DrawText(wxString::Format("%02X", ev.sample_idx), f_x, ry + 2);
+                }
 
                 // Volume
                 f_idx = c * 3 + 2;
@@ -450,11 +469,33 @@ void TrackerView::OnKeyDown(wxKeyEvent& event) {
                 }
             }
             break;
-        default:
+        default: {
+            // Check if we're in a voice instrument's text field (field 1)
+            if (m_cursor_track < (int)m_engine.track_count() && m_cursor_field == 1) {
+                auto& track = m_engine.track(m_cursor_track);
+                auto inst = track.instrument();
+                if (inst && inst->type() == InstrumentType::Voice) {
+                    VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
+                    
+                    // Handle printable characters for text input
+                    if (key >= 32 && key <= 126 && (wx_mods == 0 || (wx_mods == wxMOD_SHIFT))) {
+                        char c = (char)key;
+                        std::string current = voice->get_text(m_cursor_col);
+                        if (current.length() < 15) {  // Limit text length
+                            current += c;
+                            voice->set_text(current, m_cursor_col);
+                            Refresh();
+                            return;
+                        }
+                    }
+                }
+            }
+            
             if (!handle_action(action)) {
                 event.Skip();
             }
             return;
+        }
     }
 
     if (navigated) {

@@ -24,6 +24,7 @@
 #include "../instrument/sample_instrument.h"
 #include "../instrument/soundfont_instrument.h"
 #include "../instrument/midi_instrument.h"
+#include "../instrument/voice_instrument.h"
 #include "../instrument/dssi_instrument.h"
 #include "../instrument/lv2_instrument.h"
 #include "audio_file.h"
@@ -122,6 +123,9 @@ namespace disgrace_ns
                 midi.get_audio_input(in_l, in_r);
                 jinst["audio_input_l"] = in_l;
                 jinst["audio_input_r"] = in_r;
+            } else if (inst.type() == InstrumentType::Voice) {
+                const auto& voice = static_cast<const VoiceInstrument&>(inst);
+                jinst["tts_mode"] = (int)voice.tts_mode();
             } else if (inst.type() == InstrumentType::Plugin) {
                 try {
                     const auto& dssi = static_cast<const DSSIInstrument&>(inst);
@@ -265,6 +269,9 @@ namespace disgrace_ns
                         ji.value("audio_input_l", -1),
                         ji.value("audio_input_r", -1)
                     );
+                } else if (type == InstrumentType::Voice) {
+                    VoiceInstrument& voice = static_cast<VoiceInstrument&>(inst);
+                    voice.set_tts_mode((TTSMode)ji.value("tts_mode", 0));
                 } else if (type == InstrumentType::Plugin && (ji.contains("plugin_path") || ji.contains("plugin_name"))) {
                     DSSIInstrument& dssi = static_cast<DSSIInstrument&>(inst);
                     std::string path = ji.value("plugin_path", "");

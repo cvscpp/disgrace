@@ -29,6 +29,7 @@
 #include "../instrument/dssi_instrument.h"
 #include "../instrument/lv2_instrument.h"
 #include "../instrument/midi_instrument.h"
+#include "../instrument/voice_instrument.h"
 #include <algorithm>
 #include <iostream>
 #include <fstream>
@@ -523,6 +524,7 @@ void Engine::set_instrument_type(size_t index, InstrumentType type) {
         case InstrumentType::SoundFont: new_inst = std::make_unique<SoundFontInstrument>((double)m_sample_rate); break;
         case InstrumentType::Plugin: new_inst = std::make_unique<DSSIInstrument>((double)m_sample_rate); break;
         case InstrumentType::Midi: new_inst = std::make_unique<MidiInstrument>(this); break;
+        case InstrumentType::Voice: new_inst = std::make_unique<VoiceInstrument>(this); break;
         default: new_inst = std::make_unique<NoneInstrument>(); break;
     }
     new_inst->set_name(name); new_inst->set_type(type);

@@ -34,7 +34,8 @@ enum class InstrumentType {
     Sampler,
     SoundFont,
     Plugin,
-    Midi
+    Midi,
+    Voice
 };
 
 class Instrument

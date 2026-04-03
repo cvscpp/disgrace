@@ -23,6 +23,11 @@
 #include "../core/engine.h"
 #include "../instrument/sample_instrument.h"
 #include "../instrument/soundfont_instrument.h"
+#include "../edit/cmd_track_cut.h"
+#include "../edit/cmd_track_copy.h"
+#include "../edit/cmd_track_paste.h"
+#include "../edit/cmd_track_silence.h"
+#include "../edit/cmd_track_insert_silence.h"
 #include "theme.h"
 
 namespace disgrace_ns {
@@ -147,6 +152,7 @@ wxBEGIN_EVENT_TABLE(TracksView, wxScrolledWindow)
     EVT_MOTION(TracksView::OnMouseDrag)
     EVT_LEFT_UP(TracksView::OnMouseUp)
     EVT_MOUSEWHEEL(TracksView::OnMouseWheel)
+    EVT_KEY_DOWN(TracksView::OnKeyDown)
 wxEND_EVENT_TABLE()
 
 TracksView::TracksView(wxWindow* parent, wxWindowID id, Engine& engine)
@@ -518,6 +524,162 @@ void TracksView::update_view() {
     int total_w = 120 + tick_to_x(get_total_ticks()) + 50;
     total_h += 50;
     SetVirtualSize(total_w, total_h);
+    Refresh();
+}
+
+void TracksView::OnKeyDown(wxKeyEvent& event) {
+    int key = event.GetKeyCode();
+    
+    if (event.ControlDown() || event.CmdDown()) {
+        if (key == 'Z' || key == 'z') {
+            do_undo();
+            return;
+        } else if (key == 'Y' || key == 'y') {
+            do_redo();
+            return;
+        }
+    }
+    
+    switch (key) {
+        case 'X':
+        case 'x':
+            do_cut();
+            break;
+        case 'C':
+        case 'c':
+            do_copy();
+            break;
+        case 'V':
+        case 'v':
+            do_paste();
+            break;
+        case 'S':
+        case 's':
+            do_silence();
+            break;
+        case 'I':
+        case 'i':
+            do_insert_silence();
+            break;
+        default:
+            event.Skip();
+            return;
+    }
+}
+
+void TracksView::do_cut() {
+    if (m_sel_start_tick == -1 || m_sel_end_tick == -1) {
+        return;
+    }
+    
+    int num_tracks = (int)m_engine.track_count();
+    if (num_tracks == 0) return;
+    
+    int start_tick = std::min(m_sel_start_tick, m_sel_end_tick);
+    int end_tick = std::max(m_sel_start_tick, m_sel_end_tick);
+    
+    if (start_tick >= end_tick) return;
+    
+    size_t start_sample = (size_t)start_tick;
+    size_t end_sample = (size_t)end_tick;
+    
+    auto& track = m_engine.track(0);
+    auto cmd = std::make_unique<disgrace_ns::TrackCutCommand>(track, m_engine, start_sample, end_sample);
+    m_engine.undo_stack().execute(std::move(cmd));
+    
+    Refresh();
+}
+
+void TracksView::do_copy() {
+    if (m_sel_start_tick == -1 || m_sel_end_tick == -1) {
+        return;
+    }
+    
+    int num_tracks = (int)m_engine.track_count();
+    if (num_tracks == 0) return;
+    
+    int start_tick = std::min(m_sel_start_tick, m_sel_end_tick);
+    int end_tick = std::max(m_sel_start_tick, m_sel_end_tick);
+    
+    if (start_tick >= end_tick) return;
+    
+    size_t start_sample = (size_t)start_tick;
+    size_t end_sample = (size_t)end_tick;
+    
+    auto& track = m_engine.track(0);
+    auto cmd = std::make_unique<disgrace_ns::TrackCopyCommand>(track, m_engine, start_sample, end_sample);
+    m_engine.undo_stack().execute(std::move(cmd));
+}
+
+void TracksView::do_paste() {
+    if (m_sel_start_tick == -1) {
+        return;
+    }
+    
+    int num_tracks = (int)m_engine.track_count();
+    if (num_tracks == 0) return;
+    
+    size_t insert_sample = (size_t)m_sel_start_tick;
+    
+    auto& track = m_engine.track(0);
+    auto cmd = std::make_unique<disgrace_ns::TrackPasteCommand>(track, m_engine, insert_sample);
+    m_engine.undo_stack().execute(std::move(cmd));
+    
+    Refresh();
+}
+
+void TracksView::do_silence() {
+    if (m_sel_start_tick == -1 || m_sel_end_tick == -1) {
+        return;
+    }
+    
+    int num_tracks = (int)m_engine.track_count();
+    if (num_tracks == 0) return;
+    
+    int start_tick = std::min(m_sel_start_tick, m_sel_end_tick);
+    int end_tick = std::max(m_sel_start_tick, m_sel_end_tick);
+    
+    if (start_tick >= end_tick) return;
+    
+    size_t start_sample = (size_t)start_tick;
+    size_t end_sample = (size_t)end_tick;
+    
+    auto& track = m_engine.track(0);
+    auto cmd = std::make_unique<disgrace_ns::TrackSilenceCommand>(track, start_sample, end_sample);
+    m_engine.undo_stack().execute(std::move(cmd));
+    
+    Refresh();
+}
+
+void TracksView::do_insert_silence() {
+    if (m_sel_start_tick == -1) {
+        return;
+    }
+    
+    int num_tracks = (int)m_engine.track_count();
+    if (num_tracks == 0) return;
+    
+    size_t insert_sample = (size_t)m_sel_start_tick;
+    size_t duration = 4410;
+    
+    if (m_sel_end_tick != -1) {
+        duration = std::abs(m_sel_end_tick - m_sel_start_tick);
+    }
+    
+    auto& track = m_engine.track(0);
+    auto cmd = std::make_unique<disgrace_ns::TrackInsertSilenceCommand>(track, insert_sample, duration);
+    m_engine.undo_stack().execute(std::move(cmd));
+    
+    Refresh();
+}
+
+void TracksView::do_undo() {
+    m_engine.undo_stack().undo();
+    Refresh();
+}
+
+void TracksView::do_redo() {
+    m_engine.undo_stack().redo();
     Refresh();
 }
 

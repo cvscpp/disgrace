@@ -71,6 +71,7 @@ public:
     void OnMouseDrag(wxMouseEvent& event);
     void OnMouseUp(wxMouseEvent& event);
     void OnMouseWheel(wxMouseEvent& event);
+    void OnKeyDown(wxKeyEvent& event);
     void OnSize(wxSizeEvent& event);
     void draw(wxDC& dc);
 
@@ -79,6 +80,14 @@ private:
     int x_to_tick(int x);
     int get_track_height(int track_idx) const;
     void toggle_track_minimize(int track_idx);
+    
+    void do_cut();
+    void do_copy();
+    void do_paste();
+    void do_silence();
+    void do_insert_silence();
+    void do_undo();
+    void do_redo();
 
     Engine& m_engine;
     double m_zoom = 10.0;

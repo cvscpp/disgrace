@@ -52,6 +52,7 @@ disgrace_SOURCES = \
     io/xrns_importer.cpp \
     midi/midi_input.cpp \
     mixer/track.cpp \
+    mixer/track_clipboard.cpp \
     mixer/mixer_bus.cpp \
     sequencer/automation.cpp \
     sequencer/pattern.cpp \

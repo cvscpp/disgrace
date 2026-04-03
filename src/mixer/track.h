@@ -113,6 +113,10 @@ public:
     float note_to_frequency(uint8_t note);
     void process_tick(uint32_t engine_current_tick);
 
+    // Track minimization
+    void set_minimized(bool min) { m_minimized = min; }
+    bool is_minimized() const { return m_minimized; }
+
     // DSP Chain management
     void set_effect(size_t index, ::std::unique_ptr<disgrace_ns::DSP> dsp);
     void enable_effect(size_t index, bool en);
@@ -138,6 +142,7 @@ private:
     float m_volume = 1.f;
     bool  m_mute   = false;
     bool  m_solo   = false;
+    bool  m_minimized = false;  // Track minimization state
     NotationType m_notation = NotationType::Violin;
     int   m_output_bus = -1; // -1 = Master
     std::string m_name;

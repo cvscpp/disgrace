@@ -28,6 +28,7 @@
 #include "../sequencer/note.h"
 #include "../mixer/track.h"
 #include "../mixer/mixer_bus.h"
+#include "../mixer/track_clipboard.h"
 #include "../instrument/instrument.h"
 #include "../audio/sample_data.h"
 #include "undo_stack.h"
@@ -153,6 +154,9 @@ public:
     disgrace_ns::UndoStack& undo_stack();
     disgrace_ns::BlockClipboard& clipboard();
     disgrace_ns::SampleClipboard& sample_clipboard() { return m_sample_clipboard; }
+    
+    // Track audio clipboard
+    disgrace_ns::TrackClipboard& track_clipboard() { return m_track_clipboard; }
 
     enum class SampleRecordMode { Free, Synced };
     ::std::atomic<bool> m_is_recording_sample{false};
@@ -285,6 +289,7 @@ private:
     ::std::unique_ptr<disgrace_ns::AudioBackend> m_backend;
     disgrace_ns::BlockClipboard m_clipboard;
     disgrace_ns::SampleClipboard m_sample_clipboard;
+    disgrace_ns::TrackClipboard m_track_clipboard;
     ::std::atomic<bool> m_loop_pattern{false};
 
     ::std::unique_ptr<disgrace_ns::Transport> m_transport;

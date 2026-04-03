@@ -21,6 +21,7 @@
 #include <map>
 #include <vector>
 #include <memory>
+#include <list>
 
 namespace disgrace_ns {
 
@@ -64,6 +65,11 @@ public:
     bool synthesize_text(const std::string& text, float base_freq);
     void clear_cache();
     size_t cache_size() const { return m_audio_cache.size(); }
+    size_t get_memory_used() const { return m_memory_used; }
+    
+    // Memory limit with LRU eviction
+    void set_memory_limit(size_t bytes) { m_memory_limit = bytes; }
+    size_t get_memory_limit() const { return m_memory_limit; }
     
     // Disk cache for persistence across sessions
     void set_cache_dir(const std::string& dir) { m_cache_dir = dir; }
@@ -99,8 +105,20 @@ private:
     struct CachedAudio {
         std::vector<float> left;
         std::vector<float> right;
+        
+        // Get size in bytes
+        size_t size_bytes() const {
+            return (left.size() + right.size()) * sizeof(float);
+        }
     };
     std::map<std::string, CachedAudio> m_audio_cache;
+    std::list<std::string> m_lru_order;  // LRU ordering (oldest at front)
+    size_t m_memory_used = 0;
+    size_t m_memory_limit = 50 * 1024 * 1024;  // 50 MB default
+    
+    // Memory management with LRU eviction
+    void update_lru(const std::string& cache_key);
+    void evict_lru_if_needed(size_t new_size);
     
     // Helper to generate cache key including pitch
     std::string make_cache_key(const std::string& text, float pitch_factor) const;

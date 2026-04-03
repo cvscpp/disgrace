@@ -137,13 +137,18 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq) 
     auto cache_it = m_audio_cache.find(cache_key);
     if (cache_it != m_audio_cache.end()) {
         m_current_audio = cache_it->second;
+        update_lru(cache_key);
         return true;
     }
     
     // Check disk cache
     CachedAudio disk_audio;
     if (load_from_disk_cache(cache_key, disk_audio)) {
+        size_t audio_size = disk_audio.size_bytes();
+        evict_lru_if_needed(audio_size);
         m_audio_cache[cache_key] = disk_audio;
+        m_memory_used += audio_size;
+        update_lru(cache_key);
         m_current_audio = disk_audio;
         return true;
     }
@@ -178,9 +183,14 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq) 
         out_r = pitched_r;
     }
     
-    // Cache the pitch-shifted result in memory
+    // Cache the pitch-shifted result in memory with LRU eviction
     CachedAudio final_audio = {out_l, out_r};
+    size_t audio_size = final_audio.size_bytes();
+    
+    evict_lru_if_needed(audio_size);
     m_audio_cache[cache_key] = final_audio;
+    m_memory_used += audio_size;
+    update_lru(cache_key);
     m_current_audio = final_audio;
     m_current_text = text;
     
@@ -408,6 +418,36 @@ bool VoiceInstrument::save_to_disk_cache(const std::string& cache_key, const Cac
     return written == (sf_count_t)audio.left.size();
 }
 
+void VoiceInstrument::update_lru(const std::string& cache_key) {
+    // Remove from LRU if already present
+    auto it = std::find(m_lru_order.begin(), m_lru_order.end(), cache_key);
+    if (it != m_lru_order.end()) {
+        m_lru_order.erase(it);
+    }
+    // Add to end (most recently used)
+    m_lru_order.push_back(cache_key);
+}
+
+void VoiceInstrument::evict_lru_if_needed(size_t new_size) {
+    // Check if we need to evict
+    if (m_memory_used + new_size <= m_memory_limit) {
+        return;
+    }
+    
+    // Evict LRU entries until we have space
+    while (!m_lru_order.empty() && m_memory_used + new_size > m_memory_limit) {
+        std::string lru_key = m_lru_order.front();
+        m_lru_order.pop_front();
+        
+        auto cache_it = m_audio_cache.find(lru_key);
+        if (cache_it != m_audio_cache.end()) {
+            m_memory_used -= cache_it->second.size_bytes();
+            m_audio_cache.erase(cache_it);
+        }
+    }
+}
+
+
 bool VoiceInstrument::apply_libsamplerate_pitch(const std::vector<float>& in_left, 
                                                 const std::vector<float>& in_right,
                                                 float pitch_factor,
@@ -489,6 +529,8 @@ bool VoiceInstrument::apply_libsamplerate_pitch(const std::vector<float>& in_lef
 
 void VoiceInstrument::clear_cache() {
     m_audio_cache.clear();
+    m_lru_order.clear();
+    m_memory_used = 0;
     m_current_text.clear();
     m_current_audio = {std::vector<float>(), std::vector<float>()};
     m_playback_pos = 0;

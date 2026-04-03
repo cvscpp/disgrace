@@ -18,6 +18,7 @@
 
 #include <wx/app.h>
 #include <wx/dcclient.h>
+#include <wx/menu.h>
 #include "wx_tracks_panel.h"
 #include "wx_detached_frame.h"
 #include "../core/engine.h"
@@ -79,7 +80,19 @@ enum {
     ID_ZOOM_OUT,
     ID_VIEW_ALL,
     ID_VIEW_SEL,
-    ID_DETACH
+    ID_DETACH,
+    ID_CUT,
+    ID_COPY,
+    ID_PASTE,
+    ID_SILENCE,
+    ID_INSERT_SILENCE,
+    ID_MENU_CUT,
+    ID_MENU_COPY,
+    ID_MENU_PASTE,
+    ID_MENU_SILENCE,
+    ID_MENU_INSERT_SILENCE,
+    ID_MENU_UNDO,
+    ID_MENU_REDO
 };
 
 wxBEGIN_EVENT_TABLE(TracksPanel, wxPanel)
@@ -88,6 +101,11 @@ wxBEGIN_EVENT_TABLE(TracksPanel, wxPanel)
     EVT_BUTTON(ID_VIEW_ALL, TracksPanel::on_view_all)
     EVT_BUTTON(ID_VIEW_SEL, TracksPanel::on_view_sel)
     EVT_BUTTON(ID_DETACH, TracksPanel::on_detach)
+    EVT_BUTTON(ID_CUT, TracksPanel::on_cut)
+    EVT_BUTTON(ID_COPY, TracksPanel::on_copy)
+    EVT_BUTTON(ID_PASTE, TracksPanel::on_paste)
+    EVT_BUTTON(ID_SILENCE, TracksPanel::on_silence)
+    EVT_BUTTON(ID_INSERT_SILENCE, TracksPanel::on_insert_silence)
 wxEND_EVENT_TABLE()
 
 TracksPanel::TracksPanel(wxWindow* parent, Engine& engine)
@@ -96,19 +114,32 @@ TracksPanel::TracksPanel(wxWindow* parent, Engine& engine)
     wxBoxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
 
     wxBoxSizer* btn_sizer = new wxBoxSizer(wxHORIZONTAL);
-    int btn_w = 80;
+    int btn_w = 60;
     int btn_h = 25;
 
     m_zoom_in_btn = new wxButton(this, ID_ZOOM_IN, "Zoom In", wxDefaultPosition, wxSize(btn_w, btn_h));
     m_zoom_out_btn = new wxButton(this, ID_ZOOM_OUT, "Zoom Out", wxDefaultPosition, wxSize(btn_w, btn_h));
     m_view_all_btn = new wxButton(this, ID_VIEW_ALL, "View All", wxDefaultPosition, wxSize(btn_w, btn_h));
     m_view_sel_btn = new wxButton(this, ID_VIEW_SEL, "View Sel", wxDefaultPosition, wxSize(btn_w, btn_h));
+    
+    m_cut_btn = new wxButton(this, ID_CUT, "Cut", wxDefaultPosition, wxSize(btn_w, btn_h));
+    m_copy_btn = new wxButton(this, ID_COPY, "Copy", wxDefaultPosition, wxSize(btn_w, btn_h));
+    m_paste_btn = new wxButton(this, ID_PASTE, "Paste", wxDefaultPosition, wxSize(btn_w, btn_h));
+    m_silence_btn = new wxButton(this, ID_SILENCE, "Silence", wxDefaultPosition, wxSize(btn_w, btn_h));
+    m_insert_btn = new wxButton(this, ID_INSERT_SILENCE, "Insert", wxDefaultPosition, wxSize(btn_w, btn_h));
+    
     m_detach_btn = new wxButton(this, ID_DETACH, "[]", wxDefaultPosition, wxSize(30, btn_h));
 
     btn_sizer->Add(m_zoom_in_btn, 0, wxALL, 2);
     btn_sizer->Add(m_zoom_out_btn, 0, wxALL, 2);
     btn_sizer->Add(m_view_all_btn, 0, wxALL, 2);
     btn_sizer->Add(m_view_sel_btn, 0, wxALL, 2);
+    btn_sizer->AddStretchSpacer();
+    btn_sizer->Add(m_cut_btn, 0, wxALL, 2);
+    btn_sizer->Add(m_copy_btn, 0, wxALL, 2);
+    btn_sizer->Add(m_paste_btn, 0, wxALL, 2);
+    btn_sizer->Add(m_silence_btn, 0, wxALL, 2);
+    btn_sizer->Add(m_insert_btn, 0, wxALL, 2);
     btn_sizer->Add(m_detach_btn, 0, wxALL, 2);
 
     main_sizer->Add(btn_sizer, 0, wxEXPAND | wxALL, 2);
@@ -136,6 +167,11 @@ void TracksPanel::on_zoom_in(wxCommandEvent& event) { m_tracks_view->zoom_in(); 
 void TracksPanel::on_zoom_out(wxCommandEvent& event) { m_tracks_view->zoom_out(); }
 void TracksPanel::on_view_all(wxCommandEvent& event) { m_tracks_view->view_all(); }
 void TracksPanel::on_view_sel(wxCommandEvent& event) { m_tracks_view->view_selection(); }
+void TracksPanel::on_cut(wxCommandEvent& event) { m_tracks_view->do_cut(); }
+void TracksPanel::on_copy(wxCommandEvent& event) { m_tracks_view->do_copy(); }
+void TracksPanel::on_paste(wxCommandEvent& event) { m_tracks_view->do_paste(); }
+void TracksPanel::on_silence(wxCommandEvent& event) { m_tracks_view->do_silence(); }
+void TracksPanel::on_insert_silence(wxCommandEvent& event) { m_tracks_view->do_insert_silence(); }
 void TracksPanel::on_detach(wxCommandEvent& event) {
     if (m_detached_frame) {
         return;
@@ -152,7 +188,9 @@ wxBEGIN_EVENT_TABLE(TracksView, wxScrolledWindow)
     EVT_MOTION(TracksView::OnMouseDrag)
     EVT_LEFT_UP(TracksView::OnMouseUp)
     EVT_MOUSEWHEEL(TracksView::OnMouseWheel)
+    EVT_RIGHT_DOWN(TracksView::OnMouseRightClick)
     EVT_KEY_DOWN(TracksView::OnKeyDown)
+    EVT_CONTEXT_MENU(TracksView::OnContextMenu)
 wxEND_EVENT_TABLE()
 
 TracksView::TracksView(wxWindow* parent, wxWindowID id, Engine& engine)
@@ -541,6 +579,36 @@ void TracksView::update_view() {
     total_h += 50;
     SetVirtualSize(total_w, total_h);
     Refresh();
+}
+
+void TracksView::OnMouseRightClick(wxMouseEvent& event) {
+    // Store position for potential operations
+    // The actual context menu is shown via wxContextMenuEvent
+    event.Skip();
+}
+
+void TracksView::OnContextMenu(wxContextMenuEvent& event) {
+    wxMenu menu;
+    menu.Append(ID_MENU_CUT, "Cut\tX", "Cut selection to clipboard");
+    menu.Append(ID_MENU_COPY, "Copy\tC", "Copy selection to clipboard");
+    menu.Append(ID_MENU_PASTE, "Paste\tV", "Paste from clipboard");
+    menu.AppendSeparator();
+    menu.Append(ID_MENU_SILENCE, "Silence\tS", "Silence selection");
+    menu.Append(ID_MENU_INSERT_SILENCE, "Insert Gap\tI", "Insert gap at cursor");
+    menu.AppendSeparator();
+    menu.Append(ID_MENU_UNDO, "Undo\tCtrl+Z", "Undo last operation");
+    menu.Append(ID_MENU_REDO, "Redo\tCtrl+Y", "Redo last operation");
+    
+    // Bind menu events to operation handlers
+    Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_cut(); }, ID_MENU_CUT);
+    Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_copy(); }, ID_MENU_COPY);
+    Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_paste(); }, ID_MENU_PASTE);
+    Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_silence(); }, ID_MENU_SILENCE);
+    Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_insert_silence(); }, ID_MENU_INSERT_SILENCE);
+    Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_undo(); }, ID_MENU_UNDO);
+    Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_redo(); }, ID_MENU_REDO);
+    
+    PopupMenu(&menu, event.GetPosition());
 }
 
 void TracksView::OnKeyDown(wxKeyEvent& event) {

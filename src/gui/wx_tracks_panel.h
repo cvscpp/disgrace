@@ -43,6 +43,11 @@ private:
     void on_view_all(wxCommandEvent& event);
     void on_view_sel(wxCommandEvent& event);
     void on_detach(wxCommandEvent& event);
+    void on_cut(wxCommandEvent& event);
+    void on_copy(wxCommandEvent& event);
+    void on_paste(wxCommandEvent& event);
+    void on_silence(wxCommandEvent& event);
+    void on_insert_silence(wxCommandEvent& event);
 
     Engine& m_engine;
     int m_tab_index = -1;
@@ -51,6 +56,11 @@ private:
     wxButton* m_view_all_btn;
     wxButton* m_view_sel_btn;
     wxButton* m_detach_btn;
+    wxButton* m_cut_btn;
+    wxButton* m_copy_btn;
+    wxButton* m_paste_btn;
+    wxButton* m_silence_btn;
+    wxButton* m_insert_btn;
     class TracksView* m_tracks_view;
     class DetachedFrame* m_detached_frame = nullptr;
 
@@ -78,17 +88,11 @@ public:
     void OnMouseDrag(wxMouseEvent& event);
     void OnMouseUp(wxMouseEvent& event);
     void OnMouseWheel(wxMouseEvent& event);
+    void OnMouseRightClick(wxMouseEvent& event);
     void OnKeyDown(wxKeyEvent& event);
     void OnSize(wxSizeEvent& event);
+    void OnContextMenu(wxContextMenuEvent& event);
     void draw(wxDC& dc);
-
-private:
-    int tick_to_x(int tick);
-    int x_to_tick(int x);
-    int get_track_height(int track_idx) const;
-    void toggle_track_minimize(int track_idx);
-    std::vector<AudioRegion> detect_overlaps(const SampleInstrument* sampler);
-    
     void do_cut();
     void do_copy();
     void do_paste();
@@ -96,6 +100,13 @@ private:
     void do_insert_silence();
     void do_undo();
     void do_redo();
+
+private:
+    int tick_to_x(int tick);
+    int x_to_tick(int x);
+    int get_track_height(int track_idx) const;
+    void toggle_track_minimize(int track_idx);
+    std::vector<AudioRegion> detect_overlaps(const SampleInstrument* sampler);
 
     Engine& m_engine;
     double m_zoom = 10.0;

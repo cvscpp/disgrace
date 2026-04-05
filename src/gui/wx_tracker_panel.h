@@ -26,6 +26,7 @@
 #include <wx/tglbtn.h>
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
+#include <cstdint>
 #include <unordered_map>
 
 #include "../core/key_bindings.h"
@@ -87,7 +88,7 @@ private:
     wxButton* m_detach_btn;
 
     wxTextCtrl* m_voice_text_field;  // For Voice instrument text editing
-    int m_last_voice_col = -1;       // Track which column was last displayed
+    uint8_t m_last_voice_idx = 255;  // Track which phrase index was last displayed
     
     wxButton* m_voice_copy_btn;
     wxButton* m_voice_paste_btn;

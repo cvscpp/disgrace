@@ -96,14 +96,14 @@ TrackerPanel::TrackerPanel(wxWindow* parent, Engine& engine)
     voice_sizer->Add(new wxStaticText(this, wxID_ANY, "Text:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
     m_voice_text_field = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 24));
     m_voice_text_field->Bind(wxEVT_TEXT, [this](wxCommandEvent& ev) {
-        if (m_voice_text_field && m_last_voice_col >= 0) {
+        if (m_voice_text_field && m_last_voice_idx != 255) {
             // Get current track and instrument
             size_t current_track = m_engine.m_record_track;
             if (current_track < m_engine.track_count()) {
                 auto* inst = m_engine.track(current_track).instrument();
                 if (inst && inst->type() == InstrumentType::Voice) {
                     VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
-                    voice->set_text(m_voice_text_field->GetValue().ToStdString(), m_last_voice_col);
+                    voice->set_text(m_voice_text_field->GetValue().ToStdString(), m_last_voice_idx);
                 }
             }
         }
@@ -114,13 +114,13 @@ TrackerPanel::TrackerPanel(wxWindow* parent, Engine& engine)
     // Copy/Paste/Search buttons
     m_voice_copy_btn = new wxButton(this, wxID_ANY, "Copy", wxDefaultPosition, wxSize(50, 24));
     m_voice_copy_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-        if (m_last_voice_col >= 0) {
+        if (m_last_voice_idx != 255) {
             size_t current_track = m_engine.m_record_track;
             if (current_track < m_engine.track_count()) {
                 auto* inst = m_engine.track(current_track).instrument();
                 if (inst && inst->type() == InstrumentType::Voice) {
                     VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
-                    m_voice_clipboard = voice->get_text(m_last_voice_col);
+                    m_voice_clipboard = voice->get_text(m_last_voice_idx);
                 }
             }
         }
@@ -130,13 +130,13 @@ TrackerPanel::TrackerPanel(wxWindow* parent, Engine& engine)
     
     m_voice_paste_btn = new wxButton(this, wxID_ANY, "Paste", wxDefaultPosition, wxSize(55, 24));
     m_voice_paste_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-        if (m_last_voice_col >= 0 && !m_voice_clipboard.empty()) {
+        if (m_last_voice_idx != 255 && !m_voice_clipboard.empty()) {
             size_t current_track = m_engine.m_record_track;
             if (current_track < m_engine.track_count()) {
                 auto* inst = m_engine.track(current_track).instrument();
                 if (inst && inst->type() == InstrumentType::Voice) {
                     VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
-                    voice->set_text(m_voice_clipboard, m_last_voice_col);
+                    voice->set_text(m_voice_clipboard, m_last_voice_idx);
                     m_voice_text_field->SetValue(wxString::FromUTF8(m_voice_clipboard));
                 }
             }
@@ -155,13 +155,15 @@ TrackerPanel::TrackerPanel(wxWindow* parent, Engine& engine)
                 auto* inst = m_engine.track(current_track).instrument();
                 if (inst && inst->type() == InstrumentType::Voice) {
                     VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
-                    // Find next occurrence
-                    for (int i = (m_last_voice_col + 1) % 16; i != m_last_voice_col; i = (i + 1) % 16) {
-                        std::string text = voice->get_text(i);
+                    // Find next occurrence in phrases (0-255)
+                    uint8_t start_idx = (m_last_voice_idx == 255) ? 0 : (m_last_voice_idx + 1) % 256;
+                    for (int i = 0; i < 256; ++i) {
+                        uint8_t idx = (uint8_t)((start_idx + i) % 256);
+                        std::string text = voice->get_text(idx);
                         if (text.find(m_voice_search_term) != std::string::npos) {
-                            m_last_voice_col = i;
+                            m_last_voice_idx = idx;
                             m_voice_text_field->SetValue(wxString::FromUTF8(text));
-                            wxMessageBox(wxString::Format("Found '%s' in column %d", search, i), "Found");
+                            wxMessageBox(wxString::Format("Found '%s' at phrase index %d", search, idx), "Found");
                             return;
                         }
                     }
@@ -385,6 +387,7 @@ void TrackerPanel::update_voice_text_field() {
     if (!m_tracker || !m_voice_text_field) return;
     
     size_t current_track = m_tracker->get_cursor_track();
+    int cursor_row = m_tracker->get_cursor_row();
     int cursor_col = m_tracker->get_cursor_col();
     
     // Check if current track uses Voice instrument
@@ -393,19 +396,21 @@ void TrackerPanel::update_voice_text_field() {
         if (inst && inst->type() == InstrumentType::Voice) {
             VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
             
-            // Map cursor column to voice text column (0-15)
-            int voice_col = cursor_col % 16;
-            if (voice_col >= 0 && voice_col < 16) {
-                std::string text = voice->get_text(voice_col);
+            // Get phrase index from current tracker event's sample_idx
+            const auto& ev = m_engine.pattern().event(current_track, cursor_row, cursor_col);
+            uint8_t phrase_idx = ev.sample_idx;
+            
+            std::string text = voice->get_text(phrase_idx);
+            if (m_voice_text_field->GetValue() != wxString::FromUTF8(text)) {
                 m_voice_text_field->SetValue(wxString::FromUTF8(text));
-                m_last_voice_col = voice_col;
-                m_voice_text_field->Show();
-                m_voice_copy_btn->Show();
-                m_voice_paste_btn->Show();
-                m_voice_search_btn->Show();
-                m_voice_text_field->GetParent()->Layout();
-                return;
             }
+            m_last_voice_idx = phrase_idx;
+            m_voice_text_field->Show();
+            m_voice_copy_btn->Show();
+            m_voice_paste_btn->Show();
+            m_voice_search_btn->Show();
+            m_voice_text_field->GetParent()->Layout();
+            return;
         }
     }
     
@@ -414,7 +419,7 @@ void TrackerPanel::update_voice_text_field() {
     m_voice_copy_btn->Hide();
     m_voice_paste_btn->Hide();
     m_voice_search_btn->Hide();
-    m_last_voice_col = -1;
+    m_last_voice_idx = 255;
     m_voice_text_field->GetParent()->Layout();
 }
 

@@ -42,7 +42,7 @@ public:
     void stop();
     
     // Queue a text for synthesis
-    void queue_synthesis(const std::string& text, float base_freq = 440.0f);
+    void queue_synthesis(const std::string& text, float base_freq = 440.0f, bool update_active = true);
     
     // Get progress (0.0 to 1.0)
     float get_progress() const;
@@ -68,6 +68,7 @@ private:
     struct SynthesisTask {
         std::string text;
         float base_freq;
+        bool update_active;
     };
     
     void worker_thread_main();

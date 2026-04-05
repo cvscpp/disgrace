@@ -281,9 +281,9 @@ void TrackerView::draw(wxDC& dc) {
                 bool is_voice = (track_obj.instrument() && track_obj.instrument()->type() == InstrumentType::Voice);
                 
                 if (is_voice) {
-                    // Display text for voice instruments
+                    // Display text for voice instruments using sample_idx as phrase index
                     VoiceInstrument* voice = static_cast<VoiceInstrument*>(track_obj.instrument());
-                    std::string text = voice->get_text(c);
+                    std::string text = voice->get_text(ev.sample_idx);
                     wxString display_text = wxString::FromUTF8(text);
                     if (display_text.empty()) display_text = "...";
                     // Truncate to fit field width
@@ -469,28 +469,44 @@ void TrackerView::OnKeyDown(wxKeyEvent& event) {
                 }
             }
             break;
-        default: {
+        case WXK_RETURN: {
             // Check if we're in a voice instrument's text field (field 1)
             if (m_cursor_track < (int)m_engine.track_count() && m_cursor_field == 1) {
                 auto& track = m_engine.track(m_cursor_track);
                 auto inst = track.instrument();
                 if (inst && inst->type() == InstrumentType::Voice) {
-                    VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
-                    
-                    // Handle printable characters for text input
-                    if (key >= 32 && key <= 126 && (wx_mods == 0 || (wx_mods == wxMOD_SHIFT))) {
-                        char c = (char)key;
-                        std::string current = voice->get_text(m_cursor_col);
-                        if (current.length() < 15) {  // Limit text length
-                            current += c;
-                            voice->set_text(current, m_cursor_col);
-                            Refresh();
-                            return;
-                        }
-                    }
+                    start_text_edit();
+                    return;
                 }
             }
-            
+            break;
+        }
+        default: {
+            // Handle hex input for fields that support it
+            if (m_engine.m_record_enabled.load() && m_cursor_field > 0) {
+                int hex_val = -1;
+                if (key >= '0' && key <= '9') hex_val = key - '0';
+                else if (key >= 'A' && key <= 'F') hex_val = 10 + (key - 'A');
+                else if (key >= 'a' && key <= 'f') hex_val = 10 + (key - 'a');
+
+                if (hex_val != -1) {
+                    int abs_f = (m_cursor_field < 3) ? (m_cursor_col * 3 + m_cursor_field) : ((int)m_pattern->column_count(m_cursor_track) * 3 + m_cursor_field - 3);
+                    uint8_t current_v = m_pattern->get_field(m_cursor_track, m_cursor_row, abs_f);
+                    
+                    // Simple "shift and add" for 2-digit hex fields
+                    uint8_t new_v = (uint8_t)((current_v << 4) | (hex_val & 0x0F));
+                    if (current_v == 255) new_v = (uint8_t)hex_val; // For Volume 255 = default
+
+                    if (current_v != new_v) {
+                        std::vector<CmdEditBlock::CellEdit> edits;
+                        edits.push_back({(size_t)m_cursor_track, (size_t)m_cursor_row, (size_t)abs_f, current_v, new_v});
+                        m_engine.undo_stack().execute(std::make_unique<CmdEditBlock>(*m_pattern, edits));
+                        Refresh();
+                    }
+                    return;
+                }
+            }
+
             if (!handle_action(action)) {
                 event.Skip();
             }
@@ -513,6 +529,9 @@ void TrackerView::OnKeyDown(wxKeyEvent& event) {
 }
 
 void TrackerView::OnMouseDown(wxMouseEvent& event) {
+    if (m_is_editing_text) {
+        stop_text_edit(true);
+    }
     SetFocus();
     int mx, my;
     CalcUnscrolledPosition(event.GetX(), event.GetY(), &mx, &my);
@@ -920,6 +939,81 @@ bool TrackerView::handle_action(Action action) {
         return true;
     }
     return false;
+}
+
+void TrackerView::start_text_edit() {
+    if (m_is_editing_text) return;
+    
+    auto& track = m_engine.track(m_cursor_track);
+    auto inst = track.instrument();
+    if (!inst || inst->type() != InstrumentType::Voice) return;
+    
+    VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
+    const auto& ev = m_pattern->event(m_cursor_track, m_cursor_row, m_cursor_col);
+    std::string current_text = voice->get_text(ev.sample_idx);
+    
+    int fw = 0;
+    int abs_f = m_cursor_col * 3 + 1;
+    int fx = get_field_x(m_cursor_track, abs_f, fw);
+    
+    int row_h = 18;
+    int center_y = get_center_row_y();
+    bool is_playing = m_engine.transport_state() != TransportState::Stopped;
+    int center_row = is_playing ? (int)m_engine.current_row() : m_cursor_row;
+    int ry = center_y + (m_cursor_row - center_row) * row_h;
+    
+    // Position text editor over the field
+    // Map to unscrolled client coordinates
+    int ux, uy;
+    CalcScrolledPosition(fx, ry, &ux, &uy);
+    
+    if (!m_text_editor) {
+        m_text_editor = new wxTextCtrl(this, wxID_ANY, "", wxPoint(ux, uy), wxSize(fw + 20, row_h), wxTE_PROCESS_ENTER | wxBORDER_NONE);
+        m_text_editor->Bind(wxEVT_TEXT_ENTER, &TrackerView::on_text_enter, this);
+        m_text_editor->Bind(wxEVT_KILL_FOCUS, &TrackerView::on_text_kill_focus, this);
+    } else {
+        m_text_editor->SetPosition(wxPoint(ux, uy));
+        m_text_editor->SetSize(wxSize(fw + 40, row_h)); // Give it some extra width for typing
+    }
+    
+    m_text_editor->SetValue(wxString::FromUTF8(current_text));
+    m_text_editor->SetSelection(-1, -1); // Select all
+    m_text_editor->Show();
+    m_text_editor->SetFocus();
+    
+    m_is_editing_text = true;
+}
+
+void TrackerView::stop_text_edit(bool apply) {
+    if (!m_is_editing_text || !m_text_editor) return;
+    
+    if (apply) {
+        std::string new_text = m_text_editor->GetValue().ToStdString();
+        auto& track = m_engine.track(m_cursor_track);
+        auto inst = track.instrument();
+        if (inst && inst->type() == InstrumentType::Voice) {
+            VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
+            const auto& ev = m_pattern->event(m_cursor_track, m_cursor_row, m_cursor_col);
+            voice->set_text(new_text, ev.sample_idx);
+        }
+    }
+    
+    m_text_editor->Hide();
+    m_is_editing_text = false;
+    SetFocus();
+    Refresh();
+}
+
+void TrackerView::on_text_enter(wxCommandEvent& event) {
+    stop_text_edit(true);
+    // Move to next row after Enter
+    m_cursor_row = std::min((int)m_pattern->row_count() - 1, m_cursor_row + (int)m_engine.step_size());
+    ensure_cursor_visible();
+    Refresh();
+}
+
+void TrackerView::on_text_kill_focus(wxFocusEvent& event) {
+    stop_text_edit(true);
 }
 
 } // namespace disgrace_ns

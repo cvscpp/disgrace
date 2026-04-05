@@ -117,6 +117,9 @@ private:
     wxSlider* m_voice_voice_slider;
     wxSlider* m_voice_speed_slider;
     wxSlider* m_voice_accent_slider;
+    wxSpinCtrl* m_voice_phrase_idx;
+    wxListBox* m_voice_phrase_list;
+    wxTextCtrl* m_voice_phrase_text;
     wxButton* m_voice_process_btn;
 
     wxButton* m_zoom_in_btn;

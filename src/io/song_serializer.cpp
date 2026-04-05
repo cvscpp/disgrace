@@ -129,10 +129,10 @@ namespace disgrace_ns
                 jinst["voice_index"] = voice.get_voice();
                 jinst["voice_speed"] = voice.get_speed();
                 jinst["voice_pitch_accent"] = voice.get_pitch_accent();
-                // Store voice texts for each column
+                // Store voice texts for each phrase index (0-255)
                 json jvoice_texts = json::object();
-                for (size_t i = 0; i < 16; ++i) {
-                    std::string text = voice.get_text(i);
+                for (size_t i = 0; i < 256; ++i) {
+                    std::string text = voice.get_text((uint8_t)i);
                     if (!text.empty()) {
                         jvoice_texts[std::to_string(i)] = text;
                     }
@@ -294,10 +294,8 @@ namespace disgrace_ns
                     if (ji.contains("voice_texts")) {
                         auto& jvoice_texts = ji["voice_texts"];
                         for (auto& [key, val] : jvoice_texts.items()) {
-                            size_t col_idx = std::stoul(key);
-                            if (col_idx < 16) {
-                                voice.set_text(val.get<std::string>(), col_idx);
-                            }
+                            uint8_t phrase_idx = (uint8_t)std::stoul(key);
+                            voice.set_text(val.get<std::string>(), phrase_idx);
                         }
                     }
                 } else if (type == InstrumentType::Plugin && (ji.contains("plugin_path") || ji.contains("plugin_name"))) {

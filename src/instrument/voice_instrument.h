@@ -22,6 +22,7 @@
 #include <vector>
 #include <memory>
 #include <list>
+#include <mutex>
 
 namespace disgrace_ns {
 
@@ -45,8 +46,8 @@ public:
     void process(float* l, float* r, size_t nframes) override;
 
     // Voice-specific methods
-    void set_text(const std::string& text, size_t column_index = 0);
-    std::string get_text(size_t column_index = 0) const;
+    void set_text(const std::string& text, uint8_t phrase_index = 0);
+    std::string get_text(uint8_t phrase_index = 0) const;
     
     void set_tts_mode(TTSMode mode) { m_tts_mode = mode; }
     TTSMode tts_mode() const { return m_tts_mode; }
@@ -62,10 +63,10 @@ public:
     float get_pitch_accent() const { return m_pitch_accent; }
     
     // Synthesis
-    bool synthesize_text(const std::string& text, float base_freq);
+    bool synthesize_text(const std::string& text, float base_freq, bool update_active = true);
     void clear_cache();
-    size_t cache_size() const { return m_audio_cache.size(); }
-    size_t get_memory_used() const { return m_memory_used; }
+    size_t cache_size();
+    size_t get_memory_used();
     
     // Memory limit with LRU eviction
     void set_memory_limit(size_t bytes) { m_memory_limit = bytes; }
@@ -114,8 +115,8 @@ private:
     // Worker thread (raw pointer, created/destroyed in start/stop)
     VoiceSynthesisWorker* m_worker = nullptr;
     
-    // Text storage per column
-    std::array<std::string, 16> m_column_text;
+    // Phrase storage (up to 256 phrases)
+    std::array<std::string, 256> m_phrases;
     
     // Audio cache: "{text}@{pitch_factor}" → {samples_left, samples_right}
     // Using pitch in cache key allows pre-shifted audio to be reused
@@ -128,10 +129,12 @@ private:
             return (left.size() + right.size()) * sizeof(float);
         }
     };
-    std::map<std::string, CachedAudio> m_audio_cache;
+    std::map<std::string, std::shared_ptr<CachedAudio>> m_audio_cache;
     std::list<std::string> m_lru_order;  // LRU ordering (oldest at front)
     size_t m_memory_used = 0;
     size_t m_memory_limit = 50 * 1024 * 1024;  // 50 MB default
+    
+    mutable std::mutex m_cache_mutex;
     
     // Memory management with LRU eviction
     void update_lru(const std::string& cache_key);
@@ -142,8 +145,8 @@ private:
     
     // Disk cache helpers
     std::string get_cache_file_path(const std::string& cache_key) const;
-    bool load_from_disk_cache(const std::string& cache_key, CachedAudio& out_audio);
-    bool save_to_disk_cache(const std::string& cache_key, const CachedAudio& audio);
+    bool load_from_disk_cache(const std::string& cache_key, std::shared_ptr<CachedAudio>& out_audio);
+    bool save_to_disk_cache(const std::string& cache_key, std::shared_ptr<CachedAudio> audio);
     
     // High-quality pitch shifting using libsamplerate
     bool apply_libsamplerate_pitch(const std::vector<float>& in_left, 
@@ -154,7 +157,7 @@ private:
     
     // Playback state
     std::string m_current_text;
-    CachedAudio m_current_audio;
+    std::shared_ptr<CachedAudio> m_active_audio;
     size_t m_playback_pos = 0;
     bool m_playing = false;
     std::string m_cache_dir;  // Disk cache directory

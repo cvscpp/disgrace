@@ -28,6 +28,7 @@
 #include "wx_project_panel.h"
 #include "wx_help_panel.h"
 #include "../core/engine.h"
+#include <wx/combobox.h>
 
 namespace disgrace_ns {
 
@@ -169,6 +170,13 @@ void WxMainWindow::OnClose(wxCloseEvent& event) {
 }
 
 void WxMainWindow::OnCharHook(wxKeyEvent& event) {
+    // Prevent global key handling if a text control has focus
+    wxWindow* focus = wxWindow::FindFocus();
+    if (focus && (dynamic_cast<wxTextCtrl*>(focus) || dynamic_cast<wxComboBox*>(focus))) {
+        event.Skip();
+        return;
+    }
+
     int key = event.GetKeyCode();
     int wx_mods = event.GetModifiers();
     int modifiers = 0;

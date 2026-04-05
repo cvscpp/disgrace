@@ -36,32 +36,58 @@ VoiceInstrument::VoiceInstrument(Engine* engine)
     set_name("Voice");
 }
 
-void VoiceInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_index, size_t, uint8_t) {
+void VoiceInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_index, size_t offset_samples, uint8_t sample_index) {
     if (velocity == 0) {
         note_off(column_index);
         return;
     }
     
-    column_index = column_index % 16;
-    
-    // Get text for this note
-    std::string text = m_column_text[column_index];
+    // Get text for this note from the specified phrase index (sample_index)
+    std::string text;
+    {
+        // Actually phrases aren't protected by mutex yet, but they are mostly changed from GUI thread.
+        // For robustness we should probably mutex phrases too if they change often.
+        text = m_phrases[sample_index];
+    }
     
     // Convert MIDI note to frequency (A4 = 440 Hz, note 69)
     float note_freq = 440.0f * std::pow(2.0f, (note - 69) / 12.0f);
     
     if (!text.empty()) {
-        // New text: synthesize it at base pitch (A4 = 440 Hz)
-        if (synthesize_text(text, 440.0f)) {
+        // Check if already in cache to avoid synthesis in audio thread
+        float pitch_factor = note_freq / 440.0f;
+        std::string cache_key = make_cache_key(text, pitch_factor);
+        
+        std::shared_ptr<CachedAudio> cached;
+        {
+            std::lock_guard<std::mutex> lock(m_cache_mutex);
+            auto it = m_audio_cache.find(cache_key);
+            if (it != m_audio_cache.end()) {
+                cached = it->second;
+                update_lru(cache_key);
+            }
+        }
+
+        if (cached) {
+            m_active_audio = cached;
             m_current_text = text;
             m_playback_pos = 0;
-            m_current_pitch = note_freq / 440.0f;  // Set pitch shift factor
             m_playing = true;
+        } else {
+            // NOT IN CACHE - synthesis here will block audio thread!
+            // But we must do it if we want sound now. 
+            // The "Render" button is supposed to avoid this.
+            if (synthesize_text(text, note_freq, true)) {
+                m_playback_pos = 0;
+                m_playing = true;
+            }
         }
     } else if (!m_current_text.empty() && m_playing) {
         // No text: pitch shift the current phrase to this note
-        m_current_pitch = note_freq / 440.0f;
-        m_playback_pos = 0;  // Restart playback at new pitch
+        // (This still might trigger synthesis/pitch-shift if not cached)
+        if (synthesize_text(m_current_text, note_freq, true)) {
+            m_playback_pos = 0;
+        }
     }
 }
 
@@ -86,25 +112,26 @@ void VoiceInstrument::set_pitch(float freq) {
     m_current_pitch = freq / 440.0f;
 }
 
-void VoiceInstrument::set_text(const std::string& text, size_t column_index) {
-    column_index = column_index % 16;
-    m_column_text[column_index] = text;
+void VoiceInstrument::set_text(const std::string& text, uint8_t phrase_index) {
+    m_phrases[phrase_index] = text;
 }
 
-std::string VoiceInstrument::get_text(size_t column_index) const {
-    column_index = column_index % 16;
-    return m_column_text[column_index];
+std::string VoiceInstrument::get_text(uint8_t phrase_index) const {
+    return m_phrases[phrase_index];
 }
 
 void VoiceInstrument::process(float* l, float* r, size_t nframes) {
     std::fill(l, l + nframes, 0.0f);
     std::fill(r, r + nframes, 0.0f);
     
-    if (!m_playing || m_current_audio.left.empty()) {
+    // Local copy of shared_ptr for thread safety
+    auto audio = m_active_audio;
+    
+    if (!m_playing || !audio || audio->left.empty()) {
         return;
     }
     
-    size_t audio_len = m_current_audio.left.size();
+    size_t audio_len = audio->left.size();
     
     // Playback at normal speed (pitch shifting already applied in cache)
     for (size_t i = 0; i < nframes; ++i) {
@@ -114,14 +141,14 @@ void VoiceInstrument::process(float* l, float* r, size_t nframes) {
         }
         
         // Direct sample output (no pitch shifting needed)
-        l[i] = m_current_audio.left[m_playback_pos] * m_volume;
-        r[i] = m_current_audio.right[m_playback_pos] * m_volume;
+        l[i] = audio->left[m_playback_pos] * m_volume;
+        r[i] = audio->right[m_playback_pos] * m_volume;
         
-        m_playback_pos += 1.0f;
+        m_playback_pos++;
     }
 }
 
-bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq) {
+bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq, bool update_active) {
     if (text.empty()) {
         return false;
     }
@@ -133,29 +160,38 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq) 
     // Create cache key with pitch
     std::string cache_key = make_cache_key(text, pitch_factor);
     
-    // Increment lookup counter
-    m_perf_metrics.total_lookups++;
-    
-    // Check memory cache first
-    auto cache_it = m_audio_cache.find(cache_key);
-    if (cache_it != m_audio_cache.end()) {
-        m_current_audio = cache_it->second;
-        update_lru(cache_key);
-        m_perf_metrics.cache_hits++;
-        return true;
-    }
-    
-    // Check disk cache
-    CachedAudio disk_audio;
-    if (load_from_disk_cache(cache_key, disk_audio)) {
-        size_t audio_size = disk_audio.size_bytes();
-        evict_lru_if_needed(audio_size);
-        m_audio_cache[cache_key] = disk_audio;
-        m_memory_used += audio_size;
-        update_lru(cache_key);
-        m_current_audio = disk_audio;
-        m_perf_metrics.disk_cache_hits++;
-        return true;
+    {
+        std::lock_guard<std::mutex> lock(m_cache_mutex);
+        // Increment lookup counter
+        m_perf_metrics.total_lookups++;
+        
+        // Check memory cache first
+        auto cache_it = m_audio_cache.find(cache_key);
+        if (cache_it != m_audio_cache.end()) {
+            if (update_active) {
+                m_active_audio = cache_it->second;
+                m_current_text = text;
+            }
+            update_lru(cache_key);
+            m_perf_metrics.cache_hits++;
+            return true;
+        }
+        
+        // Check disk cache
+        std::shared_ptr<CachedAudio> disk_audio;
+        if (load_from_disk_cache(cache_key, disk_audio)) {
+            size_t audio_size = disk_audio->size_bytes();
+            evict_lru_if_needed(audio_size);
+            m_audio_cache[cache_key] = disk_audio;
+            m_memory_used += audio_size;
+            update_lru(cache_key);
+            if (update_active) {
+                m_active_audio = disk_audio;
+                m_current_text = text;
+            }
+            m_perf_metrics.disk_cache_hits++;
+            return true;
+        }
     }
     
     // Synthesize base text (at 440 Hz)
@@ -190,15 +226,23 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq) 
     }
     
     // Cache the pitch-shifted result in memory with LRU eviction
-    CachedAudio final_audio = {out_l, out_r};
-    size_t audio_size = final_audio.size_bytes();
+    auto final_audio = std::make_shared<CachedAudio>();
+    final_audio->left = std::move(out_l);
+    final_audio->right = std::move(out_r);
+    size_t audio_size = final_audio->size_bytes();
     
-    evict_lru_if_needed(audio_size);
-    m_audio_cache[cache_key] = final_audio;
-    m_memory_used += audio_size;
-    update_lru(cache_key);
-    m_current_audio = final_audio;
-    m_current_text = text;
+    {
+        std::lock_guard<std::mutex> lock(m_cache_mutex);
+        evict_lru_if_needed(audio_size);
+        m_audio_cache[cache_key] = final_audio;
+        m_memory_used += audio_size;
+        update_lru(cache_key);
+    }
+
+    if (update_active) {
+        m_active_audio = final_audio;
+        m_current_text = text;
+    }
     
     // Save to disk cache for future sessions
     save_to_disk_cache(cache_key, final_audio);
@@ -366,7 +410,7 @@ std::string VoiceInstrument::get_cache_file_path(const std::string& cache_key) c
     return m_cache_dir + "/" + safe_key + ".wav";
 }
 
-bool VoiceInstrument::load_from_disk_cache(const std::string& cache_key, CachedAudio& out_audio) {
+bool VoiceInstrument::load_from_disk_cache(const std::string& cache_key, std::shared_ptr<CachedAudio>& out_audio) {
     if (m_cache_dir.empty()) {
         return false;
     }
@@ -382,12 +426,17 @@ bool VoiceInstrument::load_from_disk_cache(const std::string& cache_key, CachedA
         return false;  // File doesn't exist
     }
     
+    auto audio = std::make_shared<CachedAudio>();
     // Load WAV file
-    return load_wav_from_file(path, out_audio.left, out_audio.right);
+    if (load_wav_from_file(path, audio->left, audio->right)) {
+        out_audio = audio;
+        return true;
+    }
+    return false;
 }
 
-bool VoiceInstrument::save_to_disk_cache(const std::string& cache_key, const CachedAudio& audio) {
-    if (m_cache_dir.empty()) {
+bool VoiceInstrument::save_to_disk_cache(const std::string& cache_key, std::shared_ptr<CachedAudio> audio) {
+    if (m_cache_dir.empty() || !audio) {
         return false;
     }
     
@@ -412,16 +461,16 @@ bool VoiceInstrument::save_to_disk_cache(const std::string& cache_key, const Cac
     
     // Interleave samples: L, R, L, R, ...
     std::vector<float> interleaved;
-    interleaved.reserve(audio.left.size() * 2);
-    for (size_t i = 0; i < audio.left.size(); ++i) {
-        interleaved.push_back(audio.left[i]);
-        interleaved.push_back(audio.right[i]);
+    interleaved.reserve(audio->left.size() * 2);
+    for (size_t i = 0; i < audio->left.size(); ++i) {
+        interleaved.push_back(audio->left[i]);
+        interleaved.push_back(audio->right[i]);
     }
     
-    sf_count_t written = sf_writef_float(file, interleaved.data(), audio.left.size());
+    sf_count_t written = sf_writef_float(file, interleaved.data(), audio->left.size());
     sf_close(file);
     
-    return written == (sf_count_t)audio.left.size();
+    return written == (sf_count_t)audio->left.size();
 }
 
 void VoiceInstrument::update_lru(const std::string& cache_key) {
@@ -447,7 +496,7 @@ void VoiceInstrument::evict_lru_if_needed(size_t new_size) {
         
         auto cache_it = m_audio_cache.find(lru_key);
         if (cache_it != m_audio_cache.end()) {
-            m_memory_used -= cache_it->second.size_bytes();
+            m_memory_used -= cache_it->second->size_bytes();
             m_audio_cache.erase(cache_it);
             m_perf_metrics.evictions++;  // Count eviction
         }
@@ -535,13 +584,24 @@ bool VoiceInstrument::apply_libsamplerate_pitch(const std::vector<float>& in_lef
 }
 
 void VoiceInstrument::clear_cache() {
+    std::lock_guard<std::mutex> lock(m_cache_mutex);
     m_audio_cache.clear();
     m_lru_order.clear();
     m_memory_used = 0;
     m_current_text.clear();
-    m_current_audio = {std::vector<float>(), std::vector<float>()};
+    m_active_audio.reset();
     m_playback_pos = 0;
     m_playing = false;
+}
+
+size_t VoiceInstrument::cache_size() {
+    std::lock_guard<std::mutex> lock(m_cache_mutex);
+    return m_audio_cache.size();
+}
+
+size_t VoiceInstrument::get_memory_used() {
+    std::lock_guard<std::mutex> lock(m_cache_mutex);
+    return m_memory_used;
 }
 
 void VoiceInstrument::start_synthesis_worker() {

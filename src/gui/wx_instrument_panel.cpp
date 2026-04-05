@@ -521,25 +521,25 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     voice_accent_sizer->Add(m_voice_accent_slider, 1, wxEXPAND | wxALL, 5);
     voice_sizer->Add(voice_accent_sizer, 0, wxEXPAND | wxALL, 5);
     
-    // Process button
-    m_voice_process_btn = new wxButton(m_voice_editor, wxID_ANY, "Pre-render Voice Audio");
+    // Process button (now before the phrase list)
+    m_voice_process_btn = new wxButton(m_voice_editor, wxID_ANY, "Pre-render All 256 Phrases");
     m_voice_process_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent& ev) {
         if (m_selected_instrument >= 0) {
             auto& inst = m_engine.instrument(m_selected_instrument);
             if (inst.type() == InstrumentType::Voice) {
                 VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
                 
-                // Scan all texts from this voice instrument
+                // Scan all 256 phrases
                 std::set<std::string> unique_texts;
-                for (size_t col = 0; col < 16; ++col) {
-                    std::string text = voice->get_text(col);
+                for (size_t i = 0; i < 256; ++i) {
+                    std::string text = voice->get_text((uint8_t)i);
                     if (!text.empty()) {
                         unique_texts.insert(text);
                     }
                 }
                 
                 if (unique_texts.empty()) {
-                    wxMessageBox("No text found in this voice instrument", "Info");
+                    wxMessageBox("No phrases found in this voice instrument", "Info");
                     return;
                 }
                 
@@ -551,32 +551,32 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
                 
                 // Queue all texts for synthesis
                 for (const auto& text : unique_texts) {
-                    worker->queue_synthesis(text, 440.0f);
+                    worker->queue_synthesis(text, 440.0f, false);
                 }
                 
                 // Create progress dialog with timer
                 wxProgressDialog* dlg = new wxProgressDialog(
                     "Pre-rendering Voice Audio", 
                     "Synthesizing phrases...",
-                    unique_texts.size(), 
+                    (int)unique_texts.size(), 
                     this,
                     wxPD_APP_MODAL | wxPD_CAN_ABORT
                 );
                 
-                // Timer to update progress
-                wxTimer* timer = new wxTimer();
-                timer->Bind(wxEVT_TIMER, [dlg, worker, unique_texts, timer, voice](wxTimerEvent&) {
-                    size_t completed = worker->get_completed();
-                    float progress = worker->get_progress();
+                // Timer to update progress (safer cleanup)
+                wxTimer* timer = new wxTimer(this);
+                timer->Bind(wxEVT_TIMER, [this, dlg, worker, timer, voice, total = unique_texts.size()](wxTimerEvent&) {
+                    int completed = (int)worker->get_completed();
                     
                     // Check if synthesis is complete
-                    if (worker->is_queue_empty() && completed >= unique_texts.size()) {
+                    if (worker->is_queue_empty() && completed >= (int)total) {
                         timer->Stop();
-                        delete timer;
-                        voice->stop_synthesis_worker();
-                        dlg->Update(completed);
-                        dlg->Destroy();
-                        wxMessageBox(wxString::Format("Pre-rendered %zu unique phrases", completed), "Complete");
+                        this->CallAfter([this, dlg, timer, voice, completed]() {
+                            voice->stop_synthesis_worker();
+                            dlg->Destroy();
+                            wxMessageBox(wxString::Format("Pre-rendered %d phrases", completed), "Complete");
+                            delete timer;
+                        });
                         return;
                     }
                     
@@ -584,9 +584,11 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
                     if (!dlg->Update(completed)) {
                         // User clicked cancel
                         timer->Stop();
-                        delete timer;
-                        voice->stop_synthesis_worker();
-                        dlg->Destroy();
+                        this->CallAfter([dlg, timer, voice]() {
+                            voice->stop_synthesis_worker();
+                            dlg->Destroy();
+                            delete timer;
+                        });
                     }
                 });
                 
@@ -595,6 +597,62 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
         }
     });
     voice_sizer->Add(m_voice_process_btn, 0, wxEXPAND | wxALL, 5);
+
+    // Phrase Selector and Editor
+    wxStaticBoxSizer* phrase_box = new wxStaticBoxSizer(wxVERTICAL, m_voice_editor, "Phrases");
+    
+    wxBoxSizer* phrase_idx_sizer = new wxBoxSizer(wxHORIZONTAL);
+    phrase_idx_sizer->Add(new wxStaticText(m_voice_editor, wxID_ANY, "Index:"), 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    m_voice_phrase_idx = new wxSpinCtrl(m_voice_editor, wxID_ANY);
+    m_voice_phrase_idx->SetRange(0, 255);
+    m_voice_phrase_idx->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent& ev) {
+        int idx = ev.GetPosition();
+        if (m_selected_instrument >= 0) {
+            auto& inst = m_engine.instrument(m_selected_instrument);
+            if (inst.type() == InstrumentType::Voice) {
+                VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
+                m_voice_phrase_text->ChangeValue(wxString::FromUTF8(voice->get_text((uint8_t)idx)));
+                m_voice_phrase_list->SetSelection(idx);
+                m_voice_phrase_list->EnsureVisible(idx);
+            }
+        }
+    });
+    phrase_idx_sizer->Add(m_voice_phrase_idx, 0, wxALL, 5);
+    phrase_box->Add(phrase_idx_sizer, 0, wxEXPAND | wxALL, 0);
+    
+    m_voice_phrase_text = new wxTextCtrl(m_voice_editor, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(-1, 80), wxTE_MULTILINE | wxTE_WORDWRAP);
+    m_voice_phrase_text->Bind(wxEVT_TEXT, [this](wxCommandEvent& ev) {
+        if (m_selected_instrument >= 0) {
+            auto& inst = m_engine.instrument(m_selected_instrument);
+            if (inst.type() == InstrumentType::Voice) {
+                VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
+                uint8_t idx = (uint8_t)m_voice_phrase_idx->GetValue();
+                std::string new_text = ev.GetString().ToStdString();
+                voice->set_text(new_text, idx);
+                
+                // Update list box item text safely
+                wxString label = wxString::Format("%02X: %s", (int)idx, wxString::FromUTF8(new_text));
+                m_voice_phrase_list->SetString(idx, label);
+            }
+        }
+    });
+    phrase_box->Add(m_voice_phrase_text, 0, wxEXPAND | wxALL, 5);
+
+    m_voice_phrase_list = new wxListBox(m_voice_editor, wxID_ANY, wxDefaultPosition, wxSize(-1, 150));
+    m_voice_phrase_list->Bind(wxEVT_LISTBOX, [this](wxCommandEvent& ev) {
+        int sel = ev.GetSelection();
+        if (sel != wxNOT_FOUND && m_selected_instrument >= 0) {
+            auto& inst = m_engine.instrument(m_selected_instrument);
+            if (inst.type() == InstrumentType::Voice) {
+                VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
+                m_voice_phrase_text->ChangeValue(wxString::FromUTF8(voice->get_text((uint8_t)sel)));
+                m_voice_phrase_idx->SetValue(sel);
+            }
+        }
+    });
+    phrase_box->Add(m_voice_phrase_list, 1, wxEXPAND | wxALL, 5);
+    
+    voice_sizer->Add(phrase_box, 1, wxEXPAND | wxALL, 5);
     
     m_voice_editor->SetSizer(voice_sizer);
     m_voice_editor->Hide();
@@ -898,6 +956,17 @@ void InstrumentPanel::update_editor() {
             m_voice_voice_slider->SetValue(voice->get_voice());
             m_voice_speed_slider->SetValue((int)(voice->get_speed() * 50.0f));
             m_voice_accent_slider->SetValue((int)(voice->get_pitch_accent() * 100.0f));
+            
+            m_voice_phrase_list->Clear();
+            for (int i = 0; i < 256; ++i) {
+                wxString label;
+                label.Printf("%02X: %s", i, wxString::FromUTF8(voice->get_text((uint8_t)i)));
+                m_voice_phrase_list->Append(label);
+            }
+            
+            m_voice_phrase_idx->SetValue(0);
+            m_voice_phrase_list->SetSelection(0);
+            m_voice_phrase_text->ChangeValue(wxString::FromUTF8(voice->get_text(0)));
             m_voice_editor->Layout();
         }
         else if (inst.type() == InstrumentType::Plugin) {

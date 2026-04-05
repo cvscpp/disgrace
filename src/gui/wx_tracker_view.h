@@ -21,6 +21,7 @@
 #include <wx/wxprec.h>
 #include <wx/panel.h>
 #include <wx/scrolwin.h>
+#include <wx/textctrl.h>
 #include <vector>
 
 #include "../sequencer/pattern.h"
@@ -58,6 +59,11 @@ public:
     };
 
 private:
+    void on_text_enter(wxCommandEvent& event);
+    void on_text_kill_focus(wxFocusEvent& event);
+    void start_text_edit();
+    void stop_text_edit(bool apply = true);
+
     int get_field_at(int track, int x);
     int get_field_x(int track, int abs_field, int& width);
     void delete_current_field();
@@ -74,6 +80,9 @@ private:
     int m_cursor_track = 0;
     int m_cursor_col = 0;
     int m_cursor_field = 0; // 0: Note, 1: Sample, 2: Volume, 3: FX1, 4: P1, 5: FX2, 6: P2
+
+    wxTextCtrl* m_text_editor = nullptr;
+    bool m_is_editing_text = false;
 
     struct TrackerPos {
         int track;

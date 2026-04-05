@@ -66,12 +66,12 @@ void VoiceSynthesisWorker::stop() {
     }
 }
 
-void VoiceSynthesisWorker::queue_synthesis(const std::string& text, float base_freq) {
+void VoiceSynthesisWorker::queue_synthesis(const std::string& text, float base_freq, bool update_active) {
     if (!m_voice_inst) return;
     
     {
         std::lock_guard<std::mutex> lock(m_queue_mutex);
-        m_queue.push({text, base_freq});
+        m_queue.push({text, base_freq, update_active});
         m_total_queued++;
     }
 }
@@ -113,7 +113,7 @@ void VoiceSynthesisWorker::process_queue() {
     
     // Synthesize outside of lock
     if (m_voice_inst && !task.text.empty()) {
-        m_voice_inst->synthesize_text(task.text, task.base_freq);
+        m_voice_inst->synthesize_text(task.text, task.base_freq, task.update_active);
     }
     
     // Update progress

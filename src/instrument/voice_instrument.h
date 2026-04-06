@@ -37,6 +37,7 @@ enum class TTSMode {
 class VoiceInstrument : public Instrument {
 public:
     VoiceInstrument(Engine* engine = nullptr);
+    ~VoiceInstrument() override;
 
     void note_on(uint8_t note, uint8_t velocity, size_t column_index = 0, size_t offset_samples = 0, uint8_t sample_index = 0) override;
     void note_off(size_t column_index = 0) override;
@@ -158,7 +159,8 @@ private:
     // Playback state
     std::string m_current_text;
     std::shared_ptr<CachedAudio> m_active_audio;
-    size_t m_playback_pos = 0;
+    double m_playback_pos = 0.0;
+    double m_playback_increment = 1.0;
     bool m_playing = false;
     std::string m_cache_dir;  // Disk cache directory
     
@@ -166,8 +168,8 @@ private:
     PerfMetrics m_perf_metrics;
     
     // TTS synthesis helpers
-    bool synthesize_with_espeak(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r);
-    bool synthesize_with_festival(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r);
+    bool synthesize_with_espeak(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r, int& out_rate);
+    bool synthesize_with_festival(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r, int& out_rate);
     bool load_wav_from_file(const std::string& filepath, std::vector<float>& out_l, std::vector<float>& out_r);
 };
 

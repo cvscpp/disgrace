@@ -111,10 +111,15 @@ void VoiceSynthesisWorker::process_queue() {
         m_queue.pop();
     }
     
+    fprintf(stderr, "[VoiceWorker] Processing: \"%s\" at %.2f Hz\n", task.text.c_str(), task.base_freq);
+    
     // Synthesize outside of lock
+    bool success = false;
     if (m_voice_inst && !task.text.empty()) {
-        m_voice_inst->synthesize_text(task.text, task.base_freq, task.update_active);
+        success = m_voice_inst->synthesize_text(task.text, task.base_freq, task.update_active);
     }
+    
+    fprintf(stderr, "[VoiceWorker] Result: %s\n", success ? "Success" : "FAILED");
     
     // Update progress
     size_t completed = m_completed.fetch_add(1) + 1;

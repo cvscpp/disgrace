@@ -42,6 +42,7 @@
 #include "../dsp/stereo_expander.h"
 #include "../dsp/ring_modulator.h"
 #include "../dsp/gate.h"
+#include "../dsp/vocoder.h"
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -119,7 +120,7 @@ MixerPanel::MixerPanel(int x, int y, int w, int h, Engine& engine)
         "Gain", "Delay", "Reverb", "Limiter", "Exciter", 
         "Phaser", "Flanger", "Echo", "Compressor", 
         "Graphical EQ", "Cabinet", "Distortion",
-        "Chorus", "Stereo Expander", "Ring Modulator", "Gate"
+        "Chorus", "Stereo Expander", "Ring Modulator", "Gate", "Vocoder"
     };
     std::sort(fx_list.begin(), fx_list.end());
     for (const auto& fx : fx_list) m_avail_fx_browser->add(fx.c_str());
@@ -667,6 +668,25 @@ void MixerPanel::update_effect_editor() {
                 Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Mix");
                 s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(0, 1); s2->value(rmo->mix); s2->align(FL_ALIGN_RIGHT);
                 s2->callback([](Fl_Widget* w, void* v){ ((RingModulatorDSP*)v)->mix = (float)((Fl_Value_Slider*)w)->value(); }, rmo);
+            } else if (auto* voc = dynamic_cast<VocoderDSP*>(dsp)) {
+                Fl_Value_Slider* s1 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Attack");
+                s1->labelsize(font_sz); s1->type(FL_HOR_NICE_SLIDER); s1->range(0.001, 0.2); s1->value(voc->attack); s1->align(FL_ALIGN_RIGHT);
+                s1->callback([](Fl_Widget* w, void* v){ ((VocoderDSP*)v)->attack = (float)((Fl_Value_Slider*)w)->value(); }, voc);
+                Fl_Value_Slider* s2 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Release");
+                s2->labelsize(font_sz); s2->type(FL_HOR_NICE_SLIDER); s2->range(0.001, 0.5); s2->value(voc->release); s2->align(FL_ALIGN_RIGHT);
+                s2->callback([](Fl_Widget* w, void* v){ ((VocoderDSP*)v)->release = (float)((Fl_Value_Slider*)w)->value(); }, voc);
+                Fl_Value_Slider* s3 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Bandwidth");
+                s3->labelsize(font_sz); s3->type(FL_HOR_NICE_SLIDER); s3->range(0.01, 0.5); s3->value(voc->bandwidth); s3->align(FL_ALIGN_RIGHT);
+                s3->callback([](Fl_Widget* w, void* v){ ((VocoderDSP*)v)->bandwidth = (float)((Fl_Value_Slider*)w)->value(); ((VocoderDSP*)v)->update_bands(); }, voc);
+                Fl_Value_Slider* s4 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Shift");
+                s4->labelsize(font_sz); s4->type(FL_HOR_NICE_SLIDER); s4->range(-1, 1); s4->value(voc->shift); s4->align(FL_ALIGN_RIGHT);
+                s4->callback([](Fl_Widget* w, void* v){ ((VocoderDSP*)v)->shift = (float)((Fl_Value_Slider*)w)->value(); ((VocoderDSP*)v)->update_bands(); }, voc);
+                Fl_Choice* c1 = new Fl_Choice(0, 0, 120, std_h, "Carrier");
+                c1->labelsize(font_sz); c1->add("Saw"); c1->add("Noise"); c1->add("External"); c1->value((int)voc->carrier_type); c1->align(FL_ALIGN_RIGHT);
+                c1->callback([](Fl_Widget* w, void* v){ ((VocoderDSP*)v)->carrier_type = (float)((Fl_Choice*)w)->value(); }, voc);
+                Fl_Value_Slider* s5 = new Fl_Value_Slider(0, 0, slider_w, std_h, "Mix");
+                s5->labelsize(font_sz); s5->type(FL_HOR_NICE_SLIDER); s5->range(0, 1); s5->value(voc->mix); s5->align(FL_ALIGN_RIGHT);
+                s5->callback([](Fl_Widget* w, void* v){ ((VocoderDSP*)v)->mix = (float)((Fl_Value_Slider*)w)->value(); }, voc);
             }
             param_pack->end(); param_scroll->end();
         }
@@ -726,6 +746,7 @@ void MixerPanel::cb_add_fx(Fl_Widget* w, void* data) {
             else if (fx_name == "Stereo Expander") set_fx_at(i, std::make_unique<StereoExpanderDSP>());
             else if (fx_name == "Ring Modulator") set_fx_at(i, std::make_unique<RingModulatorDSP>());
             else if (fx_name == "Gate") set_fx_at(i, std::make_unique<GateDSP>());
+            else if (fx_name == "Vocoder") set_fx_at(i, std::make_unique<VocoderDSP>());
             self->m_selected_fx_slot = (int)i;
             break;
         }

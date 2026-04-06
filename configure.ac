@@ -54,6 +54,28 @@ PKG_CHECK_MODULES([SNDFILE], [sndfile])
 # libsamplerate
 PKG_CHECK_MODULES([SAMPLERATE], [samplerate])
 
+# espeak-ng
+PKG_CHECK_MODULES([ESPEAK], [espeak-ng])
+
+# Festival
+AC_LANG_PUSH([C++])
+saved_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="$CPPFLAGS -I/usr/include/speech_tools"
+AC_CHECK_HEADER([festival/festival.h], [
+    AC_CHECK_LIB([estbase], [main], [
+        FESTIVAL_LIBS="-lFestival -lestools -lestbase -leststring -lncurses"
+        FESTIVAL_CFLAGS="-I/usr/include/speech_tools"
+        AC_SUBST([FESTIVAL_LIBS])
+        AC_SUBST([FESTIVAL_CFLAGS])
+        AC_DEFINE([HAVE_FESTIVAL], [1], [Define if festival is available])
+    ], [], [-lestools -leststring -lncurses])
+], [], [
+#include <cstdio>
+#include <fstream>
+])
+CPPFLAGS="$saved_CPPFLAGS"
+AC_LANG_POP([C++])
+
 # FFTW3
 PKG_CHECK_MODULES([FFTW3], [fftw3])
 

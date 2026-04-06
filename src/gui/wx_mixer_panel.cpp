@@ -38,6 +38,7 @@
 #include "../dsp/stereo_expander.h"
 #include "../dsp/ring_modulator.h"
 #include "../dsp/gate.h"
+#include "../dsp/vocoder.h"
 #include "../dsp/reference_matcher.h"
 
 #include <wx/sizer.h>
@@ -95,7 +96,7 @@ MixerPanel::MixerPanel(wxWindow* parent, Engine& engine)
         "Phaser", "Flanger", "Echo", "Compressor",
         "Graphical EQ", "Cabinet", "Distortion",
         "Chorus", "Stereo Expander", "Ring Modulator", "Gate",
-        "Reference Matcher"
+        "Reference Matcher", "Vocoder"
     };
     std::sort(fx_list.begin(), fx_list.end());
     for (const auto& fx : fx_list) m_avail_fx_browser->Append(fx);
@@ -829,6 +830,27 @@ void MixerPanel::update_effect_editor() {
 
                 add_slider("Mix", 0.0f, 1.0f, rm->get_mix(), [rm](float v){ rm->set_mix(v); });
                 add_slider("Target RMS (dB)", -24.0f, -6.0f, rm->get_target_rms(), [rm](float v){ rm->set_target_rms(v); });
+            } else if (auto* voc = dynamic_cast<disgrace_ns::VocoderDSP*>(dsp)) {
+                add_slider("Attack", 0.001f, 0.2f, voc->attack, [voc](float v){ voc->attack = v; });
+                add_slider("Release", 0.001f, 0.5f, voc->release, [voc](float v){ voc->release = v; });
+                add_slider("Bandwidth", 0.01f, 0.5f, voc->bandwidth, [voc](float v){ voc->bandwidth = v; voc->update_bands(); });
+                add_slider("Shift", -1.0f, 1.0f, voc->shift, [voc](float v){ voc->shift = v; voc->update_bands(); });
+                
+                wxBoxSizer* c_row = new wxBoxSizer(wxHORIZONTAL);
+                c_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "Carrier:", wxDefaultPosition, wxSize(80, -1)), 0, wxALL, 5);
+                wxChoice* c_choice = new wxChoice(m_fx_params_group, wxID_ANY);
+                c_choice->Append("Saw"); c_choice->Append("Noise"); c_choice->Append("External");
+                c_choice->SetSelection((int)voc->carrier_type);
+                c_choice->Bind(wxEVT_CHOICE, [this, voc, p_choice](wxCommandEvent& ev) {
+                    if (m_is_updating_ui) return;
+                    voc->carrier_type = (float)ev.GetSelection();
+                    voc->set_current_preset("Manual");
+                    if (p_choice) p_choice->SetStringSelection("Manual");
+                });
+                c_row->Add(c_choice, 1, wxEXPAND | wxALL, 5);
+                params_sizer->Add(c_row, 0, wxEXPAND | wxALL, 2);
+                
+                add_slider("Mix", 0.0f, 1.0f, voc->mix, [voc](float v){ voc->mix = v; });
             }
         } else {
             params_sizer->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "No effect selected"), 0, wxALL, 5);
@@ -924,6 +946,7 @@ void MixerPanel::on_add_fx(wxCommandEvent& event) {
     else if (fx_name == "Ring Modulator") dsp = std::make_unique<disgrace_ns::RingModulatorDSP>();
     else if (fx_name == "Gate") dsp = std::make_unique<disgrace_ns::GateDSP>();
     else if (fx_name == "Reference Matcher") dsp = std::make_unique<disgrace_ns::ReferenceMatcherDSP>();
+    else if (fx_name == "Vocoder") dsp = std::make_unique<disgrace_ns::VocoderDSP>();
 
     if (dsp) {
         set_fx_at(slot, std::move(dsp));

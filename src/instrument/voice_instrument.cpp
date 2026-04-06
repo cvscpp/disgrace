@@ -18,6 +18,7 @@
 
 #include "voice_instrument.h"
 #include "voice_synthesis_worker.h"
+#include "../core/engine.h"
 #include <cstdlib>
 #include <cstring>
 #include <sndfile.h>
@@ -26,14 +27,96 @@
 #include <samplerate.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <espeak-ng/speak_lib.h>
+#include <festival/festival.h>
+#include <thread>
 
 namespace disgrace_ns {
+
+static std::mutex g_espeak_mutex;
+static int g_espeak_refcount = 0;
+static int g_espeak_sample_rate = 22050; // Default fallback
+
+static std::mutex g_festival_mutex;
+static int g_festival_refcount = 0;
+
+// Context for espeak callback
+struct EspeakContext {
+    std::vector<float>* left;
+    std::vector<float>* right;
+    bool completed = false;
+};
+
+static int espeak_callback(short* wav, int numsamples, espeak_EVENT* events) {
+    // Find the context from user_data in the first event that has it
+    EspeakContext* ctx = nullptr;
+    
+    // Scan events for user_data
+    espeak_EVENT* ev = events;
+    while (ev->type != espeakEVENT_LIST_TERMINATED) {
+        if (ev->user_data) {
+            ctx = static_cast<EspeakContext*>(ev->user_data);
+        }
+        if (ev->type == espeakEVENT_MSG_TERMINATED) {
+            if (ctx) ctx->completed = true;
+        }
+        ev++;
+    }
+
+    if (wav && numsamples > 0 && ctx) {
+        // espeak-ng usually produces mono at 22050Hz or 44100Hz
+        // We assume mono here and duplicate to stereo as before
+        for (int i = 0; i < numsamples; ++i) {
+            float s = wav[i] / 32768.0f;
+            ctx->left->push_back(s);
+            ctx->right->push_back(s);
+        }
+    }
+    
+    return 0; // continue synthesis
+}
 
 VoiceInstrument::VoiceInstrument(Engine* engine)
     : m_engine(engine)
 {
-    set_type(InstrumentType::None); // Will be set to Voice later
+    set_type(InstrumentType::Voice); // Changed from None to Voice
     set_name("Voice");
+
+    std::lock_guard<std::mutex> lock(g_espeak_mutex);
+    if (g_espeak_refcount == 0) {
+        // Initialize espeak-ng
+        // AUDIO_OUTPUT_RETRIEVAL means it will call our callback instead of playing
+        int rate = espeak_Initialize(AUDIO_OUTPUT_RETRIEVAL, 500, nullptr, 0);
+        if (rate > 0) {
+            g_espeak_sample_rate = rate;
+            espeak_SetSynthCallback(espeak_callback);
+        }
+    }
+    g_espeak_refcount++;
+
+    {
+        std::lock_guard<std::mutex> lock(g_festival_mutex);
+        if (g_festival_refcount == 0) {
+            // Initialize Festival
+            // 2100000 is a standard heap size for festival
+            festival_initialize(1, 2100000);
+        }
+        g_festival_refcount++;
+    }
+}
+
+VoiceInstrument::~VoiceInstrument() {
+    std::lock_guard<std::mutex> lock(g_espeak_mutex);
+    g_espeak_refcount--;
+    if (g_espeak_refcount == 0) {
+        espeak_Terminate();
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(g_festival_mutex);
+        g_festival_refcount--;
+        // Festival doesn't have a standard terminate() that works reliably across calls
+    }
 }
 
 void VoiceInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_index, size_t offset_samples, uint8_t sample_index) {
@@ -71,14 +154,18 @@ void VoiceInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_inde
         if (cached) {
             m_active_audio = cached;
             m_current_text = text;
-            m_playback_pos = 0;
+            m_current_pitch = pitch_factor; // Store the pitch factor of the cached audio
+            m_playback_pos = 0.0;
+            m_playback_increment = 1.0;
             m_playing = true;
         } else {
             // NOT IN CACHE - synthesis here will block audio thread!
             // But we must do it if we want sound now. 
             // The "Render" button is supposed to avoid this.
             if (synthesize_text(text, note_freq, true)) {
-                m_playback_pos = 0;
+                m_current_pitch = pitch_factor; // Store the pitch factor of the cached audio
+                m_playback_pos = 0.0;
+                m_playback_increment = 1.0;
                 m_playing = true;
             }
         }
@@ -86,7 +173,8 @@ void VoiceInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_inde
         // No text: pitch shift the current phrase to this note
         // (This still might trigger synthesis/pitch-shift if not cached)
         if (synthesize_text(m_current_text, note_freq, true)) {
-            m_playback_pos = 0;
+            m_playback_pos = 0.0;
+            m_playback_increment = 1.0;
         }
     }
 }
@@ -94,12 +182,12 @@ void VoiceInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_inde
 void VoiceInstrument::note_off(size_t column_index) {
     (void)column_index;
     m_playing = false;
-    m_playback_pos = 0;
+    m_playback_pos = 0.0;
 }
 
 void VoiceInstrument::panic() {
     m_playing = false;
-    m_playback_pos = 0;
+    m_playback_pos = 0.0;
     m_current_text.clear();
 }
 
@@ -109,7 +197,22 @@ void VoiceInstrument::set_volume(float vol) {
 
 void VoiceInstrument::set_pitch(float freq) {
     // Store base pitch for pitch shifting
-    m_current_pitch = freq / 440.0f;
+    float target_pitch = freq / 440.0f;
+    target_pitch = std::max(0.01f, std::min(100.0f, target_pitch));
+    
+    // If we have active audio, calculate playback increment relative to the cached pitch
+    if (m_active_audio && !m_current_text.empty()) {
+        // We know what pitch the current cache is (it was synthesized at some base_freq)
+        // But we don't store that base_freq explicitly in VoiceInstrument playback state.
+        // For now, let's assume m_current_pitch represents the pitch of the cached audio.
+        // Actually, m_current_pitch is updated here.
+        
+        // A better way: calculate increment based on target freq / cached freq.
+        // But let's just use real-time resampling for small deviations from cached pitch.
+        m_playback_increment = target_pitch / m_current_pitch;
+    } else {
+        m_current_pitch = target_pitch;
+    }
 }
 
 void VoiceInstrument::set_text(const std::string& text, uint8_t phrase_index) {
@@ -133,29 +236,39 @@ void VoiceInstrument::process(float* l, float* r, size_t nframes) {
     
     size_t audio_len = audio->left.size();
     
-    // Playback at normal speed (pitch shifting already applied in cache)
+    // Playback with linear interpolation for pitch shifting/slides
     for (size_t i = 0; i < nframes; ++i) {
-        if (m_playback_pos >= audio_len) {
+        if (m_playback_pos >= (double)(audio_len - 1)) {
             m_playing = false;
             break;
         }
         
-        // Direct sample output (no pitch shifting needed)
-        l[i] = audio->left[m_playback_pos] * m_volume;
-        r[i] = audio->right[m_playback_pos] * m_volume;
+        size_t idx = (size_t)m_playback_pos;
+        float frac = (float)(m_playback_pos - (double)idx);
         
-        m_playback_pos++;
+        // Left channel interpolation
+        float l0 = audio->left[idx];
+        float l1 = audio->left[idx + 1];
+        l[i] = (l0 + (l1 - l0) * frac) * m_volume;
+        
+        // Right channel interpolation
+        float r0 = audio->right[idx];
+        float r1 = audio->right[idx + 1];
+        r[i] = (r0 + (r1 - r0) * frac) * m_volume;
+        
+        m_playback_pos += m_playback_increment;
     }
 }
 
 bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq, bool update_active) {
     if (text.empty()) {
+        fprintf(stderr, "[VoiceInst] synthesize_text FAILED: empty text\n");
         return false;
     }
     
     // Calculate pitch factor (relative to 440 Hz)
     float pitch_factor = base_freq / 440.0f;
-    pitch_factor = std::max(0.5f, std::min(2.0f, pitch_factor));
+    pitch_factor = std::max(0.01f, std::min(100.0f, pitch_factor)); // Widened range
     
     // Create cache key with pitch
     std::string cache_key = make_cache_key(text, pitch_factor);
@@ -168,6 +281,7 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq, 
         // Check memory cache first
         auto cache_it = m_audio_cache.find(cache_key);
         if (cache_it != m_audio_cache.end()) {
+            fprintf(stderr, "[VoiceInst] Memory cache hit for: \"%s\" (pitch %.2f)\n", text.c_str(), pitch_factor);
             if (update_active) {
                 m_active_audio = cache_it->second;
                 m_current_text = text;
@@ -180,6 +294,7 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq, 
         // Check disk cache
         std::shared_ptr<CachedAudio> disk_audio;
         if (load_from_disk_cache(cache_key, disk_audio)) {
+            fprintf(stderr, "[VoiceInst] Disk cache hit for: \"%s\" (pitch %.2f)\n", text.c_str(), pitch_factor);
             size_t audio_size = disk_audio->size_bytes();
             evict_lru_if_needed(audio_size);
             m_audio_cache[cache_key] = disk_audio;
@@ -194,36 +309,50 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq, 
         }
     }
     
+    fprintf(stderr, "[VoiceInst] Synthesizing: \"%s\" (pitch %.2f, mode %s)\n", 
+            text.c_str(), pitch_factor, m_tts_mode == TTSMode::RealTimeEspeak ? "eSpeak" : "Festival");
+    
     // Synthesize base text (at 440 Hz)
     m_perf_metrics.total_synthesized++;  // Count TTS synthesis
     std::vector<float> out_l, out_r;
+    int source_rate = 22050; // default
     
     switch (m_tts_mode) {
         case TTSMode::RealTimeEspeak:
-            if (!synthesize_with_espeak(text, out_l, out_r)) {
+            if (!synthesize_with_espeak(text, out_l, out_r, source_rate)) {
+                fprintf(stderr, "[VoiceInst] eSpeak synthesis FAILED\n");
                 return false;
             }
             break;
         case TTSMode::OfflineFestival:
-            if (!synthesize_with_festival(text, out_l, out_r)) {
+            if (!synthesize_with_festival(text, out_l, out_r, source_rate)) {
+                fprintf(stderr, "[VoiceInst] Festival synthesis FAILED\n");
                 return false;
             }
             break;
     }
     
     if (out_l.empty()) {
+        fprintf(stderr, "[VoiceInst] Synthesis FAILED: output buffer is empty\n");
         return false;
     }
     
-    // Apply pitch shifting with libsamplerate if pitch != 1.0
-    if (std::abs(pitch_factor - 1.0f) > 0.001f) {
-        std::vector<float> pitched_l, pitched_r;
-        if (!apply_libsamplerate_pitch(out_l, out_r, pitch_factor, pitched_l, pitched_r)) {
-            return false;
-        }
-        out_l = pitched_l;
-        out_r = pitched_r;
+    fprintf(stderr, "[VoiceInst] Synthesis OK: %zu frames at %d Hz\n", out_l.size(), source_rate);
+    
+    // Calculate total resampling ratio
+    // 1.0/pitch_factor for the note pitch
+    // target_rate / espeak_rate for the sample rate conversion
+    float target_rate = m_engine ? (float)m_engine->sample_rate() : 44100.0f;
+    float total_ratio = (1.0f / pitch_factor) * (target_rate / (float)source_rate);
+    
+    // Apply pitch shifting and resampling with libsamplerate
+    // We always resample now because we need to match engine rate even if pitch is 1.0
+    std::vector<float> pitched_l, pitched_r;
+    if (!apply_libsamplerate_pitch(out_l, out_r, 1.0f / total_ratio, pitched_l, pitched_r)) {
+        return false;
     }
+    out_l = pitched_l;
+    out_r = pitched_r;
     
     // Cache the pitch-shifted result in memory with LRU eviction
     auto final_audio = std::make_shared<CachedAudio>();
@@ -250,105 +379,89 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq, 
     return true;
 }
 
-bool VoiceInstrument::synthesize_with_espeak(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r) {
-    // Create temp file path
-    const char* tmp_wav = "/tmp/disgrace_voice.wav";
-    
-    // Escape quotes in text for shell command
-    std::string escaped_text = text;
-    size_t pos = 0;
-    while ((pos = escaped_text.find('"', pos)) != std::string::npos) {
-        escaped_text.replace(pos, 1, "\\\"");
-        pos += 2;
-    }
-    
-    // Build espeak command with parameters
-    std::string cmd = "espeak-ng";
-    
-    // Add voice selection
+bool VoiceInstrument::synthesize_with_espeak(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r, int& out_rate) {
+    if (text.empty()) return false;
+    out_rate = g_espeak_sample_rate;
+
+    // Set voice
     if (m_voice_index > 0) {
-        cmd += " -v +m" + std::to_string(m_voice_index);
+        std::string voice_name = "mb-m" + std::to_string(m_voice_index);
+        espeak_SetVoiceByName(voice_name.c_str());
+    } else {
+        espeak_SetVoiceByName("default");
     }
+
+    // Set speed (espeak uses 80-450, default is 175)
+    int speed = (int)(m_speed * 175.0f);
+    espeak_SetParameter(espeakRATE, speed, 0);
+
+    EspeakContext ctx;
+    ctx.left = &out_l;
+    ctx.right = &out_r;
+    ctx.completed = false;
+
+    // Use a lock to ensure only one thread synthesizes at a time
+    // since espeak callback is global and we use user_data to distinguish messages,
+    // but to be safe with shared resources we'll serialize.
+    static std::mutex synth_mutex;
+    std::lock_guard<std::mutex> lock(synth_mutex);
+
+    unsigned int unique_id = 0;
+    espeak_ERROR err = espeak_Synth(text.c_str(), text.size() + 1, 0, POS_CHARACTER, 0, 
+                                    espeakCHARS_AUTO, &unique_id, &ctx);
     
-    // Add speed parameter (espeak uses -s for speed)
-    int speed = (int)(m_speed * 175.0f);  // 175 is default, scale with our speed factor
-    cmd += " -s " + std::to_string(speed);
-    
-    // Add output file and text
-    cmd += " -w \"" + std::string(tmp_wav) + "\" \"" + escaped_text + "\" 2>/dev/null";
-    
-    int ret = system(cmd.c_str());
-    if (ret != 0) {
-        return false;
-    }
-    
-    // Load WAV file
-    if (!load_wav_from_file(tmp_wav, out_l, out_r)) {
-        return false;
-    }
-    
-    // Clean up
-    remove(tmp_wav);
-    
-    return true;
+    if (err != EE_OK) return false;
+
+    // Synchronize blocks until all data is processed by the callback
+    espeak_Synchronize();
+
+    return !out_l.empty();
 }
 
-bool VoiceInstrument::synthesize_with_festival(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r) {
-    // Create temp file paths
-    const char* tmp_scm = "/tmp/disgrace_voice.scm";
-    const char* tmp_wav = "/tmp/disgrace_voice.wav";
-    
-    // Create Festival Scheme script to synthesize
-    FILE* scm_file = fopen(tmp_scm, "w");
-    if (!scm_file) {
-        return false;
-    }
-    
-    // Select voice based on voice_index
+bool VoiceInstrument::synthesize_with_festival(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r, int& out_rate) {
+    if (text.empty()) return false;
+
+    std::lock_guard<std::mutex> lock(g_festival_mutex);
+
+    // Set voice based on m_voice_index
     if (m_voice_index == 0) {
-        fprintf(scm_file, "(voice_default)\n");
+        festival_eval_command("(voice_default)");
     } else {
         // Voices: 1=kal_diphone, 2=rms_diphone, 3=awb_diphone, etc
-        fprintf(scm_file, "(voice_kal_diphone)\n");  // Default fallback
+        festival_eval_command("(voice_kal_diphone)"); 
     }
-    
-    // Set pitch accent/intonation (Festival par.pd_targets controls pitch)
+
+    // Set pitch accent/intonation
     if (m_pitch_accent != 0.5f) {
-        fprintf(scm_file, "(set! (Parameter.evaluate par.pd_targets) %.2f)\n", 
-                0.5f + m_pitch_accent);
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd), "(set! (Parameter.evaluate par.pd_targets) %.2f)", 0.5f + m_pitch_accent);
+        festival_eval_command(cmd);
     }
-    
+
     // Set speech rate (duration stretch)
     if (m_speed != 1.0f) {
-        fprintf(scm_file, "(set! (Parameter.evaluate Duration_Stretch) %.2f)\n", 
-                1.0f / m_speed);  // Inverse because stretch >1 is slower
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd), "(set! (Parameter.evaluate Duration_Stretch) %.2f)", 1.0f / m_speed);
+        festival_eval_command(cmd);
     }
-    
-    // Synthesize
-    fprintf(scm_file, "(utt.save.wave (utt.synth (eval (list 'Utterance 'Text \"%s\"))) \"%s\" 'riff)\n",
-            text.c_str(), tmp_wav);
-    fclose(scm_file);
-    
-    // Run Festival with the script
-    std::string cmd = "festival --script \"" + std::string(tmp_scm) + "\" 2>/dev/null";
-    int ret = system(cmd.c_str());
-    
-    // Clean up script file
-    remove(tmp_scm);
-    
-    if (ret != 0) {
+
+    EST_Wave wave;
+    if (!festival_text_to_wave(text.c_str(), wave)) {
         return false;
     }
+
+    out_rate = wave.sample_rate();
+    int n = wave.num_samples();
     
-    // Load WAV file
-    if (!load_wav_from_file(tmp_wav, out_l, out_r)) {
-        return false;
+    out_l.reserve(n);
+    out_r.reserve(n);
+    for (int i = 0; i < n; ++i) {
+        float s = (float)wave.a(i) / 32768.0f;
+        out_l.push_back(s);
+        out_r.push_back(s);
     }
-    
-    // Clean up WAV file
-    remove(tmp_wav);
-    
-    return true;
+
+    return !out_l.empty();
 }
 
 bool VoiceInstrument::load_wav_from_file(const std::string& filepath, std::vector<float>& out_l, std::vector<float>& out_r) {
@@ -426,12 +539,15 @@ bool VoiceInstrument::load_from_disk_cache(const std::string& cache_key, std::sh
         return false;  // File doesn't exist
     }
     
+    fprintf(stderr, "[VoiceInst] Loading from disk cache: %s\n", path.c_str());
+    
     auto audio = std::make_shared<CachedAudio>();
     // Load WAV file
     if (load_wav_from_file(path, audio->left, audio->right)) {
         out_audio = audio;
         return true;
     }
+    fprintf(stderr, "[VoiceInst] FAILED to load WAV from disk: %s\n", path.c_str());
     return false;
 }
 
@@ -448,14 +564,17 @@ bool VoiceInstrument::save_to_disk_cache(const std::string& cache_key, std::shar
         return false;
     }
     
+    fprintf(stderr, "[VoiceInst] Saving to disk cache: %s\n", path.c_str());
+    
     // Save as WAV file
     SF_INFO sf_info = {};
-    sf_info.samplerate = 44100;  // Standard rate
+    sf_info.samplerate = m_engine ? (int)m_engine->sample_rate() : 44100;
     sf_info.channels = 2;
     sf_info.format = SF_FORMAT_WAV | SF_FORMAT_PCM_16;
     
     SNDFILE* file = sf_open(path.c_str(), SFM_WRITE, &sf_info);
     if (!file) {
+        fprintf(stderr, "[VoiceInst] FAILED to open for writing: %s (error %s)\n", path.c_str(), sf_strerror(NULL));
         return false;
     }
     
@@ -469,6 +588,10 @@ bool VoiceInstrument::save_to_disk_cache(const std::string& cache_key, std::shar
     
     sf_count_t written = sf_writef_float(file, interleaved.data(), audio->left.size());
     sf_close(file);
+    
+    if (written != (sf_count_t)audio->left.size()) {
+        fprintf(stderr, "[VoiceInst] FAILED to write all samples to disk: %s\n", path.c_str());
+    }
     
     return written == (sf_count_t)audio->left.size();
 }
@@ -516,8 +639,8 @@ bool VoiceInstrument::apply_libsamplerate_pitch(const std::vector<float>& in_lef
         return false;
     }
     
-    // Clamp pitch factor to reasonable range
-    pitch_factor = std::max(0.5f, std::min(2.0f, pitch_factor));
+    // Clamp pitch factor to reasonable range (widened to 0.05 - 20.0 for 5+ octaves)
+    pitch_factor = std::max(0.01f, std::min(100.0f, pitch_factor));
     
     // If pitch is 1.0, just copy
     if (std::abs(pitch_factor - 1.0f) < 0.001f) {
@@ -549,6 +672,9 @@ bool VoiceInstrument::apply_libsamplerate_pitch(const std::vector<float>& in_lef
     src_data.input_frames = in_left.size();
     src_data.src_ratio = 1.0 / pitch_factor;  // Resample ratio
     
+    fprintf(stderr, "[VoiceInst] Resampling: in %zu, out %zu, ratio %.4f\n", 
+            (size_t)src_data.input_frames, (size_t)out_frames, (double)src_data.src_ratio);
+
     // Allocate output buffer
     std::vector<float> out_buf_l(out_frames);
     std::vector<float> out_buf_r(out_frames);

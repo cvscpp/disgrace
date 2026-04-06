@@ -549,50 +549,64 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
                 
                 if (!worker) return;
                 
-                // Queue all texts for synthesis
-                for (const auto& text : unique_texts) {
-                    worker->queue_synthesis(text, 440.0f, false);
+                // Queue phrases across multiple octaves for better coverage
+                // Standard range: C-2 (36) to C-6 (84) in steps of 4 semitones for reasonable cache size
+                std::vector<uint8_t> notes;
+                for (uint8_t note = 36; note <= 84; note += 4) {
+                    notes.push_back(note);
                 }
                 
-                // Create progress dialog with timer
+                size_t total_tasks = unique_texts.size() * notes.size();
+                
+                // Queue all texts for synthesis at different pitches
+                for (const auto& text : unique_texts) {
+                    for (uint8_t note : notes) {
+                        float freq = 440.0f * std::pow(2.0f, (note - 69) / 12.0f);
+                        worker->queue_synthesis(text, freq, false);
+                    }
+                }
+                
+                // Create progress dialog
                 wxProgressDialog* dlg = new wxProgressDialog(
                     "Pre-rendering Voice Audio", 
-                    "Synthesizing phrases...",
-                    (int)unique_texts.size(), 
+                    "Synthesizing phrases across octaves...",
+                    (int)total_tasks, 
                     this,
-                    wxPD_APP_MODAL | wxPD_CAN_ABORT
+                    wxPD_APP_MODAL | wxPD_CAN_ABORT | wxPD_ELAPSED_TIME | wxPD_REMAINING_TIME
                 );
                 
-                // Timer to update progress (safer cleanup)
-                wxTimer* timer = new wxTimer(this);
-                timer->Bind(wxEVT_TIMER, [this, dlg, worker, timer, voice, total = unique_texts.size()](wxTimerEvent&) {
+                fprintf(stderr, "[GUI] Starting pre-render poll loop for %zu tasks\n", total_tasks);
+
+                bool aborted = false;
+                while (true) {
                     int completed = (int)worker->get_completed();
                     
-                    // Check if synthesis is complete
-                    if (worker->is_queue_empty() && completed >= (int)total) {
-                        timer->Stop();
-                        this->CallAfter([this, dlg, timer, voice, completed]() {
-                            voice->stop_synthesis_worker();
-                            dlg->Destroy();
-                            wxMessageBox(wxString::Format("Pre-rendered %d phrases", completed), "Complete");
-                            delete timer;
-                        });
-                        return;
-                    }
-                    
                     // Update dialog
-                    if (!dlg->Update(completed)) {
-                        // User clicked cancel
-                        timer->Stop();
-                        this->CallAfter([dlg, timer, voice]() {
-                            voice->stop_synthesis_worker();
-                            dlg->Destroy();
-                            delete timer;
-                        });
+                    wxString msg = wxString::Format("Completed %d of %d tasks\nMemory Used: %.2f MB", 
+                                                    completed, (int)total_tasks, voice->get_memory_used() / (1024.0 * 1024.0));
+                    
+                    if (!dlg->Update(completed, msg)) {
+                        fprintf(stderr, "[GUI] Pre-render ABORTED by user\n");
+                        aborted = true;
+                        break;
                     }
-                });
-                
-                timer->Start(100);  // Update every 100ms
+
+                    if (worker->is_queue_empty() && completed >= (int)total_tasks) {
+                        fprintf(stderr, "[GUI] Pre-render FINISHED: %d tasks\n", completed);
+                        break;
+                    }
+
+                    // Keep GUI responsive and wait a bit
+                    wxSafeYield();
+                    wxMilliSleep(50);
+                }
+
+                voice->stop_synthesis_worker();
+                dlg->Destroy();
+
+                if (!aborted) {
+                    wxMessageBox(wxString::Format("Pre-rendered %d tasks across all phrases", (int)worker->get_completed()), "Complete");
+                }
             }
         }
     });

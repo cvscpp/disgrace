@@ -33,6 +33,7 @@
 #include "stereo_expander.h"
 #include "ring_modulator.h"
 #include "gate.h"
+#include "vocoder.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 
@@ -56,6 +57,7 @@ static std::unique_ptr<DSP> create_dsp(const std::string& type) {
     if (type == "StereoExpander" || type == "Stereo Expander") return std::make_unique<StereoExpanderDSP>();
     if (type == "RingModulator" || type == "Ring Modulator") return std::make_unique<RingModulatorDSP>();
     if (type == "Gate") return std::make_unique<GateDSP>();
+    if (type == "Vocoder") return std::make_unique<VocoderDSP>();
     return nullptr;
 }
 

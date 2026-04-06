@@ -127,6 +127,16 @@ namespace disgrace_ns
         }
     }
 
+    void disgrace_ns::SampleInstrument::update_sample_data(size_t index, std::shared_ptr<disgrace_ns::SampleData> data)
+    {
+        if (index < m_samples.size()) {
+            m_samples[index].data = data;
+            // Note: Voices currently keep their own reference to SampleData.
+            // If they are active, they will continue to use the old data.
+            // This is generally safe and prevents audio glitches.
+        }
+    }
+
     void SampleInstrument::push_undo(size_t index) {
         if (index >= m_samples.size() || !m_samples[index].data) return;
         auto& state = m_undo_states[index];

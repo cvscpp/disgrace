@@ -675,7 +675,6 @@ void TracksView::do_cut() {
         return;
     }
     
-    // Get selected track
     int num_tracks = (int)m_engine.track_count();
     if (m_selected_track >= num_tracks) return;
     
@@ -687,183 +686,90 @@ void TracksView::do_cut() {
     
     auto sampler = static_cast<SampleInstrument*>(inst);
     
-    // Convert time-based selection to pattern rows
     int start_row = std::min(m_sel_start_tick, m_sel_end_tick);
     int end_row = std::max(m_sel_start_tick, m_sel_end_tick);
-    if (start_row == end_row) {
-        end_row = start_row + 1;  // Minimum 1 row
-    }
     
-    // Convert rows to sample time
-    // Each row = 1/LPB of a beat, need to calculate exact sample positions
     uint32_t lpb = m_engine.lpb();
     double bpm = m_engine.tempo();
     double sample_rate = m_engine.sample_rate();
-    
-    // Samples per beat = (sample_rate * 60) / bpm
     double samples_per_beat = (sample_rate * 60.0) / bpm;
-    // Samples per row = samples_per_beat / lpb
     double samples_per_row = (lpb > 0) ? (samples_per_beat / lpb) : 44100.0;
     
-    size_t start_sample = (size_t)(start_row * samples_per_row);
-    size_t end_sample = (size_t)(end_row * samples_per_row);
+    size_t start_sample_global = (size_t)(start_row * samples_per_row);
+    size_t end_sample_global = (size_t)(end_row * samples_per_row);
     
-    // Now find and cut all samples in this time range
-    // Iterate through patterns to find note events
     auto order = m_engine.order_list();
     size_t current_sample_pos = 0;
+    
+    // Map of sample_index to its modifications (start, end)
+    struct Mod { size_t start; size_t end; };
+    std::map<size_t, std::vector<Mod>> mods;
     
     for (size_t pat_idx = 0; pat_idx < order.size(); ++pat_idx) {
         auto& pattern = m_engine.pattern(order[pat_idx]);
         size_t pat_rows = pattern.row_count();
         size_t pat_samples = (size_t)(pat_rows * samples_per_row);
         
-        // Check each row in this pattern
         for (size_t row = 0; row < pat_rows; ++row) {
             size_t row_sample_pos = current_sample_pos + (size_t)(row * samples_per_row);
             
             auto& event = pattern.event(m_selected_track, row, 0);
-            if (event.note != 255) {  // 255 = empty/no note
-                // Found a note trigger - this sample is playing from here
-                size_t sample_idx = (event.sample_idx > 0) ? (event.sample_idx - 1) : sampler->selected_sample();
+            if (event.note != 255 && event.note != 254) {
+                size_t s_idx = (event.sample_idx > 0) ? (event.sample_idx - 1) : sampler->selected_sample();
                 
-                if (sample_idx < sampler->sample_count()) {
-                    auto& sample_entry = sampler->get_sample(sample_idx);
+                if (s_idx < sampler->sample_count()) {
+                    auto& sample_entry = sampler->get_sample(s_idx);
                     if (sample_entry.data) {
-                        // Calculate which part of this sample falls in the selection
-                        size_t sample_start = 0;
-                        size_t sample_end = sample_entry.data->left.size();
+                        size_t sample_len = sample_entry.data->left.size();
+                        size_t note_start_global = row_sample_pos;
+                        size_t note_end_global = row_sample_pos + sample_len;
                         
-                        // If selection starts after this note triggers, adjust start offset
-                        if (start_sample > row_sample_pos) {
-                            sample_start = std::min((size_t)(start_sample - row_sample_pos), sample_end);
-                        }
+                        size_t intersect_start = std::max(start_sample_global, note_start_global);
+                        size_t intersect_end = std::min(end_sample_global, note_end_global);
                         
-                        // If selection ends before note completes, adjust end offset
-                        if (end_sample < row_sample_pos + sample_entry.data->left.size()) {
-                            sample_end = std::max((size_t)(end_sample - row_sample_pos), sample_start);
-                        } else {
-                            // Selection covers entire rest of sample
-                            sample_end = sample_entry.data->left.size();
-                        }
-                        
-                        // Only cut if we have a valid range
-                        if (sample_start < sample_end && sample_end > 0) {
-                            // Cut audio data: erase from sample_start to sample_end
-                            auto& left = sample_entry.data->left;
-                            auto& right = sample_entry.data->right;
-                            
-                            left.erase(left.begin() + sample_start, left.begin() + sample_end);
-                            if (!right.empty()) {
-                                right.erase(right.begin() + sample_start, right.begin() + sample_end);
-                            }
+                        if (intersect_start < intersect_end) {
+                            mods[s_idx].push_back({intersect_start - note_start_global, intersect_end - note_start_global});
                         }
                     }
                 }
             }
         }
-        
         current_sample_pos += pat_samples;
     }
     
-    Refresh();
+    bool changed = false;
+    for (auto& pair : mods) {
+        size_t s_idx = pair.first;
+        auto& sample_entry = sampler->get_sample(s_idx);
+        
+        // Create a working copy
+        auto new_data = std::make_shared<SampleData>(*sample_entry.data);
+        
+        // Sort modifications in reverse order to keep indices valid while erasing
+        std::sort(pair.second.begin(), pair.second.end(), [](const Mod& a, const Mod& b) {
+            return a.start > b.start;
+        });
+        
+        sampler->push_undo(s_idx);
+        for (const auto& m : pair.second) {
+            new_data->cut(m.start, m.end);
+        }
+        sampler->update_sample_data(s_idx, new_data);
+        changed = true;
+    }
+    
+    if (changed) {
+        update_view();
+        Refresh();
+    }
 }
 
 void TracksView::do_copy() {
-    if (m_sel_start_tick == -1 || m_sel_end_tick == -1 || m_selected_track < 0) {
-        return;
-    }
-    
-    int num_tracks = (int)m_engine.track_count();
-    if (m_selected_track >= num_tracks) return;
-    
-    auto& track = m_engine.track(m_selected_track);
-    auto inst = track.instrument();
-    if (!inst || inst->type() != InstrumentType::Sampler) {
-        return;
-    }
-    
-    // Convert time-based selection to pattern rows
-    int start_row = std::min(m_sel_start_tick, m_sel_end_tick);
-    int end_row = std::max(m_sel_start_tick, m_sel_end_tick);
-    if (start_row == end_row) {
-        end_row = start_row + 1;  // Minimum 1 row
-    }
-    
-    // Collect all note events in this time range from the pattern
-    auto order = m_engine.order_list();
-    int current_pattern_row = 0;
-    std::vector<std::pair<int, int>> notes_to_copy;  // (pattern_index, row)
-    
-    for (size_t pat_idx = 0; pat_idx < order.size(); ++pat_idx) {
-        auto& pattern = m_engine.pattern(order[pat_idx]);
-        size_t pat_rows = pattern.row_count();
-        
-        for (size_t row = 0; row < pat_rows; ++row) {
-            int global_row = current_pattern_row + row;
-            
-            if (global_row >= start_row && global_row < end_row) {
-                // Check for note events in this row for our track
-                auto& event = pattern.event(m_selected_track, row, 0);
-                if (event.note != 255) {  // 255 = empty/no note
-                    notes_to_copy.push_back({pat_idx, row});
-                }
-            }
-            
-            if (global_row >= end_row) break;
-        }
-        
-        current_pattern_row += pat_rows;
-        if (current_pattern_row >= end_row) break;
-    }
-    
-    if (notes_to_copy.empty()) {
-        return;  // Nothing to copy
-    }
-    
-    // For copy, we just mark these for later operations
-    // (Actual clipboard handling would be done here)
+    // Clipboard not fully implemented yet in this version
 }
 
 void TracksView::do_paste() {
-    if (m_sel_start_tick == -1 || m_selected_track < 0) {
-        return;
-    }
-    
-    int num_tracks = (int)m_engine.track_count();
-    if (m_selected_track >= num_tracks) return;
-    
-    auto& track = m_engine.track(m_selected_track);
-    auto inst = track.instrument();
-    if (!inst || inst->type() != InstrumentType::Sampler) {
-        return;
-    }
-    
-    // Paste would insert notes at the cursor position
-    int paste_row = m_sel_start_tick;
-    
-    // Find pattern containing this row and insert/modify notes
-    auto order = m_engine.order_list();
-    int current_pattern_row = 0;
-    
-    for (size_t pat_idx = 0; pat_idx < order.size(); ++pat_idx) {
-        auto& pattern = m_engine.pattern(order[pat_idx]);
-        size_t pat_rows = pattern.row_count();
-        
-        if (current_pattern_row + pat_rows > paste_row) {
-            // This pattern contains our paste row
-            int local_row = paste_row - current_pattern_row;
-            if (local_row >= 0 && local_row < (int)pat_rows) {
-                // Insert note at this position
-                pattern.event(m_selected_track, local_row, 0).note = 60;  // Middle C
-            }
-            break;
-        }
-        
-        current_pattern_row += pat_rows;
-    }
-    
-    Refresh();
+    // Clipboard not fully implemented yet in this version
 }
 
 void TracksView::do_silence() {
@@ -871,7 +777,6 @@ void TracksView::do_silence() {
         return;
     }
     
-    // Get selected track
     int num_tracks = (int)m_engine.track_count();
     if (m_selected_track >= num_tracks) return;
     
@@ -883,27 +788,23 @@ void TracksView::do_silence() {
     
     auto sampler = static_cast<SampleInstrument*>(inst);
     
-    // Convert time-based selection to pattern rows
     int start_row = std::min(m_sel_start_tick, m_sel_end_tick);
     int end_row = std::max(m_sel_start_tick, m_sel_end_tick);
-    if (start_row == end_row) {
-        end_row = start_row + 1;  // Minimum 1 row
-    }
     
-    // Convert rows to sample time
     uint32_t lpb = m_engine.lpb();
     double bpm = m_engine.tempo();
     double sample_rate = m_engine.sample_rate();
-    
     double samples_per_beat = (sample_rate * 60.0) / bpm;
     double samples_per_row = (lpb > 0) ? (samples_per_beat / lpb) : 44100.0;
     
-    size_t start_sample = (size_t)(start_row * samples_per_row);
-    size_t end_sample = (size_t)(end_row * samples_per_row);
+    size_t start_sample_global = (size_t)(start_row * samples_per_row);
+    size_t end_sample_global = (size_t)(end_row * samples_per_row);
     
-    // Find and silence all samples in this time range
     auto order = m_engine.order_list();
     size_t current_sample_pos = 0;
+    
+    struct Mod { size_t start; size_t end; };
+    std::map<size_t, std::vector<Mod>> mods;
     
     for (size_t pat_idx = 0; pat_idx < order.size(); ++pat_idx) {
         auto& pattern = m_engine.pattern(order[pat_idx]);
@@ -914,43 +815,46 @@ void TracksView::do_silence() {
             size_t row_sample_pos = current_sample_pos + (size_t)(row * samples_per_row);
             
             auto& event = pattern.event(m_selected_track, row, 0);
-            if (event.note != 255) {  // 255 = empty/no note
-                size_t sample_idx = (event.sample_idx > 0) ? (event.sample_idx - 1) : sampler->selected_sample();
+            if (event.note != 255 && event.note != 254) {
+                size_t s_idx = (event.sample_idx > 0) ? (event.sample_idx - 1) : sampler->selected_sample();
                 
-                if (sample_idx < sampler->sample_count()) {
-                    auto& sample_entry = sampler->get_sample(sample_idx);
+                if (s_idx < sampler->sample_count()) {
+                    auto& sample_entry = sampler->get_sample(s_idx);
                     if (sample_entry.data) {
-                        size_t sample_start = 0;
-                        size_t sample_end = sample_entry.data->left.size();
+                        size_t sample_len = sample_entry.data->left.size();
+                        size_t note_start_global = row_sample_pos;
+                        size_t note_end_global = row_sample_pos + sample_len;
                         
-                        if (start_sample > row_sample_pos) {
-                            sample_start = std::min((size_t)(start_sample - row_sample_pos), sample_end);
-                        }
+                        size_t intersect_start = std::max(start_sample_global, note_start_global);
+                        size_t intersect_end = std::min(end_sample_global, note_end_global);
                         
-                        if (end_sample < row_sample_pos + sample_entry.data->left.size()) {
-                            sample_end = std::max((size_t)(end_sample - row_sample_pos), sample_start);
-                        } else {
-                            sample_end = sample_entry.data->left.size();
-                        }
-                        
-                        // Silence (zero) audio data instead of erasing
-                        if (sample_start < sample_end && sample_end > 0) {
-                            for (size_t i = sample_start; i < sample_end; ++i) {
-                                sample_entry.data->left[i] = 0.0f;
-                                if (i < sample_entry.data->right.size()) {
-                                    sample_entry.data->right[i] = 0.0f;
-                                }
-                            }
+                        if (intersect_start < intersect_end) {
+                            mods[s_idx].push_back({intersect_start - note_start_global, intersect_end - note_start_global});
                         }
                     }
                 }
             }
         }
-        
         current_sample_pos += pat_samples;
     }
     
-    Refresh();
+    bool changed = false;
+    for (auto& pair : mods) {
+        size_t s_idx = pair.first;
+        auto& sample_entry = sampler->get_sample(s_idx);
+        auto new_data = std::make_shared<SampleData>(*sample_entry.data);
+        
+        sampler->push_undo(s_idx);
+        for (const auto& m : pair.second) {
+            new_data->silence(m.start, m.end);
+        }
+        sampler->update_sample_data(s_idx, new_data);
+        changed = true;
+    }
+    
+    if (changed) {
+        Refresh();
+    }
 }
 
 void TracksView::do_insert_silence() {
@@ -969,32 +873,28 @@ void TracksView::do_insert_silence() {
     
     auto sampler = static_cast<SampleInstrument*>(inst);
     
-    // Get cursor position
-    int cursor_row = m_sel_start_tick;
-    
-    // Calculate how much silence to insert
     uint32_t lpb = m_engine.lpb();
     double bpm = m_engine.tempo();
     double sample_rate = m_engine.sample_rate();
-    
     double samples_per_beat = (sample_rate * 60.0) / bpm;
     double samples_per_row = (lpb > 0) ? (samples_per_beat / lpb) : 44100.0;
     
-    size_t insert_duration = (size_t)samples_per_row;  // Insert 1 row of silence
+    int cursor_row = m_sel_start_tick;
+    size_t insert_pos_global = (size_t)(cursor_row * samples_per_row);
     
-    // If there's a selection range, use that as duration
+    size_t insert_duration = (size_t)samples_per_row;
     if (m_sel_end_tick != -1 && m_sel_end_tick != m_sel_start_tick) {
         int start_row = std::min(m_sel_start_tick, m_sel_end_tick);
         int end_row = std::max(m_sel_start_tick, m_sel_end_tick);
         insert_duration = (size_t)((end_row - start_row) * samples_per_row);
+        insert_pos_global = (size_t)(start_row * samples_per_row);
     }
     
-    // Convert cursor to sample time
-    size_t insert_pos = (size_t)(cursor_row * samples_per_row);
-    
-    // Find and insert silence in all samples at this position
     auto order = m_engine.order_list();
     size_t current_sample_pos = 0;
+    
+    struct Mod { size_t pos; };
+    std::map<size_t, std::vector<Mod>> mods;
     
     for (size_t pat_idx = 0; pat_idx < order.size(); ++pat_idx) {
         auto& pattern = m_engine.pattern(order[pat_idx]);
@@ -1005,42 +905,47 @@ void TracksView::do_insert_silence() {
             size_t row_sample_pos = current_sample_pos + (size_t)(row * samples_per_row);
             
             auto& event = pattern.event(m_selected_track, row, 0);
-            if (event.note != 255) {  // 255 = empty/no note
-                size_t sample_idx = (event.sample_idx > 0) ? (event.sample_idx - 1) : sampler->selected_sample();
+            if (event.note != 255 && event.note != 254) {
+                size_t s_idx = (event.sample_idx > 0) ? (event.sample_idx - 1) : sampler->selected_sample();
                 
-                if (sample_idx < sampler->sample_count()) {
-                    auto& sample_entry = sampler->get_sample(sample_idx);
+                if (s_idx < sampler->sample_count()) {
+                    auto& sample_entry = sampler->get_sample(s_idx);
                     if (sample_entry.data) {
-                        // Calculate insertion point within this sample
-                        // Only insert if the cursor is within this sample's playback time
-                        if (insert_pos >= row_sample_pos && 
-                            insert_pos < row_sample_pos + sample_entry.data->left.size()) {
-                            
-                            size_t local_insert_pos = insert_pos - row_sample_pos;
-                            
-                            // Insert silent samples
-                            std::vector<float> silence(insert_duration, 0.0f);
-                            sample_entry.data->left.insert(
-                                sample_entry.data->left.begin() + local_insert_pos,
-                                silence.begin(), silence.end()
-                            );
-                            
-                            if (!sample_entry.data->right.empty()) {
-                                sample_entry.data->right.insert(
-                                    sample_entry.data->right.begin() + local_insert_pos,
-                                    silence.begin(), silence.end()
-                                );
-                            }
+                        size_t sample_len = sample_entry.data->left.size();
+                        if (insert_pos_global >= row_sample_pos && 
+                            insert_pos_global < row_sample_pos + sample_len) {
+                            mods[s_idx].push_back({insert_pos_global - row_sample_pos});
                         }
                     }
                 }
             }
         }
-        
         current_sample_pos += pat_samples;
     }
     
-    Refresh();
+    bool changed = false;
+    for (auto& pair : mods) {
+        size_t s_idx = pair.first;
+        auto& sample_entry = sampler->get_sample(s_idx);
+        auto new_data = std::make_shared<SampleData>(*sample_entry.data);
+        
+        // Sort in reverse
+        std::sort(pair.second.begin(), pair.second.end(), [](const Mod& a, const Mod& b) {
+            return a.pos > b.pos;
+        });
+        
+        sampler->push_undo(s_idx);
+        for (const auto& m : pair.second) {
+            new_data->insert_silence(m.pos, insert_duration);
+        }
+        sampler->update_sample_data(s_idx, new_data);
+        changed = true;
+    }
+    
+    if (changed) {
+        update_view();
+        Refresh();
+    }
 }
 
 void TracksView::do_undo() {

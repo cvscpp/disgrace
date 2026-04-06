@@ -57,6 +57,7 @@ namespace disgrace_ns
         size_t sample_count() const { return m_samples.size(); }
         const SampleEntry& get_sample(size_t index) const { return m_samples[index]; }
         SampleEntry& get_sample(size_t index) { return m_samples[index]; }
+        void update_sample_data(size_t index, std::shared_ptr<disgrace_ns::SampleData> data);
 
         void set_selected_sample(size_t index) { m_selected_sample_index = index; }
         size_t selected_sample() const { return m_selected_sample_index; }

@@ -34,22 +34,25 @@
 
 namespace disgrace_ns {
 
-static void draw_waveform_helper(wxDC& dc, int x, int y, int w, int h, const SampleData& data, const wxColour& col) {
+static void draw_waveform_helper(wxDC& dc, int x, int y, int w, int h, const SampleData& data, const wxColour& col, size_t max_samples = 0) {
     if (data.left.empty() || w <= 0) return;
     dc.SetPen(wxPen(col));
     
     bool is_stereo = !data.right.empty();
     int ch_h = is_stereo ? h / 2 : h;
 
+    size_t data_len = (max_samples > 0) ? std::min(max_samples, data.left.size()) : data.left.size();
+    if (data_len == 0) return;
+
     auto draw_channel = [&](const std::vector<float>& ch_data, int ch_y) {
         int mid_y = ch_y + ch_h / 2;
-        double samples_per_pixel = (double)ch_data.size() / w;
+        double samples_per_pixel = (double)data_len / w;
         for (int i = 0; i < w; ++i) {
             size_t start = (size_t)(i * samples_per_pixel);
             size_t end = (size_t)((i + 1) * samples_per_pixel);
-            if (end > ch_data.size()) end = ch_data.size();
+            if (end > data_len) end = data_len;
             if (start >= end) {
-                if (start < ch_data.size()) {
+                if (start < data_len) {
                     int amp = (int)(ch_data[start] * (ch_h / 2 - 2));
                     dc.DrawLine(x + i, mid_y - amp, x + i, mid_y + amp);
                 }
@@ -220,7 +223,7 @@ int TracksView::get_total_ticks() {
 }
 
 int TracksView::tick_to_x(int tick) { return (int)(tick * m_zoom); }
-int TracksView::x_to_tick(int x) { return (m_zoom > 0) ? (int)(x / m_zoom) : 0; }
+int TracksView::x_to_tick(int x) { return (m_zoom > 0) ? (int)((double)x / m_zoom + 0.5) : 0; }
 
 int TracksView::get_track_height(int track_idx) const {
     if (track_idx < 0 || (size_t)track_idx >= m_engine.track_count()) {
@@ -312,6 +315,11 @@ void TracksView::draw(wxDC& dc) {
 
     // Draw Tracks
     int cur_y = 30;
+    double bpm = m_engine.tempo();
+    double sample_rate = m_engine.sample_rate();
+    double samples_per_beat = (sample_rate * 60.0) / bpm;
+    double samples_per_row = (lpb > 0) ? (samples_per_beat / lpb) : 44100.0;
+
     for (int t = 0; t < num_tracks; ++t) {
         auto& track_obj = m_engine.track(t);
         int track_h_actual = track_obj.is_minimized() ? 20 : 80;
@@ -398,15 +406,21 @@ void TracksView::draw(wxDC& dc) {
                                 }
                                 if (!found_end) note_len = pat_rows - r;
 
-                                int nw = tick_to_x(note_len);
-                                if (nw < 2) nw = 2;
-
                                 if (inst && inst->type() == InstrumentType::Sampler) {
                                     SampleInstrument* sampler = static_cast<SampleInstrument*>(inst);
                                     size_t s_idx = (ev.sample_idx > 0) ? (ev.sample_idx - 1) : sampler->selected_sample();
                                     if (s_idx < sampler->sample_count()) {
                                         auto& sample = sampler->get_sample(s_idx);
                                         if (sample.data) {
+                                            double sample_duration_rows = (double)sample.data->left.size() / samples_per_row;
+                                            int nw_limit = tick_to_x(note_len);
+                                            int nw_sample = tick_to_x(sample_duration_rows);
+                                            int nw = std::min(nw_limit, nw_sample);
+                                            if (nw < 2) nw = 2;
+
+                                            size_t samples_to_draw = (size_t)((double)nw / m_zoom * samples_per_row);
+                                            samples_to_draw = std::min(samples_to_draw, sample.data->left.size());
+
                                             // Detect overlaps
                                             auto overlaps = detect_overlaps(sampler);
                                             bool is_overlapping = (s_idx < overlaps.size()) && overlaps[s_idx].is_overlapping;
@@ -422,7 +436,7 @@ void TracksView::draw(wxDC& dc) {
                                             dc.DrawRectangle(nx, ty + 5, nw, track_h_actual - 10);
                                             
                                             // Draw waveform
-                                            draw_waveform_helper(dc, nx, ty + 5, nw, track_h_actual - 10, *sample.data, ThemeManager::toWxColour(m_engine.m_tracker_note));
+                                            draw_waveform_helper(dc, nx, ty + 5, nw, track_h_actual - 10, *sample.data, ThemeManager::toWxColour(m_engine.m_tracker_note), samples_to_draw);
                                             
                                             // Draw overlap indicator if needed
                                             if (is_overlapping) {
@@ -432,6 +446,8 @@ void TracksView::draw(wxDC& dc) {
                                         }
                                     }
                                 } else {
+                                    int nw = tick_to_x(note_len);
+                                    if (nw < 2) nw = 2;
                                     // Just a block
                                     dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_note)));
                                     dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_note)));
@@ -465,9 +481,8 @@ void TracksView::draw(wxDC& dc) {
         dc.DrawLine(play_x, 0, play_x, virtual_size.GetHeight());
     }
 
-    // Selection - only on the selected track
-    if (m_selected_track >= 0 && m_selected_track < num_tracks && 
-        m_sel_start_tick != -1 && m_sel_end_tick != -1) {
+    // Selection - highlight on selected track AND guide on all tracks
+    if (m_sel_start_tick != -1 && m_sel_end_tick != -1) {
         int s1 = std::min(m_sel_start_tick, m_sel_end_tick);
         int s2 = std::max(m_sel_start_tick, m_sel_end_tick);
         if (s1 == s2) s2 = s1 + 1;  // Minimum 1 tick width for visibility
@@ -476,28 +491,37 @@ void TracksView::draw(wxDC& dc) {
         int sx2 = header_w + tick_to_x(s2);
         if (sx2 == sx1) sx2 = sx1 + 2;  // Minimum 2 pixels for visibility
         
-        // Calculate track position
-        int cur_y = 30;
-        for (int t = 0; t < m_selected_track; ++t) {
-            auto& t_obj = m_engine.track(t);
-            int t_h = t_obj.is_minimized() ? 20 : 80;
-            cur_y += t_h;
+        // Draw selection guide across all tracks
+        dc.SetBrush(wxBrush(wxColour(0, 120, 215, 32))); // Very light blue
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.DrawRectangle(sx1, 0, sx2 - sx1, virtual_size.GetHeight());
+
+        // Draw selection highlight on the selected track if it's a sampler
+        if (m_selected_track >= 0 && m_selected_track < num_tracks) {
+            auto& sel_track = m_engine.track(m_selected_track);
+            auto inst = sel_track.instrument();
+            if (inst && inst->type() == InstrumentType::Sampler) {
+                // Calculate track position
+                int cur_y_pos = 30;
+                for (int t = 0; t < m_selected_track; ++t) {
+                    auto& t_obj = m_engine.track(t);
+                    int t_h = t_obj.is_minimized() ? 20 : 80;
+                    cur_y_pos += t_h;
+                }
+                
+                int sel_track_h = sel_track.is_minimized() ? 20 : 80;
+                
+                // Draw selection highlight on this track
+                dc.SetBrush(wxBrush(wxColour(0, 120, 215, 64))); // Semi-transparent blue
+                dc.SetPen(wxPen(wxColour(0, 120, 215), 2));
+                dc.DrawRectangle(sx1, cur_y_pos, sx2 - sx1, sel_track_h);
+            }
         }
         
-        auto& sel_track = m_engine.track(m_selected_track);
-        int sel_track_h = sel_track.is_minimized() ? 20 : 80;
-        int track_top = cur_y;
-        int track_bottom = cur_y + sel_track_h;
-        
-        // Draw selection on this track only
-        dc.SetBrush(wxBrush(wxColour(0, 120, 215, 64))); // Semi-transparent blue
-        dc.SetPen(*wxTRANSPARENT_PEN);
-        dc.DrawRectangle(sx1, track_top, sx2 - sx1, sel_track_h);
-        
-        // Border lines
-        dc.SetPen(wxPen(wxColour(0, 120, 215), 2));
-        dc.DrawLine(sx1, track_top, sx1, track_bottom);
-        dc.DrawLine(sx2, track_top, sx2, track_bottom);
+        // Border lines across all tracks
+        dc.SetPen(wxPen(wxColour(0, 120, 215, 128), 1, wxPENSTYLE_DOT));
+        dc.DrawLine(sx1, 0, sx1, virtual_size.GetHeight());
+        dc.DrawLine(sx2, 0, sx2, virtual_size.GetHeight());
     }
 }
 
@@ -529,7 +553,7 @@ void TracksView::OnMouseDown(wxMouseEvent& event) {
         cur_y += track_h;
     }
     
-    // Track content selection - only in non-header area
+    // Track content selection - always set selected track even if not sampler
     if (x > header_w && clicked_track >= 0) {
         m_selected_track = clicked_track;
         m_is_selecting = true;
@@ -688,6 +712,7 @@ void TracksView::do_cut() {
     
     int start_row = std::min(m_sel_start_tick, m_sel_end_tick);
     int end_row = std::max(m_sel_start_tick, m_sel_end_tick);
+    if (start_row == end_row) end_row = start_row + 1;
     
     uint32_t lpb = m_engine.lpb();
     double bpm = m_engine.tempo();
@@ -713,22 +738,25 @@ void TracksView::do_cut() {
         for (size_t row = 0; row < pat_rows; ++row) {
             size_t row_sample_pos = current_sample_pos + (size_t)(row * samples_per_row);
             
-            auto& event = pattern.event(m_selected_track, row, 0);
-            if (event.note != 255 && event.note != 254) {
-                size_t s_idx = (event.sample_idx > 0) ? (event.sample_idx - 1) : sampler->selected_sample();
-                
-                if (s_idx < sampler->sample_count()) {
-                    auto& sample_entry = sampler->get_sample(s_idx);
-                    if (sample_entry.data) {
-                        size_t sample_len = sample_entry.data->left.size();
-                        size_t note_start_global = row_sample_pos;
-                        size_t note_end_global = row_sample_pos + sample_len;
-                        
-                        size_t intersect_start = std::max(start_sample_global, note_start_global);
-                        size_t intersect_end = std::min(end_sample_global, note_end_global);
-                        
-                        if (intersect_start < intersect_end) {
-                            mods[s_idx].push_back({intersect_start - note_start_global, intersect_end - note_start_global});
+            size_t num_cols = pattern.column_count(m_selected_track);
+            for (size_t c = 0; c < num_cols; ++c) {
+                auto& event = pattern.event(m_selected_track, row, c);
+                if (event.note != 255 && event.note != 254) {
+                    size_t s_idx = (event.sample_idx > 0) ? (event.sample_idx - 1) : sampler->selected_sample();
+                    
+                    if (s_idx < sampler->sample_count()) {
+                        auto& sample_entry = sampler->get_sample(s_idx);
+                        if (sample_entry.data) {
+                            size_t sample_len = sample_entry.data->left.size();
+                            size_t note_start_global = row_sample_pos;
+                            size_t note_end_global = row_sample_pos + sample_len;
+                            
+                            size_t intersect_start = std::max(start_sample_global, note_start_global);
+                            size_t intersect_end = std::min(end_sample_global, note_end_global);
+                            
+                            if (intersect_start < intersect_end) {
+                                mods[s_idx].push_back({intersect_start - note_start_global, intersect_end - note_start_global});
+                            }
                         }
                     }
                 }
@@ -765,11 +793,136 @@ void TracksView::do_cut() {
 }
 
 void TracksView::do_copy() {
-    // Clipboard not fully implemented yet in this version
+    if (m_sel_start_tick == -1 || m_sel_end_tick == -1 || m_selected_track < 0) {
+        return;
+    }
+
+    int num_tracks = (int)m_engine.track_count();
+    if (m_selected_track >= num_tracks) return;
+
+    auto& track = m_engine.track(m_selected_track);
+    auto inst = track.instrument();
+    if (!inst || inst->type() != InstrumentType::Sampler) {
+        return;
+    }
+
+    auto sampler = static_cast<SampleInstrument*>(inst);
+
+    int start_row = std::min(m_sel_start_tick, m_sel_end_tick);
+    int end_row = std::max(m_sel_start_tick, m_sel_end_tick);
+    if (start_row == end_row) end_row = start_row + 1;
+
+    uint32_t lpb = m_engine.lpb();
+    double bpm = m_engine.tempo();
+    double sample_rate = m_engine.sample_rate();
+    double samples_per_beat = (sample_rate * 60.0) / bpm;
+    double samples_per_row = (lpb > 0) ? (samples_per_beat / lpb) : 44100.0;
+
+    size_t start_sample_global = (size_t)(start_row * samples_per_row);
+    size_t end_sample_global = (size_t)(end_row * samples_per_row);
+
+    auto order = m_engine.order_list();
+    size_t current_sample_pos = 0;
+
+    for (size_t pat_idx = 0; pat_idx < order.size(); ++pat_idx) {
+        auto& pattern = m_engine.pattern(order[pat_idx]);
+        size_t pat_rows = pattern.row_count();
+        size_t pat_samples = (size_t)(pat_rows * samples_per_row);
+
+        for (size_t row = 0; row < pat_rows; ++row) {
+            size_t row_sample_pos = current_sample_pos + (size_t)(row * samples_per_row);
+            
+            size_t num_cols = pattern.column_count(m_selected_track);
+            for (size_t c = 0; c < num_cols; ++c) {
+                auto& event = pattern.event(m_selected_track, row, c);
+                if (event.note != 255 && event.note != 254) {
+                    size_t s_idx = (event.sample_idx > 0) ? (event.sample_idx - 1) : sampler->selected_sample();
+                    if (s_idx < sampler->sample_count()) {
+                        auto& sample_entry = sampler->get_sample(s_idx);
+                        if (sample_entry.data) {
+                            size_t sample_len = sample_entry.data->left.size();
+                            size_t note_start_global = row_sample_pos;
+                            size_t note_end_global = row_sample_pos + sample_len;
+
+                            size_t intersect_start = std::max(start_sample_global, note_start_global);
+                            size_t intersect_end = std::min(end_sample_global, note_end_global);
+
+                            if (intersect_start < intersect_end) {
+                                // Just copy the first one we find for now
+                                auto cmd = std::make_unique<TrackCopyCommand>(track, m_engine, intersect_start - note_start_global, intersect_end - note_start_global);
+                                cmd->apply();
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        current_sample_pos += pat_samples;
+    }
 }
 
 void TracksView::do_paste() {
-    // Clipboard not fully implemented yet in this version
+    if (m_sel_start_tick == -1 || m_selected_track < 0) {
+        return;
+    }
+
+    int num_tracks = (int)m_engine.track_count();
+    if (m_selected_track >= num_tracks) return;
+
+    auto& track = m_engine.track(m_selected_track);
+    auto inst = track.instrument();
+    if (!inst || inst->type() != InstrumentType::Sampler) {
+        return;
+    }
+
+    auto sampler = static_cast<SampleInstrument*>(inst);
+
+    int cursor_row = m_sel_start_tick;
+
+    uint32_t lpb = m_engine.lpb();
+    double bpm = m_engine.tempo();
+    double sample_rate = m_engine.sample_rate();
+    double samples_per_beat = (sample_rate * 60.0) / bpm;
+    double samples_per_row = (lpb > 0) ? (samples_per_beat / lpb) : 44100.0;
+
+    size_t paste_pos_global = (size_t)(cursor_row * samples_per_row);
+
+    auto order = m_engine.order_list();
+    size_t current_sample_pos = 0;
+
+    for (size_t pat_idx = 0; pat_idx < order.size(); ++pat_idx) {
+        auto& pattern = m_engine.pattern(order[pat_idx]);
+        size_t pat_rows = pattern.row_count();
+        size_t pat_samples = (size_t)(pat_rows * samples_per_row);
+
+        for (size_t row = 0; row < pat_rows; ++row) {
+            size_t row_sample_pos = current_sample_pos + (size_t)(row * samples_per_row);
+            
+            size_t num_cols = pattern.column_count(m_selected_track);
+            for (size_t c = 0; c < num_cols; ++c) {
+                auto& event = pattern.event(m_selected_track, row, c);
+                if (event.note != 255 && event.note != 254) {
+                    size_t s_idx = (event.sample_idx > 0) ? (event.sample_idx - 1) : sampler->selected_sample();
+                    if (s_idx < sampler->sample_count()) {
+                        auto& sample_entry = sampler->get_sample(s_idx);
+                        if (sample_entry.data) {
+                            size_t sample_len = sample_entry.data->left.size();
+                            if (paste_pos_global >= row_sample_pos && 
+                                paste_pos_global < row_sample_pos + sample_len) {
+                                auto cmd = std::make_unique<TrackPasteCommand>(track, m_engine, paste_pos_global - row_sample_pos);
+                                cmd->apply();
+                                update_view();
+                                Refresh();
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        current_sample_pos += pat_samples;
+    }
 }
 
 void TracksView::do_silence() {
@@ -790,6 +943,7 @@ void TracksView::do_silence() {
     
     int start_row = std::min(m_sel_start_tick, m_sel_end_tick);
     int end_row = std::max(m_sel_start_tick, m_sel_end_tick);
+    if (start_row == end_row) end_row = start_row + 1;
     
     uint32_t lpb = m_engine.lpb();
     double bpm = m_engine.tempo();
@@ -814,22 +968,25 @@ void TracksView::do_silence() {
         for (size_t row = 0; row < pat_rows; ++row) {
             size_t row_sample_pos = current_sample_pos + (size_t)(row * samples_per_row);
             
-            auto& event = pattern.event(m_selected_track, row, 0);
-            if (event.note != 255 && event.note != 254) {
-                size_t s_idx = (event.sample_idx > 0) ? (event.sample_idx - 1) : sampler->selected_sample();
-                
-                if (s_idx < sampler->sample_count()) {
-                    auto& sample_entry = sampler->get_sample(s_idx);
-                    if (sample_entry.data) {
-                        size_t sample_len = sample_entry.data->left.size();
-                        size_t note_start_global = row_sample_pos;
-                        size_t note_end_global = row_sample_pos + sample_len;
-                        
-                        size_t intersect_start = std::max(start_sample_global, note_start_global);
-                        size_t intersect_end = std::min(end_sample_global, note_end_global);
-                        
-                        if (intersect_start < intersect_end) {
-                            mods[s_idx].push_back({intersect_start - note_start_global, intersect_end - note_start_global});
+            size_t num_cols = pattern.column_count(m_selected_track);
+            for (size_t c = 0; c < num_cols; ++c) {
+                auto& event = pattern.event(m_selected_track, row, c);
+                if (event.note != 255 && event.note != 254) {
+                    size_t s_idx = (event.sample_idx > 0) ? (event.sample_idx - 1) : sampler->selected_sample();
+                    
+                    if (s_idx < sampler->sample_count()) {
+                        auto& sample_entry = sampler->get_sample(s_idx);
+                        if (sample_entry.data) {
+                            size_t sample_len = sample_entry.data->left.size();
+                            size_t note_start_global = row_sample_pos;
+                            size_t note_end_global = row_sample_pos + sample_len;
+                            
+                            size_t intersect_start = std::max(start_sample_global, note_start_global);
+                            size_t intersect_end = std::min(end_sample_global, note_end_global);
+                            
+                            if (intersect_start < intersect_end) {
+                                mods[s_idx].push_back({intersect_start - note_start_global, intersect_end - note_start_global});
+                            }
                         }
                     }
                 }
@@ -904,17 +1061,20 @@ void TracksView::do_insert_silence() {
         for (size_t row = 0; row < pat_rows; ++row) {
             size_t row_sample_pos = current_sample_pos + (size_t)(row * samples_per_row);
             
-            auto& event = pattern.event(m_selected_track, row, 0);
-            if (event.note != 255 && event.note != 254) {
-                size_t s_idx = (event.sample_idx > 0) ? (event.sample_idx - 1) : sampler->selected_sample();
-                
-                if (s_idx < sampler->sample_count()) {
-                    auto& sample_entry = sampler->get_sample(s_idx);
-                    if (sample_entry.data) {
-                        size_t sample_len = sample_entry.data->left.size();
-                        if (insert_pos_global >= row_sample_pos && 
-                            insert_pos_global < row_sample_pos + sample_len) {
-                            mods[s_idx].push_back({insert_pos_global - row_sample_pos});
+            size_t num_cols = pattern.column_count(m_selected_track);
+            for (size_t c = 0; c < num_cols; ++c) {
+                auto& event = pattern.event(m_selected_track, row, c);
+                if (event.note != 255 && event.note != 254) {
+                    size_t s_idx = (event.sample_idx > 0) ? (event.sample_idx - 1) : sampler->selected_sample();
+                    
+                    if (s_idx < sampler->sample_count()) {
+                        auto& sample_entry = sampler->get_sample(s_idx);
+                        if (sample_entry.data) {
+                            size_t sample_len = sample_entry.data->left.size();
+                            if (insert_pos_global >= row_sample_pos && 
+                                insert_pos_global < row_sample_pos + sample_len) {
+                                mods[s_idx].push_back({insert_pos_global - row_sample_pos});
+                            }
                         }
                     }
                 }

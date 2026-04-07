@@ -76,17 +76,17 @@ ProjectPanel::ProjectPanel(int x, int y, int w, int h, Engine& engine)
     cur_y += browser_h + margin;
 
     // Export controls now placed below the file browser
-    Fl_Box* sr_label = new Fl_Box(x + margin, cur_y, 160, 25, "Export Sample Rate:");
+    Fl_Box* sr_label = new Fl_Box(x + margin, cur_y, 140, 25, "Export Sample Rate:");
     sr_label->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-    m_sample_rate_ch = new Fl_Choice(x + margin + 170, cur_y, 100, 25);
+    m_sample_rate_ch = new Fl_Choice(x + margin + 145, cur_y, 140, 25);
     m_sample_rate_ch->add("44100|48000|88200|96000|192000");
     m_sample_rate_ch->value(0);
 
     cur_y += 25 + margin / 2;
-    m_separate_tracks_btn = new Fl_Check_Button(x + margin, cur_y, 200, 25, "Separate Files (per track)");
+    m_separate_tracks_btn = new Fl_Check_Button(x + margin, cur_y, left_w - 2 * margin, 25, "Separate Files (per track)");
     
     cur_y += 25 + margin / 2;
-    m_realtime_btn = new Fl_Check_Button(x + margin, cur_y, 200, 25, "Realtime Export (for MIDI/HW)");
+    m_realtime_btn = new Fl_Check_Button(x + margin, cur_y, left_w - 2 * margin, 25, "Realtime Export (for MIDI/HW)");
 
     cur_y += 25 + margin;
     m_export_progress_bar = new Fl_Progress(x + margin, cur_y, left_w - 2 * margin, 15);
@@ -232,7 +232,7 @@ void ProjectPanel::update_track_list() {
     int cur_y = m_track_container->y(); // Corrected: use container's absolute y
     int label_w = 30;
     int input_w = 150;
-    int choice_w = 150;
+    int choice_w = 180;
     int btn_w = 30;
 
     size_t num_tracks = m_engine.track_count();
@@ -255,7 +255,7 @@ void ProjectPanel::update_track_list() {
         name_in->when(FL_WHEN_ENTER_KEY | FL_WHEN_RELEASE);
         cur_x += input_w - 50 + 5;
 
-        Fl_Choice* inst_ch = new Fl_Choice(cur_x, row_y + 5, choice_w - 20, 25);
+        Fl_Choice* inst_ch = new Fl_Choice(cur_x, row_y + 5, choice_w, 25);
         inst_ch->add("None");
         for (size_t j = 0; j < num_insts; ++j) {
             inst_ch->add(m_engine.instrument(j).name().c_str());
@@ -264,7 +264,7 @@ void ProjectPanel::update_track_list() {
         int inst_idx = m_engine.get_instrument_index(m_engine.track(i).instrument());
         inst_ch->value(inst_idx + 1);
         inst_ch->callback(cb_track_inst, new std::pair<ProjectPanel*, size_t>(this, i));
-        cur_x += choice_w - 20 + 5;
+        cur_x += choice_w + 5;
 
         // Notation Type Dropdown
         Fl_Choice* notation_ch = new Fl_Choice(cur_x, row_y + 5, 100, 25);
@@ -282,7 +282,7 @@ void ProjectPanel::update_track_list() {
         }
         cur_x += 100 + 5;
 
-        Fl_Choice* out_ch = new Fl_Choice(cur_x, row_y + 5, 80, 25);
+        Fl_Choice* out_ch = new Fl_Choice(cur_x, row_y + 5, 120, 25);
         out_ch->add("Master");
         for (size_t j = 0; j < num_buses; ++j) {
             char b_name[32]; snprintf(b_name, 32, "Bus %zu", j + 1);
@@ -290,7 +290,7 @@ void ProjectPanel::update_track_list() {
         }
         out_ch->value(m_engine.track(i).output_bus() + 1);
         out_ch->callback(cb_track_output, new std::pair<ProjectPanel*, size_t>(this, i));
-        cur_x += 80 + 5;
+        cur_x += 120 + 5;
 
         Fl_Button* up = new Fl_Button(cur_x, row_y + 5, btn_w, 25, "@8<");
         up->callback(cb_move_track_up, new std::pair<ProjectPanel*, size_t>(this, i));
@@ -322,7 +322,7 @@ void ProjectPanel::update_track_list() {
         cur_x += input_w - 50 + 5;
         
         // Buses can route to other buses (forward only) or Master
-        Fl_Choice* out_ch = new Fl_Choice(cur_x, row_y + 5, 80, 25);
+        Fl_Choice* out_ch = new Fl_Choice(cur_x, row_y + 5, 120, 25);
         out_ch->add("Master");
         for (size_t j = 0; j < num_buses; ++j) {
             char b_name[32]; snprintf(b_name, 32, "Bus %zu", j + 1);
@@ -330,7 +330,7 @@ void ProjectPanel::update_track_list() {
         }
         out_ch->value(m_engine.bus(i).output_bus() + 1);
         out_ch->callback(cb_bus_output, new std::pair<ProjectPanel*, size_t>(this, i));
-        cur_x += 80 + 5 + 130 + 5; // Skip inst and up/down for now or keep space
+        cur_x += 120 + 5 + 130 + 5; // Skip inst and up/down for now or keep space
 
         Fl_Button* rem = new Fl_Button(cur_x, row_y + 5, btn_w, 25, "X");
         rem->callback(cb_remove_bus, new std::pair<ProjectPanel*, size_t>(this, i));

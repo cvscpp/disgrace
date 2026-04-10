@@ -28,7 +28,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <espeak-ng/speak_lib.h>
+#ifdef HAVE_FESTIVAL
 #include <festival/festival.h>
+#endif
 #include <thread>
 
 namespace disgrace_ns {
@@ -37,8 +39,10 @@ static std::mutex g_espeak_mutex;
 static int g_espeak_refcount = 0;
 static int g_espeak_sample_rate = 22050; // Default fallback
 
+#ifdef HAVE_FESTIVAL
 static std::mutex g_festival_mutex;
 static int g_festival_refcount = 0;
+#endif
 
 // Context for espeak callback
 struct EspeakContext {
@@ -94,6 +98,7 @@ VoiceInstrument::VoiceInstrument(Engine* engine)
     }
     g_espeak_refcount++;
 
+#ifdef HAVE_FESTIVAL
     {
         std::lock_guard<std::mutex> lock(g_festival_mutex);
         if (g_festival_refcount == 0) {
@@ -103,20 +108,25 @@ VoiceInstrument::VoiceInstrument(Engine* engine)
         }
         g_festival_refcount++;
     }
+#endif
 }
 
 VoiceInstrument::~VoiceInstrument() {
-    std::lock_guard<std::mutex> lock(g_espeak_mutex);
-    g_espeak_refcount--;
-    if (g_espeak_refcount == 0) {
-        espeak_Terminate();
+    {
+        std::lock_guard<std::mutex> lock(g_espeak_mutex);
+        g_espeak_refcount--;
+        if (g_espeak_refcount == 0) {
+            espeak_Terminate();
+        }
     }
 
+#ifdef HAVE_FESTIVAL
     {
         std::lock_guard<std::mutex> lock(g_festival_mutex);
         g_festival_refcount--;
         // Festival doesn't have a standard terminate() that works reliably across calls
     }
+#endif
 }
 
 void VoiceInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_index, size_t offset_samples, uint8_t sample_index) {
@@ -325,10 +335,18 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq, 
             }
             break;
         case TTSMode::OfflineFestival:
+#ifdef HAVE_FESTIVAL
             if (!synthesize_with_festival(text, out_l, out_r, source_rate)) {
                 fprintf(stderr, "[VoiceInst] Festival synthesis FAILED\n");
                 return false;
             }
+#else
+            fprintf(stderr, "[VoiceInst] Festival support not compiled in; falling back to eSpeak\n");
+            if (!synthesize_with_espeak(text, out_l, out_r, source_rate)) {
+                fprintf(stderr, "[VoiceInst] eSpeak synthesis FAILED\n");
+                return false;
+            }
+#endif
             break;
     }
     
@@ -419,6 +437,7 @@ bool VoiceInstrument::synthesize_with_espeak(const std::string& text, std::vecto
 }
 
 bool VoiceInstrument::synthesize_with_festival(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r, int& out_rate) {
+#ifdef HAVE_FESTIVAL
     if (text.empty()) return false;
 
     std::lock_guard<std::mutex> lock(g_festival_mutex);
@@ -462,6 +481,10 @@ bool VoiceInstrument::synthesize_with_festival(const std::string& text, std::vec
     }
 
     return !out_l.empty();
+#else
+    (void)text; (void)out_l; (void)out_r; (void)out_rate;
+    return false;
+#endif
 }
 
 bool VoiceInstrument::load_wav_from_file(const std::string& filepath, std::vector<float>& out_l, std::vector<float>& out_r) {

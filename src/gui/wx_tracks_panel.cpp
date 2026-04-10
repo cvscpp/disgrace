@@ -17,6 +17,7 @@
  */
 
 #include <wx/app.h>
+#include <wx/artprov.h>
 #include <wx/dcclient.h>
 #include <wx/menu.h>
 #include "wx_tracks_panel.h"
@@ -73,7 +74,7 @@ static void draw_waveform_helper(wxDC& dc, int x, int y, int w, int h, const Sam
     if (is_stereo) {
         draw_channel(data.right, y + ch_h);
         // Draw a small divider line
-        dc.SetPen(wxPen(wxColour(100, 100, 100, 128)));
+        dc.SetPen(wxPen(wxColour(col.Red(), col.Green(), col.Blue(), 80)));
         dc.DrawLine(x, y + ch_h, x + w, y + ch_h);
         dc.SetPen(wxPen(col));
     }
@@ -118,21 +119,31 @@ TracksPanel::TracksPanel(wxWindow* parent, Engine& engine)
     wxBoxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
 
     wxBoxSizer* btn_sizer = new wxBoxSizer(wxHORIZONTAL);
-    int btn_w = 60;
-    int btn_h = 25;
+    int btn_h = 28;
 
-    m_zoom_in_btn = new wxButton(this, ID_ZOOM_IN, "Zoom In", wxDefaultPosition, wxSize(btn_w, btn_h));
-    m_zoom_out_btn = new wxButton(this, ID_ZOOM_OUT, "Zoom Out", wxDefaultPosition, wxSize(btn_w, btn_h));
-    m_view_all_btn = new wxButton(this, ID_VIEW_ALL, "View All", wxDefaultPosition, wxSize(btn_w, btn_h));
-    m_view_sel_btn = new wxButton(this, ID_VIEW_SEL, "View Sel", wxDefaultPosition, wxSize(btn_w, btn_h));
-    
-    m_cut_btn = new wxButton(this, ID_CUT, "Cut", wxDefaultPosition, wxSize(btn_w, btn_h));
-    m_copy_btn = new wxButton(this, ID_COPY, "Copy", wxDefaultPosition, wxSize(btn_w, btn_h));
-    m_paste_btn = new wxButton(this, ID_PASTE, "Paste", wxDefaultPosition, wxSize(btn_w, btn_h));
-    m_silence_btn = new wxButton(this, ID_SILENCE, "Silence", wxDefaultPosition, wxSize(btn_w, btn_h));
-    m_insert_btn = new wxButton(this, ID_INSERT_SILENCE, "Insert", wxDefaultPosition, wxSize(btn_w, btn_h));
-    
-    m_detach_btn = new wxButton(this, ID_DETACH, "[]", wxDefaultPosition, wxSize(30, btn_h));
+    m_zoom_in_btn = new wxButton(this, ID_ZOOM_IN, "Zoom In", wxDefaultPosition, wxSize(-1, btn_h));
+    m_zoom_in_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_PLUS, wxART_BUTTON, wxSize(16, 16)));
+    m_zoom_out_btn = new wxButton(this, ID_ZOOM_OUT, "Zoom Out", wxDefaultPosition, wxSize(-1, btn_h));
+    m_zoom_out_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_MINUS, wxART_BUTTON, wxSize(16, 16)));
+    m_view_all_btn = new wxButton(this, ID_VIEW_ALL, "View All", wxDefaultPosition, wxSize(-1, btn_h));
+    m_view_all_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_HOME, wxART_BUTTON, wxSize(16, 16)));
+    m_view_sel_btn = new wxButton(this, ID_VIEW_SEL, "View Sel", wxDefaultPosition, wxSize(-1, btn_h));
+    m_view_sel_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FIND, wxART_BUTTON, wxSize(16, 16)));
+
+    m_cut_btn = new wxButton(this, ID_CUT, "Cut", wxDefaultPosition, wxSize(-1, btn_h));
+    m_cut_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_CUT, wxART_BUTTON, wxSize(16, 16)));
+    m_copy_btn = new wxButton(this, ID_COPY, "Copy", wxDefaultPosition, wxSize(-1, btn_h));
+    m_copy_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_COPY, wxART_BUTTON, wxSize(16, 16)));
+    m_paste_btn = new wxButton(this, ID_PASTE, "Paste", wxDefaultPosition, wxSize(-1, btn_h));
+    m_paste_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_PASTE, wxART_BUTTON, wxSize(16, 16)));
+    m_silence_btn = new wxButton(this, ID_SILENCE, "Silence", wxDefaultPosition, wxSize(-1, btn_h));
+    m_silence_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_CROSS_MARK, wxART_BUTTON, wxSize(16, 16)));
+    m_insert_btn = new wxButton(this, ID_INSERT_SILENCE, "Insert", wxDefaultPosition, wxSize(-1, btn_h));
+    m_insert_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_PLUS, wxART_BUTTON, wxSize(16, 16)));
+
+    m_detach_btn = new wxButton(this, ID_DETACH, "", wxDefaultPosition, wxSize(btn_h, btn_h));
+    m_detach_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FULL_SCREEN, wxART_BUTTON, wxSize(16, 16)));
+    m_detach_btn->SetToolTip("Detach / re-attach tracks view");
 
     btn_sizer->Add(m_zoom_in_btn, 0, wxALL, 2);
     btn_sizer->Add(m_zoom_out_btn, 0, wxALL, 2);
@@ -341,7 +352,7 @@ void TracksView::draw(wxDC& dc) {
         dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_fg_color)));
         dc.DrawRectangle(btn_x, btn_y, btn_w, btn_h);
         
-        dc.SetTextForeground(*wxWHITE);
+        dc.SetTextForeground(ThemeManager::toWxColour(m_engine.m_fg_color));
         wxFont btn_font(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
         dc.SetFont(btn_font);
         wxString btn_text = track_obj.is_minimized() ? "+" : "-";
@@ -349,7 +360,7 @@ void TracksView::draw(wxDC& dc) {
 
         wxFont bold_font(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
         dc.SetFont(bold_font);
-        dc.SetTextForeground(*wxWHITE);
+        dc.SetTextForeground(ThemeManager::toWxColour(m_engine.m_fg_color));
         wxString name = track_obj.name().substr(0, 15);
         dc.DrawText(name, 30, ty + 5);
 
@@ -359,7 +370,7 @@ void TracksView::draw(wxDC& dc) {
         if (!track_obj.is_minimized()) {
             wxFont normal_font(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
             dc.SetFont(normal_font);
-            dc.SetTextForeground(wxColour(200, 200, 200));
+            dc.SetTextForeground(ThemeManager::toWxColour(m_engine.m_tracker_text));
             if (inst) {
                 wxString inst_name = inst->name().substr(0, 20);
                 dc.DrawText(inst_name, 30, ty + 20);
@@ -477,7 +488,7 @@ void TracksView::draw(wxDC& dc) {
     // Current Playback Marker
     if (m_engine.transport_state() != TransportState::Stopped) {
         int play_x = header_w + tick_to_x(play_tick);
-        dc.SetPen(wxPen(wxColour(255, 255, 255)));
+        dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_cursor)));
         dc.DrawLine(play_x, 0, play_x, virtual_size.GetHeight());
     }
 
@@ -492,7 +503,8 @@ void TracksView::draw(wxDC& dc) {
         if (sx2 == sx1) sx2 = sx1 + 2;  // Minimum 2 pixels for visibility
         
         // Draw selection guide across all tracks
-        dc.SetBrush(wxBrush(wxColour(0, 120, 215, 32))); // Very light blue
+        wxColour sel_col = ThemeManager::toWxColour(m_engine.m_selection_color);
+        dc.SetBrush(wxBrush(wxColour(sel_col.Red(), sel_col.Green(), sel_col.Blue(), 32)));
         dc.SetPen(*wxTRANSPARENT_PEN);
         dc.DrawRectangle(sx1, 0, sx2 - sx1, virtual_size.GetHeight());
 
@@ -512,14 +524,14 @@ void TracksView::draw(wxDC& dc) {
                 int sel_track_h = sel_track.is_minimized() ? 20 : 80;
                 
                 // Draw selection highlight on this track
-                dc.SetBrush(wxBrush(wxColour(0, 120, 215, 64))); // Semi-transparent blue
-                dc.SetPen(wxPen(wxColour(0, 120, 215), 2));
+                dc.SetBrush(wxBrush(wxColour(sel_col.Red(), sel_col.Green(), sel_col.Blue(), 64)));
+                dc.SetPen(wxPen(sel_col, 2));
                 dc.DrawRectangle(sx1, cur_y_pos, sx2 - sx1, sel_track_h);
             }
         }
         
         // Border lines across all tracks
-        dc.SetPen(wxPen(wxColour(0, 120, 215, 128), 1, wxPENSTYLE_DOT));
+        dc.SetPen(wxPen(wxColour(sel_col.Red(), sel_col.Green(), sel_col.Blue(), 128), 1, wxPENSTYLE_DOT));
         dc.DrawLine(sx1, 0, sx1, virtual_size.GetHeight());
         dc.DrawLine(sx2, 0, sx2, virtual_size.GetHeight());
     }

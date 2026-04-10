@@ -41,10 +41,18 @@ public:
     std::string name() const override { return "Echo"; }
     std::string type_name() const override { return "Echo"; }
 
+    void set_sample_rate(float sr) override {
+        m_sample_rate = sr;
+        size_t buf_size = (size_t)(sr * 2.0f); // 2 seconds max delay
+        m_buf_l.assign(buf_size, 0.0f);
+        m_buf_r.assign(buf_size, 0.0f);
+        m_pos = 0;
+    }
+
     void process(float* l, float* r, size_t nframes) override
     {
         if (m_bypassed) return;
-        size_t delay_samples = (size_t)(time * 44100.0f);
+        size_t delay_samples = (size_t)(time * m_sample_rate);
         if (delay_samples >= m_buf_l.size()) delay_samples = m_buf_l.size() - 1;
 
         for (size_t i = 0; i < nframes; ++i)
@@ -102,6 +110,7 @@ private:
     size_t m_pos = 0;
     std::vector<float> m_buf_l, m_buf_r;
     float m_filter_l = 0, m_filter_r = 0;
+    float m_sample_rate = 44100.0f;
 };
 
 } // namespace disgrace_ns

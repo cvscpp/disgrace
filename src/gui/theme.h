@@ -56,6 +56,10 @@ struct Theme {
     uint32_t tracker_sample;
     uint32_t tracker_volume;
     uint32_t tracker_effect;
+
+    // UI accent / selection
+    uint32_t selection_color; // active/focused item highlight
+    uint32_t warning_color;   // destructive actions, error indicators
 };
 
 class ThemeManager {
@@ -66,6 +70,9 @@ public:
     static const std::vector<Theme>& get_available_themes();
     static ThemeType get_current_theme_type() { return m_current_theme; }
     static wxColour toWxColour(uint32_t c);
+
+    // Returns wxBLACK or wxWHITE, whichever contrasts better against the given color.
+    static wxColour contrastColor(uint32_t bg);
 
 private:
     static void init_themes();

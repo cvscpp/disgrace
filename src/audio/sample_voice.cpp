@@ -76,6 +76,16 @@ namespace disgrace_ns
         m_volume = vol;
     }
 
+    void disgrace_ns::SampleVoice::set_engine_rate(double sr)
+    {
+        m_engine_rate = sr;
+        if (m_active && m_sample) {
+            double base_freq = 440.0;
+            double freq = base_freq * m_increment * (m_engine_rate / double(m_sample->sample_rate));
+            m_increment = (freq / base_freq) * (double(m_sample->sample_rate) / m_engine_rate);
+        }
+    }
+
     bool disgrace_ns::SampleVoice::active() const
     {
         return m_active;

@@ -121,6 +121,9 @@ public:
     std::string get_key_name(Action action) const;
     void assign(Action action, int key, int modifiers);
 
+    // Returns all known actions in display order (for building shortcut lists)
+    static const std::vector<Action>& all_actions();
+
 private:
     std::map<Action, KeyCombo> m_action_to_key;
     std::map<KeyCombo, Action> m_key_to_action;

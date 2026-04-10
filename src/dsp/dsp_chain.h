@@ -40,6 +40,12 @@ public:
     void move_down(size_t index);
     void remove(size_t index);
 
+    void set_sample_rate(float sr) {
+        for (auto& e : m_effects) {
+            if (e) e->set_sample_rate(sr);
+        }
+    }
+
     const ::std::array<::std::unique_ptr<disgrace_ns::DSP>, MAX_INSERTS>& effects() const { return m_effects; }
     bool is_enabled(size_t index) const { return index < MAX_INSERTS && m_enabled[index]; }
 

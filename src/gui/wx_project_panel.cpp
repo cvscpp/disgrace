@@ -194,7 +194,7 @@ void ProjectPanel::update_track_list() {
             } else {
                 m_engine.track(i).set_instrument(&m_engine.instrument(sel - 1));
             }
-            update_track_list();
+            CallAfter([this]() { update_track_list(); });
         });
         grid_sizer->Add(inst_ch, 0, wxEXPAND | wxALL, 2);
 
@@ -253,15 +253,15 @@ void ProjectPanel::update_track_list() {
         };
 
         grid_sizer->Add(create_small_btn(wxART_GO_UP, "^", [this, i](wxCommandEvent&) {
-            if (i > 0) { m_engine.move_track(i, i - 1); update_track_list(); }
+            if (i > 0) { m_engine.move_track(i, i - 1); CallAfter([this]() { update_track_list(); }); }
         }), 0, wxALL, 1);
 
         grid_sizer->Add(create_small_btn(wxART_GO_DOWN, "v", [this, i](wxCommandEvent&) {
-            if (i < m_engine.track_count() - 1) { m_engine.move_track(i, i + 1); update_track_list(); }
+            if (i < m_engine.track_count() - 1) { m_engine.move_track(i, i + 1); CallAfter([this]() { update_track_list(); }); }
         }), 0, wxALL, 1);
 
         wxButton* rem_btn = create_small_btn(wxART_DELETE, "X", [this, i](wxCommandEvent&) {
-            m_engine.remove_track(i); update_track_list();
+            m_engine.remove_track(i); CallAfter([this]() { update_track_list(); });
         });
         rem_btn->SetForegroundColour(*wxRED);
         grid_sizer->Add(rem_btn, 0, wxALL, 1);

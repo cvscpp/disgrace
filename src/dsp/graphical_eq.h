@@ -85,6 +85,11 @@ public:
     std::string name() const override { return "Graphical EQ"; }
     std::string type_name() const override { return "GraphicalEQ"; }
 
+    void set_sample_rate(float sr) override {
+        m_sample_rate = sr;
+        update_filters();
+    }
+
     void process(float* l, float* r, size_t nframes) override
     {
         if (m_bypassed) return;
@@ -104,7 +109,7 @@ public:
     void set_band_gain(size_t band, float gain_db) {
         if (band < NUM_BANDS) {
             m_gains[band] = gain_db;
-            m_filters[band].set_peaking(m_frequencies[band], 1.414f, m_gains[band], 44100.0f);
+            m_filters[band].set_peaking(m_frequencies[band], 1.414f, m_gains[band], m_sample_rate);
         }
     }
 
@@ -155,10 +160,11 @@ public:
 private:
     void update_filters() {
         for (size_t i = 0; i < NUM_BANDS; ++i) {
-            m_filters[i].set_peaking(m_frequencies[i], 1.414f, m_gains[i], 44100.0f);
+            m_filters[i].set_peaking(m_frequencies[i], 1.414f, m_gains[i], m_sample_rate);
         }
     }
 
+    float m_sample_rate = 44100.0f;
     std::vector<float> m_frequencies;
     std::array<float, NUM_BANDS> m_gains;
     std::vector<Biquad> m_filters;

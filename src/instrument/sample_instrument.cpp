@@ -17,6 +17,7 @@
  */
 
 #include "sample_instrument.h"
+#include "../audio/sample_voice.h"
 #include <cmath>
 #include <algorithm>
 
@@ -63,6 +64,14 @@ namespace disgrace_ns
     void disgrace_ns::SampleInstrument::panic()
     {
         for (auto& v : m_voices) if (v && v->active()) v->panic();
+    }
+
+    void disgrace_ns::SampleInstrument::set_sample_rate(double sr)
+    {
+        m_engine_rate = sr;
+        for (auto& v : m_voices) {
+            if (v) static_cast<disgrace_ns::SampleVoice*>(v.get())->set_engine_rate(sr);
+        }
     }
 
     void disgrace_ns::SampleInstrument::set_volume(float vol)

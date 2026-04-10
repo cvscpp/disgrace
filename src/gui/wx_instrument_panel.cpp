@@ -65,6 +65,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
 
     wxBoxSizer* top_btn_sizer = new wxBoxSizer(wxHORIZONTAL);
     m_detach_btn = new wxButton(m_inst_list_pane, wxID_ANY, "[]", wxDefaultPosition, wxSize(30, 20));
+    m_detach_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FULL_SCREEN, wxART_BUTTON, wxSize(14, 14)));
     m_detach_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_detach, this);
     top_btn_sizer->Add(new wxStaticText(m_inst_list_pane, wxID_ANY, "Instruments"), 1, wxALL | wxALIGN_CENTER_VERTICAL, 2);
     top_btn_sizer->Add(m_detach_btn, 0, wxALL, 2);
@@ -130,6 +131,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_sample_list_grp = new wxPanel(m_sampler_editor, wxID_ANY, wxDefaultPosition, wxSize(220, -1), wxBORDER_THEME);
     wxBoxSizer* sample_list_sizer = new wxBoxSizer(wxVERTICAL);
     m_add_sample_btn = new wxButton(m_sample_list_grp, wxID_ANY, "Add Sample");
+    m_add_sample_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_PLUS, wxART_BUTTON, wxSize(16, 16)));
     m_add_sample_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_add_sample, this);
     sample_list_sizer->Add(m_add_sample_btn, 0, wxEXPAND | wxALL, 2);
     
@@ -151,7 +153,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_sample_play_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_sample_play, this);
     
     m_sample_stop_btn = new wxButton(rec_panel, wxID_ANY, "Stop", wxDefaultPosition, wxSize(-1, 25));
-    m_sample_stop_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_QUIT, wxART_BUTTON, wxSize(16, 16)));
+    m_sample_stop_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_STOP, wxART_BUTTON, wxSize(16, 16)));
     m_sample_stop_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_sample_stop, this);
     
     m_rec_btn = new wxToggleButton(rec_panel, wxID_ANY, "Record", wxDefaultPosition, wxSize(-1, 25));
@@ -207,7 +209,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_norm_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_TICK_MARK, wxART_BUTTON, wxSize(16, 16)));
     m_norm_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_normalize, this);
     m_vol_btn = new wxButton(m_sampler_editor, wxID_ANY, "Gain", wxDefaultPosition, wxSize(-1, 25));
-    m_vol_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_PLUS, wxART_BUTTON, wxSize(16, 16)));
+    m_vol_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_UP, wxART_BUTTON, wxSize(16, 16)));
     m_vol_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_adjust_vol, this);
     m_vol_input = new wxSpinCtrlDouble(m_sampler_editor, wxID_ANY);
     m_vol_input->SetRange(0.0, 10.0); m_vol_input->SetIncrement(0.1); m_vol_input->SetValue(1.0);
@@ -220,12 +222,16 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     proc_sizer->Add(new wxStaticText(m_sampler_editor, wxID_ANY, "Fades:"), 0, wxALIGN_CENTER_VERTICAL);
     wxBoxSizer* fade_sizer = new wxBoxSizer(wxHORIZONTAL);
     m_fade_in_lin_btn = new wxButton(m_sampler_editor, wxID_ANY, "In Lin", wxDefaultPosition, wxSize(-1, 25));
+    m_fade_in_lin_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_FORWARD, wxART_BUTTON, wxSize(16, 16)));
     m_fade_in_lin_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_fade_in_lin, this);
     m_fade_in_log_btn = new wxButton(m_sampler_editor, wxID_ANY, "In Log", wxDefaultPosition, wxSize(-1, 25));
+    m_fade_in_log_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_FORWARD, wxART_BUTTON, wxSize(16, 16)));
     m_fade_in_log_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_fade_in_log, this);
     m_fade_out_lin_btn = new wxButton(m_sampler_editor, wxID_ANY, "Out Lin", wxDefaultPosition, wxSize(-1, 25));
+    m_fade_out_lin_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_BACK, wxART_BUTTON, wxSize(16, 16)));
     m_fade_out_lin_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_fade_out_lin, this);
     m_fade_out_log_btn = new wxButton(m_sampler_editor, wxID_ANY, "Out Log", wxDefaultPosition, wxSize(-1, 25));
+    m_fade_out_log_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_BACK, wxART_BUTTON, wxSize(16, 16)));
     m_fade_out_log_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_fade_out_log, this);
     fade_sizer->Add(m_fade_in_lin_btn, 0, wxRIGHT, 2);
     fade_sizer->Add(m_fade_in_log_btn, 0, wxRIGHT, 2);
@@ -237,9 +243,10 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     proc_sizer->Add(new wxStaticText(m_sampler_editor, wxID_ANY, "Edit:"), 0, wxALIGN_CENTER_VERTICAL);
     wxBoxSizer* edit_sizer = new wxBoxSizer(wxHORIZONTAL);
     m_silence_btn = new wxButton(m_sampler_editor, wxID_ANY, "Silence", wxDefaultPosition, wxSize(-1, 25));
-    m_silence_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_MISSING_IMAGE, wxART_BUTTON, wxSize(16, 16)));
+    m_silence_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_CROSS_MARK, wxART_BUTTON, wxSize(16, 16)));
     m_silence_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_silence, this);
     m_ins_sil_btn = new wxButton(m_sampler_editor, wxID_ANY, "Insert Sil", wxDefaultPosition, wxSize(-1, 25));
+    m_ins_sil_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_PLUS, wxART_BUTTON, wxSize(16, 16)));
     m_ins_sil_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_insert_silence, this);
     m_cut_btn = new wxButton(m_sampler_editor, wxID_ANY, "Cut", wxDefaultPosition, wxSize(-1, 25));
     m_cut_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_CUT, wxART_BUTTON, wxSize(16, 16)));
@@ -313,6 +320,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_sfont_editor = new wxPanel(m_right_panel, wxID_ANY);
     wxBoxSizer* sfont_sizer = new wxBoxSizer(wxVERTICAL);
     m_sfont_load_btn = new wxButton(m_sfont_editor, wxID_ANY, "Load SoundFont");
+    m_sfont_load_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(16, 16)));
     m_sfont_load_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&){
         wxFileDialog dlg(this, "Load SoundFont", "", "", "SoundFont files (*.sf2;*.sf3)|*.sf2;*.sf3", wxFD_OPEN);
         if (dlg.ShowModal() == wxID_OK) {
@@ -355,6 +363,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_plugin_editor = new wxPanel(m_right_panel, wxID_ANY);
     wxBoxSizer* plugin_sizer = new wxBoxSizer(wxVERTICAL);
     m_plugin_scan_btn = new wxButton(m_plugin_editor, wxID_ANY, "Scan Plugins");
+    m_plugin_scan_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FIND, wxART_BUTTON, wxSize(16, 16)));
     m_plugin_scan_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_plugin_scan, this);
     plugin_sizer->Add(m_plugin_scan_btn, 0, wxALL, 5);
 
@@ -377,8 +386,10 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     
     wxBoxSizer* zyn_btns = new wxBoxSizer(wxHORIZONTAL);
     m_zyn_prev_btn = new wxButton(m_zyn_editor, wxID_ANY, "<", wxDefaultPosition, wxSize(30, 25));
+    m_zyn_prev_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_BACK, wxART_BUTTON, wxSize(14, 14)));
     m_zyn_prev_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_zyn_prev, this);
     m_zyn_next_btn = new wxButton(m_zyn_editor, wxID_ANY, ">", wxDefaultPosition, wxSize(30, 25));
+    m_zyn_next_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_FORWARD, wxART_BUTTON, wxSize(14, 14)));
     m_zyn_next_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_zyn_next, this);
     zyn_btns->Add(m_zyn_prev_btn, 0, wxALL, 2);
     zyn_btns->Add(m_zyn_next_btn, 0, wxALL, 2);
@@ -541,6 +552,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     
     // Process button (now before the phrase list)
     m_voice_process_btn = new wxButton(m_voice_editor, wxID_ANY, "Pre-render All 256 Phrases");
+    m_voice_process_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_REFRESH, wxART_BUTTON, wxSize(16, 16)));
     m_voice_process_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent& ev) {
         if (m_selected_instrument >= 0) {
             auto& inst = m_engine.instrument(m_selected_instrument);
@@ -753,8 +765,8 @@ void InstrumentPanel::update_instrument_list() {
         
         wxButton* sel = new wxButton(row, wxID_ANY, wxString::Format("%zu:", i + 1), wxDefaultPosition, wxSize(40, 25), wxBORDER_NONE);
         if ((int)i == m_selected_instrument) {
-            sel->SetBackgroundColour(wxColour(0, 120, 215));
-            sel->SetForegroundColour(*wxWHITE);
+            sel->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_selection_color));
+            sel->SetForegroundColour(ThemeManager::contrastColor(m_engine.m_selection_color));
         } else {
             sel->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_bg_color));
             sel->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_fg_color));
@@ -834,8 +846,8 @@ void InstrumentPanel::update_editor() {
                 
                 wxButton* sel = new wxButton(row, wxID_ANY, wxString::Format("%zu", i + 1), wxDefaultPosition, wxSize(25, 25), wxBORDER_NONE);
                 if ((int)i == m_selected_sample) {
-                    sel->SetBackgroundColour(wxColour(0, 120, 215));
-                    sel->SetForegroundColour(*wxWHITE);
+                    sel->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_selection_color));
+                    sel->SetForegroundColour(ThemeManager::contrastColor(m_engine.m_selection_color));
                 } else {
                     sel->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_bg_color));
                     sel->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_fg_color));
@@ -896,7 +908,7 @@ void InstrumentPanel::update_editor() {
 
                 wxButton* rem = new wxButton(row, wxID_ANY, "X", wxDefaultPosition, wxSize(25, 25));
                 rem->SetBitmap(wxArtProvider::GetBitmap(wxART_DELETE, wxART_BUTTON, wxSize(14, 14)));
-                rem->SetForegroundColour(*wxRED);
+                rem->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_warning_color));
                 rem->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&){
                     static_cast<SampleInstrument*>(&m_engine.instrument(m_selected_instrument))->remove_sample(i);
                     m_selected_sample = -1;

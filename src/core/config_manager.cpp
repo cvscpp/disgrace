@@ -51,13 +51,11 @@ std::string ConfigManager::get_config_path() {
     return p.string();
 }
 
-void ConfigManager::load() {
-    std::string path = get_config_path();
-    if (!fs::exists(path)) {
-        save(); // Save defaults if not exist
-        return;
-    }
+std::string ConfigManager::config_path() {
+    return get_config_path();
+}
 
+void ConfigManager::read_from(const std::string& path) {
     try {
         std::ifstream f(path);
         json j;
@@ -80,38 +78,37 @@ void ConfigManager::load() {
             m_config.gui_button_height = jg.value("button_height", 25);
             m_config.gui_font_size = jg.value("font_size", 12);
             m_config.gui_theme = (ThemeType)jg.value("theme", (int)ThemeType::Classic);
-            m_config.waveform_color = jg.value("waveform_color", 0x00FF0000);
-            m_config.bg_color = jg.value("bg_color", 0xCCCCCC00);
-            m_config.fg_color = jg.value("fg_color", 0x00000000);
-            m_config.button_color = jg.value("button_color", 0xCCCCCC00);
-            m_config.boxtype = jg.value("boxtype", 2); // FL_UP_BOX
+            m_config.waveform_color = jg.value("waveform_color", 0x00FF0000u);
+            m_config.bg_color = jg.value("bg_color", 0xCCCCCC00u);
+            m_config.fg_color = jg.value("fg_color", 0x00000000u);
+            m_config.button_color = jg.value("button_color", 0xCCCCCC00u);
+            m_config.boxtype = jg.value("boxtype", 2);
             m_config.btn_boxtype = jg.value("btn_boxtype", 2);
             m_config.label_boxtype = jg.value("label_boxtype", 0);
         }
 
         if (j.contains("tracker")) {
             auto& jt = j["tracker"];
-            m_config.tracker_bg = jt.value("bg", 0x1E1E1E00);
-            m_config.tracker_text = jt.value("text", 0xC8C8C800);
-            m_config.tracker_cursor = jt.value("cursor", 0xFFFF0000);
-            m_config.tracker_row_highlight = jt.value("row_highlight", 0x3C3C5000);
-            m_config.tracker_lpb_highlight = jt.value("lpb_highlight", 0x2D2D3700);
-            m_config.tracker_note = jt.value("note", 0xB4B4FF00);
-            m_config.tracker_sample = jt.value("sample", 0xB4FFB400);
-            m_config.tracker_volume = jt.value("volume", 0xFFB4B400);
-            m_config.tracker_effect = jt.value("effect", 0xFFFFB400);
+            m_config.tracker_bg = jt.value("bg", 0x1E1E1E00u);
+            m_config.tracker_text = jt.value("text", 0xC8C8C800u);
+            m_config.tracker_cursor = jt.value("cursor", 0xFFFF0000u);
+            m_config.tracker_row_highlight = jt.value("row_highlight", 0x3C3C5000u);
+            m_config.tracker_lpb_highlight = jt.value("lpb_highlight", 0x2D2D3700u);
+            m_config.tracker_note = jt.value("note", 0xB4B4FF00u);
+            m_config.tracker_sample = jt.value("sample", 0xB4FFB400u);
+            m_config.tracker_volume = jt.value("volume", 0xFFB4B400u);
+            m_config.tracker_effect = jt.value("effect", 0xFFFFB400u);
         }
 
         if (j.contains("keyboard")) {
             m_config.keyboard_layout = j["keyboard"].value("layout", 0);
         }
     } catch (const std::exception& e) {
-        std::cerr << "Error loading config: " << e.what() << std::endl;
+        std::cerr << "Error loading config from " << path << ": " << e.what() << std::endl;
     }
 }
 
-void ConfigManager::save() {
-    std::string path = get_config_path();
+void ConfigManager::write_to(const std::string& path) {
     try {
         json j;
         
@@ -147,8 +144,29 @@ void ConfigManager::save() {
         std::ofstream f(path);
         f << j.dump(4);
     } catch (const std::exception& e) {
-        std::cerr << "Error saving config: " << e.what() << std::endl;
+        std::cerr << "Error saving config to " << path << ": " << e.what() << std::endl;
     }
+}
+
+void ConfigManager::load() {
+    std::string path = get_config_path();
+    if (!fs::exists(path)) {
+        save(); // Save defaults if file doesn't exist yet
+        return;
+    }
+    read_from(path);
+}
+
+void ConfigManager::load_from(const std::string& path) {
+    read_from(path);
+}
+
+void ConfigManager::save() {
+    write_to(get_config_path());
+}
+
+void ConfigManager::save_to(const std::string& path) {
+    write_to(path);
 }
 
 } // namespace disgrace_ns

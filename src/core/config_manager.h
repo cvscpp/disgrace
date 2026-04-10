@@ -66,6 +66,10 @@ public:
 
     void load();
     void save();
+    void load_from(const std::string& path);
+    void save_to(const std::string& path);
+
+    std::string config_path();  // path to the default config file
 
     const Config& config() const { return m_config; }
     Config& config() { return m_config; }
@@ -73,6 +77,8 @@ public:
 private:
     ConfigManager();
     std::string get_config_path();
+    void write_to(const std::string& path);
+    void read_from(const std::string& path);
 
     Config m_config;
 };

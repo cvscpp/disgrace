@@ -7,6 +7,7 @@
 #include <wx/checkbox.h>
 #include <wx/spinctrl.h>
 #include <wx/stattext.h>
+#include <wx/listctrl.h>
 
 namespace disgrace_ns {
 
@@ -46,9 +47,8 @@ private:
     wxChoice* m_btn_boxtype_choice;
 
     wxChoice* m_kbd_layout;
-    wxChoice* m_action_choice;
-    wxButton* m_assign_btn;
-    wxStaticText* m_current_binding_box;
+    wxListCtrl* m_shortcut_list;   // scrollable shortcut reference list
+    wxButton*   m_assign_btn;
 
     void init_audio_grp(int x, int y, int w, int h);
     void init_midi_grp(int x, int y, int w, int h);
@@ -56,6 +56,7 @@ private:
     void init_gui_grp(int x, int y, int w, int h);
     void init_kbd_grp(int x, int y, int w, int h);
     void init_misc_grp(int x, int y, int w, int h);
+    void populate_shortcut_list();
 
     void on_reinit_audio(wxCommandEvent& event);
     void on_reinit_midi(wxCommandEvent& event);
@@ -69,6 +70,11 @@ private:
     void on_btn_boxtype(wxCommandEvent& event);
     void on_kbd_layout(wxCommandEvent& event);
     void on_assign_key(wxCommandEvent& event);
+    void on_reset_keys(wxCommandEvent& event);
+    void on_save_settings(wxCommandEvent& event);
+    void on_load_settings(wxCommandEvent& event);
+    void on_export_settings(wxCommandEvent& event);
+    void on_import_settings(wxCommandEvent& event);
 
     wxDECLARE_EVENT_TABLE();
 };

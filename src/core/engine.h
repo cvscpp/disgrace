@@ -75,6 +75,7 @@ public:
     bool initialize();
     void shutdown();
     void save_config();
+    void load_config();  // Re-apply config fields to engine (no audio reinit)
     void new_project();
     void reinitialize_audio(uint32_t num_ins = 2, uint32_t num_outs = 2,
                             uint32_t num_midi_ins = 1, uint32_t num_midi_outs = 1);
@@ -261,6 +262,12 @@ public:
     unsigned int m_tracker_volume = 0xFFB4B4FF;
     unsigned int m_tracker_effect = 0xFFFFB4FF;
 
+    // UI accent colors
+    unsigned int m_selection_color = 0x0078D4FF;  // active item highlight
+    unsigned int m_warning_color   = 0xFF4444FF;  // destructive actions / error indicators
+    unsigned int m_input_bg_color  = 0xFFFFFFFF;  // text input backgrounds
+    unsigned int m_label_color     = 0x666666FF;  // secondary labels / captions
+
     KeyBindings m_key_bindings;
 
     uint32_t sample_rate() const { return m_sample_rate; }
@@ -285,6 +292,8 @@ public:
     friend class XrnsImporter;
 
 private:
+    void propagate_sample_rate(uint32_t sr);
+
     disgrace_ns::UndoStack m_undo;
     bool m_initialized;
     ::std::unique_ptr<disgrace_ns::AudioBackend> m_backend;

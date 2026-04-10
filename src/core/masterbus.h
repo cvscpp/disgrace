@@ -44,6 +44,10 @@ public:
                  float* r,
                  size_t nframes);
 
+    void set_sample_rate(float sr) {
+        m_filter.set_sample_rate(sr);
+    }
+
     float meter_l() const;
     float meter_r() const;
 

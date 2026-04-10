@@ -66,7 +66,6 @@ private:
     wxSpinCtrl* m_lpb_spin;
     wxSpinCtrl* m_octave_spin;
     wxSpinCtrl* m_step_spin;
-    wxStaticText* m_status;
     wxStaticText* m_clock;
     class VUMeter* m_meter_l;
     class VUMeter* m_meter_r;

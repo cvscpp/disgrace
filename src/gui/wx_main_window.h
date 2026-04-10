@@ -66,7 +66,7 @@ private:
 
     wxTimer* m_timer;
     wxNotebook* m_tabs;
-    wxStatusBar* m_status;
+    wxStatusBar* m_status = nullptr;
 
     TransportBar* m_transport;
     ProjectPanel* m_project_panel;

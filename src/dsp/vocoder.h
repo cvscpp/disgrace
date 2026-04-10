@@ -81,10 +81,15 @@ public:
     std::string name() const override { return "Vocoder"; }
     std::string type_name() const override { return "Vocoder"; }
 
+    void set_sample_rate(float sr) override {
+        m_sample_rate = sr;
+        update_bands();
+    }
+
     void process(float* l, float* r, size_t nframes) override {
         if (m_bypassed) return;
 
-        float sr = 44100.0f; 
+        float sr = m_sample_rate;
         float att_coeff = std::exp(-1.0f / (attack * sr + 1.0f));
         float rel_coeff = std::exp(-1.0f / (release * sr + 1.0f));
 
@@ -128,7 +133,7 @@ public:
     }
 
     void update_bands() {
-        float sr = 44100.0f;
+        float sr = m_sample_rate;
         float min_f = 80.0f;
         float max_f = 10000.0f;
         float q = 1.0f / (bandwidth + 0.05f);
@@ -187,6 +192,7 @@ public:
 private:
     Band m_bands[NUM_BANDS];
     float m_saw_phase = 0;
+    float m_sample_rate = 44100.0f;
 };
 
 } // namespace disgrace_ns

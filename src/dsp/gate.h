@@ -37,12 +37,14 @@ public:
     std::string name() const override { return "Gate"; }
     std::string type_name() const override { return "Gate"; }
 
+    void set_sample_rate(float sr) override { m_sample_rate = sr; }
+
     void process(float* l, float* r, size_t nframes) override
     {
         if (m_bypassed) return;
 
-        float attack_coeff = std::exp(-1.0f / (attack * 44100.0f));
-        float release_coeff = std::exp(-1.0f / (release * 44100.0f));
+        float attack_coeff = std::exp(-1.0f / (attack * m_sample_rate));
+        float release_coeff = std::exp(-1.0f / (release * m_sample_rate));
 
         for (size_t i = 0; i < nframes; ++i)
         {
@@ -98,6 +100,7 @@ public:
 private:
     float m_envelope = 0.0f;
     float m_gain = 1.0f;
+    float m_sample_rate = 44100.0f;
 };
 
 } // namespace disgrace_ns

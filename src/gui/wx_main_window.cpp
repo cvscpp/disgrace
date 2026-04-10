@@ -29,6 +29,7 @@
 #include "wx_help_panel.h"
 #include "../core/engine.h"
 #include <wx/combobox.h>
+#include <iostream>
 
 namespace disgrace_ns {
 

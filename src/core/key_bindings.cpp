@@ -18,6 +18,7 @@
 
 #include "key_bindings.h"
 #include <cstring>
+#include <vector>
 
 namespace disgrace_ns {
 
@@ -322,6 +323,85 @@ std::string KeyBindings::get_key_name(Action action) const {
         }
     }
     return name;
+}
+
+const std::vector<Action>& KeyBindings::all_actions() {
+    static const std::vector<Action> actions = {
+        // Transport
+        Action::Play,
+        Action::PlaySong,
+        Action::PlayPattern,
+        Action::PlayFromPosition,
+        Action::Stop,
+        Action::Record,
+        Action::ToggleMetronome,
+        // Edit
+        Action::Undo,
+        Action::Redo,
+        Action::Copy,
+        Action::Cut,
+        Action::Paste,
+        Action::Clear,
+        Action::SelectAll,
+        // Navigation
+        Action::MoveUp,
+        Action::MoveDown,
+        Action::MoveLeft,
+        Action::MoveRight,
+        Action::JumpToNextColumn,
+        Action::JumpToPrevColumn,
+        Action::JumpToRow0,
+        Action::JumpToRow16,
+        Action::JumpToRow32,
+        Action::JumpToRow48,
+        // Pattern
+        Action::InsertRow,
+        Action::DeleteRow,
+        Action::InsertPattern,
+        Action::DeletePattern,
+        Action::DuplicatePattern,
+        Action::NextPattern,
+        Action::PrevPattern,
+        Action::IncPatternIndex,
+        Action::DecPatternIndex,
+        Action::NextOrderPos,
+        Action::PrevOrderPos,
+        // Track
+        Action::MuteTrack,
+        Action::SoloTrack,
+        // Octave
+        Action::OctaveUp,
+        Action::OctaveDown,
+        // Notes — row 1 (lower octave)
+        Action::NoteC,
+        Action::NoteCs,
+        Action::NoteD,
+        Action::NoteDs,
+        Action::NoteE,
+        Action::NoteF,
+        Action::NoteFs,
+        Action::NoteG,
+        Action::NoteGs,
+        Action::NoteA,
+        Action::NoteAs,
+        Action::NoteB,
+        // Notes — row 2 (upper octave)
+        Action::NoteOff,
+        Action::NoteC2,
+        Action::NoteCs2,
+        Action::NoteD2,
+        Action::NoteDs2,
+        Action::NoteE2,
+        Action::NoteF2,
+        Action::NoteFs2,
+        Action::NoteG2,
+        Action::NoteGs2,
+        Action::NoteA2,
+        Action::NoteAs2,
+        Action::NoteB2,
+        Action::NoteC3,
+    };
+    return actions;
 }
 
 } // namespace disgrace_ns

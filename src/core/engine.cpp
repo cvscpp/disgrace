@@ -18,6 +18,7 @@
 
 #include "engine.h"
 #include "config_manager.h"
+#include "../gui/theme.h"
 #include "../audio/audio_backend.h"
 #include "../audio/jack_backend.h"
 #include "../audio/null_backend.h"
@@ -82,14 +83,51 @@ bool Engine::initialize() {
     m_tracker_volume = conf.tracker_volume;
     m_tracker_effect = conf.tracker_effect;
 
+    m_key_bindings.set_layout((KeyboardLayout)conf.keyboard_layout);
+    ThemeManager::apply_theme_and_settings(*this);
+
     new_project();
     if (!m_backend->start()) {
         std::cerr << "Failed to start JACK backend, falling back to null backend." << std::endl;
         m_backend = std::make_unique<NullBackend>();
         m_backend->start();
     }
+    propagate_sample_rate(m_backend->sample_rate());
     m_initialized = true;
     return true;
+}
+
+void Engine::load_config() {
+    const auto& conf = ConfigManager::instance().config();
+    m_num_ins = conf.num_audio_ins;
+    m_num_outs = conf.num_audio_outs;
+    m_num_midi_ins = conf.num_midi_ins;
+    m_num_midi_outs = conf.num_midi_outs;
+    m_gui_button_height = conf.gui_button_height;
+    m_gui_font_size = conf.gui_font_size;
+    m_gui_theme = conf.gui_theme;
+    m_waveform_color = conf.waveform_color;
+    m_bg_color = conf.bg_color;
+    m_fg_color = conf.fg_color;
+    m_button_color = conf.button_color;
+    m_boxtype = conf.boxtype;
+    m_btn_boxtype = conf.btn_boxtype;
+    m_label_boxtype = conf.label_boxtype;
+
+    m_tracker_bg = conf.tracker_bg;
+    m_tracker_text = conf.tracker_text;
+    m_tracker_cursor = conf.tracker_cursor;
+    m_tracker_row_highlight = conf.tracker_row_highlight;
+    m_tracker_lpb_highlight = conf.tracker_lpb_highlight;
+    m_tracker_note = conf.tracker_note;
+    m_tracker_sample = conf.tracker_sample;
+    m_tracker_volume = conf.tracker_volume;
+    m_tracker_effect = conf.tracker_effect;
+
+    m_key_bindings.set_layout((KeyboardLayout)conf.keyboard_layout);
+
+    // Re-apply theme-derived accent colors
+    ThemeManager::apply_theme_and_settings(*this);
 }
 
 void Engine::save_config() {
@@ -187,10 +225,22 @@ void Engine::reinitialize_audio(uint32_t num_ins, uint32_t num_outs, uint32_t nu
         m_backend = std::make_unique<NullBackend>();
         m_backend->start();
     }
+    propagate_sample_rate(m_backend->sample_rate());
 }
 
 bool Engine::audio_active() const { return m_initialized; }
 bool Engine::is_playing() const { return transport().is_playing(); }
+
+void Engine::propagate_sample_rate(uint32_t sr) {
+    if (sr == 0) sr = 44100;
+    m_sample_rate = sr;
+    m_timing.set_sample_rate(sr);
+    m_metronome.set_sample_rate((double)sr);
+    for (auto& track : m_tracks) track.chain().set_sample_rate((float)sr);
+    for (auto& bus : m_buses) bus.chain().set_sample_rate((float)sr);
+    m_master.set_sample_rate((float)sr);
+    for (auto& inst : m_instruments) inst->set_sample_rate((double)sr);
+}
 
 void Engine::start() { 
     transport().play();

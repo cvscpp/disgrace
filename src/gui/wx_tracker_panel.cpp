@@ -19,6 +19,8 @@
 #include "wx_tracker_panel.h"
 #include "wx_tracker_view.h"
 #include "wx_detached_frame.h"
+
+#include <wx/artprov.h>
 #include "../core/engine.h"
 #include "../instrument/voice_instrument.h"
 
@@ -45,47 +47,82 @@ TrackerPanel::TrackerPanel(wxWindow* parent, Engine& engine)
 {
     wxBoxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
 
-    int btn_h = 25;
+    const int BTN_H = 26;
+    const int PAD   = 2;   // wxALL border per button
+    const int M     = PAD * 2;  // total horizontal margin per button slot
 
-    wxBoxSizer* btn_sizer = new wxBoxSizer(wxHORIZONTAL);
-
-    m_detach_btn = new wxButton(this, ID_DETACH, "[]", wxDefaultPosition, wxSize(30, 20));
-    btn_sizer->Add(m_detach_btn, 0, wxALL, 2);
-
-    m_add_pattern_btn = new wxButton(this, ID_ADD_PATTERN, "Add", wxDefaultPosition, wxSize(40, btn_h));
-    m_add_pattern_btn->SetWindowStyleFlag(wxBU_EXACTFIT);
-    btn_sizer->Add(m_add_pattern_btn, 0, wxALL, 2);
-
-    m_remove_pattern_btn = new wxButton(this, ID_REMOVE_PATTERN, "Rem", wxDefaultPosition, wxSize(40, btn_h));
-    m_remove_pattern_btn->SetWindowStyleFlag(wxBU_EXACTFIT);
-    btn_sizer->Add(m_remove_pattern_btn, 0, wxALL, 2);
-
-    m_copy_pattern_btn = new wxButton(this, ID_COPY_PATTERN, "Copy", wxDefaultPosition, wxSize(40, btn_h));
-    m_copy_pattern_btn->SetWindowStyleFlag(wxBU_EXACTFIT);
-    btn_sizer->Add(m_copy_pattern_btn, 0, wxALL, 2);
-
-    m_dec_pattern_btn = new wxButton(this, ID_DEC_PATTERN, "-", wxDefaultPosition, wxSize(60, btn_h));
-    btn_sizer->Add(m_dec_pattern_btn, 0, wxALL, 2);
-
-    m_inc_pattern_btn = new wxButton(this, ID_INC_PATTERN, "+", wxDefaultPosition, wxSize(60, btn_h));
-    btn_sizer->Add(m_inc_pattern_btn, 0, wxALL, 2);
-
-    m_follow_btn = new wxToggleButton(this, ID_FOLLOW_PLAYBACK, "Follow", wxDefaultPosition, wxSize(120, btn_h));
-    m_follow_btn->SetValue(true);
-    m_follow_playback = true;
-    btn_sizer->Add(m_follow_btn, 0, wxALL, 2);
-
-    main_sizer->Add(btn_sizer, 0, wxEXPAND | wxALL, 2);
-
+    // ── Content row: [left column] [tracker view] ──────────────────────────
     wxBoxSizer* content_sizer = new wxBoxSizer(wxHORIZONTAL);
 
-    int pattern_list_width = 120;
+    // ── Left column: 3 button rows + pattern list ──────────────────────────
+    wxBoxSizer* left_col = new wxBoxSizer(wxVERTICAL);
 
-    m_pattern_scroll = new wxScrolledWindow(this, wxID_ANY, wxDefaultPosition, wxSize(pattern_list_width, -1), wxVSCROLL);
+    // Pre-compute button widths so each row exactly matches pattern_list_width.
+    //   Each slot = total / n_buttons; button pixel width = slot - M.
+    const int PLW   = 120;      // pattern list width (matches wxSize below)
+    const int B2W   = PLW / 3 - M;   // row-2: 3 equal buttons  → 36px
+    const int B3W   = PLW / 2 - M;   // row-3: 2 equal buttons  → 56px
+    const int B1FW  = PLW - (BTN_H + M) - M;  // row-1: follow fills rest → 86px
+
+    // Row 1: Detach  |  Follow
+    wxBoxSizer* row1 = new wxBoxSizer(wxHORIZONTAL);
+    m_detach_btn = new wxButton(this, ID_DETACH, "", wxDefaultPosition, wxSize(BTN_H, BTN_H));
+    m_detach_btn->SetMinSize(wxSize(BTN_H, BTN_H));
+    m_detach_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FULL_SCREEN, wxART_BUTTON, wxSize(14, 14)));
+    m_detach_btn->SetToolTip("Detach / re-attach tracker view");
+    row1->Add(m_detach_btn, 0, wxALL, PAD);
+    m_follow_btn = new wxToggleButton(this, ID_FOLLOW_PLAYBACK, wxString::FromUTF8("↻"), wxDefaultPosition, wxSize(B1FW, BTN_H));
+    m_follow_btn->SetMinSize(wxSize(B1FW, BTN_H));
+    m_follow_btn->SetValue(true);
+    m_follow_playback = true;
+    m_follow_btn->SetToolTip("Follow playback position");
+    row1->Add(m_follow_btn, 0, wxALL, PAD);
+    left_col->Add(row1, 0, wxEXPAND);
+
+    // Row 2: Add  |  Remove  |  Copy
+    wxBoxSizer* row2 = new wxBoxSizer(wxHORIZONTAL);
+    m_add_pattern_btn = new wxButton(this, ID_ADD_PATTERN, "", wxDefaultPosition, wxSize(B2W, BTN_H));
+    m_add_pattern_btn->SetMinSize(wxSize(B2W, BTN_H));
+    m_add_pattern_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_PLUS, wxART_BUTTON, wxSize(14, 14)));
+    m_add_pattern_btn->SetToolTip("Add pattern to order");
+    row2->Add(m_add_pattern_btn, 0, wxALL, PAD);
+    m_remove_pattern_btn = new wxButton(this, ID_REMOVE_PATTERN, "", wxDefaultPosition, wxSize(B2W, BTN_H));
+    m_remove_pattern_btn->SetMinSize(wxSize(B2W, BTN_H));
+    m_remove_pattern_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_MINUS, wxART_BUTTON, wxSize(14, 14)));
+    m_remove_pattern_btn->SetToolTip("Remove pattern from order");
+    row2->Add(m_remove_pattern_btn, 0, wxALL, PAD);
+    m_copy_pattern_btn = new wxButton(this, ID_COPY_PATTERN, "", wxDefaultPosition, wxSize(B2W, BTN_H));
+    m_copy_pattern_btn->SetMinSize(wxSize(B2W, BTN_H));
+    m_copy_pattern_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_COPY, wxART_BUTTON, wxSize(14, 14)));
+    m_copy_pattern_btn->SetToolTip("Duplicate pattern in order");
+    row2->Add(m_copy_pattern_btn, 0, wxALL, PAD);
+    left_col->Add(row2, 0, wxEXPAND);
+
+    // Row 3: Prev position  |  Next position
+    wxBoxSizer* row3 = new wxBoxSizer(wxHORIZONTAL);
+    m_dec_pattern_btn = new wxButton(this, ID_DEC_PATTERN, "", wxDefaultPosition, wxSize(B3W, BTN_H));
+    m_dec_pattern_btn->SetMinSize(wxSize(B3W, BTN_H));
+    m_dec_pattern_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_BACK, wxART_BUTTON, wxSize(14, 14)));
+    m_dec_pattern_btn->SetToolTip("Decrement pattern index at current order position");
+    row3->Add(m_dec_pattern_btn, 0, wxALL, PAD);
+    m_inc_pattern_btn = new wxButton(this, ID_INC_PATTERN, "", wxDefaultPosition, wxSize(B3W, BTN_H));
+    m_inc_pattern_btn->SetMinSize(wxSize(B3W, BTN_H));
+    m_inc_pattern_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_FORWARD, wxART_BUTTON, wxSize(14, 14)));
+    m_inc_pattern_btn->SetToolTip("Increment pattern index at current order position");
+    row3->Add(m_inc_pattern_btn, 0, wxALL, PAD);
+    left_col->Add(row3, 0, wxEXPAND);
+
+    // Pattern list scroll (expands vertically to fill remaining space)
+    int pattern_list_width = 120;
+    m_pattern_scroll = new wxScrolledWindow(this, wxID_ANY, wxDefaultPosition,
+                                            wxSize(pattern_list_width, -1), wxVSCROLL);
     m_pattern_scroll->SetScrollRate(0, 25);
     m_pattern_list_container = new wxPanel(m_pattern_scroll, wxID_ANY);
-    content_sizer->Add(m_pattern_scroll, 0, wxEXPAND | wxALL, 2);
+    left_col->Add(m_pattern_scroll, 1, wxEXPAND | wxALL, 2);
 
+    content_sizer->Add(left_col, 0, wxEXPAND | wxALL, 0);
+
+    // Tracker view (fills remaining horizontal space)
     m_tracker = new TrackerView(this, wxID_ANY, m_engine.pattern(), m_engine);
     content_sizer->Add(m_tracker, 1, wxEXPAND | wxALL, 2);
 
@@ -113,6 +150,7 @@ TrackerPanel::TrackerPanel(wxWindow* parent, Engine& engine)
     
     // Copy/Paste/Search buttons
     m_voice_copy_btn = new wxButton(this, wxID_ANY, "Copy", wxDefaultPosition, wxSize(50, 24));
+    m_voice_copy_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_COPY, wxART_BUTTON, wxSize(14, 14)));
     m_voice_copy_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
         if (m_last_voice_idx != 255) {
             size_t current_track = m_engine.m_record_track;
@@ -129,6 +167,7 @@ TrackerPanel::TrackerPanel(wxWindow* parent, Engine& engine)
     voice_sizer->Add(m_voice_copy_btn, 0, wxALL, 2);
     
     m_voice_paste_btn = new wxButton(this, wxID_ANY, "Paste", wxDefaultPosition, wxSize(55, 24));
+    m_voice_paste_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_PASTE, wxART_BUTTON, wxSize(14, 14)));
     m_voice_paste_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
         if (m_last_voice_idx != 255 && !m_voice_clipboard.empty()) {
             size_t current_track = m_engine.m_record_track;
@@ -146,6 +185,7 @@ TrackerPanel::TrackerPanel(wxWindow* parent, Engine& engine)
     voice_sizer->Add(m_voice_paste_btn, 0, wxALL, 2);
     
     m_voice_search_btn = new wxButton(this, wxID_ANY, "Find", wxDefaultPosition, wxSize(45, 24));
+    m_voice_search_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FIND, wxART_BUTTON, wxSize(14, 14)));
     m_voice_search_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
         wxString search = wxGetTextFromUser("Search for text:", "Find in Voice Instrument");
         if (!search.IsEmpty()) {
@@ -282,8 +322,8 @@ void TrackerPanel::update_pattern_list() {
         pos_str.Printf("%02zu:", i);
         wxButton* b = new wxButton(m_pattern_list_container, wxID_ANY, pos_str, wxPoint(start_x, cur_y), wxSize(35, row_h));
         if (m_selected_order_idx == (int)i) {
-            b->SetBackgroundColour(wxColour(0, 120, 215));
-            b->SetForegroundColour(*wxWHITE);
+            b->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_selection_color));
+            b->SetForegroundColour(ThemeManager::contrastColor(m_engine.m_selection_color));
         } else {
             b->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_bg_color));
             b->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_fg_color));

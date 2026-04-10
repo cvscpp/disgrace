@@ -47,6 +47,8 @@ public:
     virtual void note_off(size_t column_index = 0) = 0;
     virtual void panic() = 0;
 
+    virtual void set_sample_rate(double sr) {}
+
     virtual void set_volume(float vol) = 0;
 
     virtual void set_pitch(float freq) = 0;

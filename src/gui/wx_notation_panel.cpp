@@ -17,6 +17,7 @@
  */
 
 #include <wx/app.h>
+#include <wx/artprov.h>
 #include <wx/dcclient.h>
 #include <wx/msgdlg.h>
 #include <wx/utils.h>
@@ -58,11 +59,17 @@ NotationPanel::NotationPanel(wxWindow* parent, Engine& engine)
     int btn_h = 25;
 
     m_zoom_in_btn = new wxButton(this, ID_ZOOM_IN, "Zoom In", wxDefaultPosition, wxSize(btn_w, btn_h));
+    m_zoom_in_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_PLUS, wxART_BUTTON, wxSize(16, 16)));
     m_zoom_out_btn = new wxButton(this, ID_ZOOM_OUT, "Zoom Out", wxDefaultPosition, wxSize(btn_w, btn_h));
+    m_zoom_out_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_MINUS, wxART_BUTTON, wxSize(16, 16)));
     m_view_all_btn = new wxButton(this, ID_VIEW_ALL, "View All", wxDefaultPosition, wxSize(btn_w, btn_h));
+    m_view_all_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_HOME, wxART_BUTTON, wxSize(16, 16)));
     m_view_sel_btn = new wxButton(this, ID_VIEW_SEL, "View Sel", wxDefaultPosition, wxSize(btn_w, btn_h));
+    m_view_sel_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FIND, wxART_BUTTON, wxSize(16, 16)));
     m_preview_all_btn = new wxButton(this, ID_PREVIEW_ALL, "Preview All", wxDefaultPosition, wxSize(100, btn_h));
+    m_preview_all_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_FORWARD, wxART_BUTTON, wxSize(16, 16)));
     m_detach_btn = new wxButton(this, ID_DETACH, "[]", wxDefaultPosition, wxSize(30, btn_h));
+    m_detach_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FULL_SCREEN, wxART_BUTTON, wxSize(16, 16)));
 
     btn_sizer->Add(m_zoom_in_btn, 0, wxALL, 2);
     btn_sizer->Add(m_zoom_out_btn, 0, wxALL, 2);
@@ -189,6 +196,7 @@ void NotationView::update_view() {
                      inst->type() == InstrumentType::Midi)) {
             int ty = 30 + t * track_h;
             wxButton* b = new wxButton(this, ID_PREVIEW_BASE + t, "Preview (LY)", wxPoint(5, ty + 70), wxSize(110, 25));
+            b->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_FORWARD, wxART_BUTTON, wxSize(14, 14)));
             wxFont btn_font(8, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
             b->SetFont(btn_font);
             b->Bind(wxEVT_BUTTON, &NotationView::on_preview_track, this);
@@ -377,13 +385,13 @@ void NotationView::draw(wxDC& dc) {
 
         wxFont bold_font(11, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
         dc.SetFont(bold_font);
-        dc.SetTextForeground(*wxWHITE);
+        dc.SetTextForeground(ThemeManager::toWxColour(m_engine.m_fg_color));
         wxString name = track_obj.name().substr(0, 14);
         dc.DrawText(name, 5, ty + 5);
 
         wxFont normal_font(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
         dc.SetFont(normal_font);
-        dc.SetTextForeground(wxColour(200, 200, 200));
+        dc.SetTextForeground(ThemeManager::toWxColour(m_engine.m_tracker_text));
         wxString inst_name = inst->name().substr(0, 18);
         dc.DrawText(inst_name, 5, ty + 20);
         
@@ -435,7 +443,7 @@ void NotationView::draw(wxDC& dc) {
 
     if (m_engine.transport_state() != TransportState::Stopped) {
         int play_x = header_w + tick_to_x((int)m_engine.m_current_row);
-        dc.SetPen(wxPen(wxColour(255, 255, 255)));
+        dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_cursor)));
         dc.DrawLine(play_x, 0, play_x, virtual_size.GetHeight());
     }
 
@@ -445,7 +453,8 @@ void NotationView::draw(wxDC& dc) {
         int sx1 = header_w + tick_to_x(s1);
         int sx2 = header_w + tick_to_x(s2);
         
-        dc.SetBrush(wxBrush(wxColour(0, 120, 215, 64))); 
+        wxColour sel_col = ThemeManager::toWxColour(m_engine.m_selection_color);
+        dc.SetBrush(wxBrush(wxColour(sel_col.Red(), sel_col.Green(), sel_col.Blue(), 64)));
         dc.SetPen(*wxTRANSPARENT_PEN);
         dc.DrawRectangle(sx1, 20, sx2 - sx1, virtual_size.GetHeight() - 20);
     }

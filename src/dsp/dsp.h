@@ -37,6 +37,8 @@ public:
     virtual std::string name() const = 0;
     virtual std::string type_name() const = 0;
 
+    virtual void set_sample_rate(float sr) {}
+
     bool is_bypassed() const { return m_bypassed; }
     void set_bypass(bool b) { m_bypassed = b; }
 

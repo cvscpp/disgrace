@@ -17,11 +17,15 @@
  */
 
 #include "wx_transportbar.h"
+#include "theme.h"
 #include "wx_vu_meter.h"
 #include "wx_main_window.h"
+
+#include <wx/artprov.h>
 #include "../core/engine.h"
 
 #include <wx/sizer.h>
+#include <wx/statline.h>
 #include <cstdio>
 
 namespace disgrace_ns {
@@ -53,110 +57,111 @@ wxEND_EVENT_TABLE()
 TransportBar::TransportBar(wxWindow* parent, wxWindowID id, Engine& engine)
     : wxPanel(parent, id), m_engine(engine)
 {
-    SetSizeHints(wxDefaultCoord, wxDefaultCoord, -1, 40);
-
     wxBoxSizer* main_sizer = new wxBoxSizer(wxHORIZONTAL);
-    main_sizer->SetMinSize(wxSize(-1, 40));
+    // Guarantee enough height for GTK spin buttons (both arrows visible)
+    SetMinSize(wxSize(-1, 50));
 
-    int btn_w = 60;
-    int btn_h = 25;
-    int btn_spacing = 2;
+    const int PAD   = 4;   // standard item padding
+    const int GPAD  = 6;   // gap around group separators
+    const int BTN_W = 62;
+    const int BTN_H = -1;  // natural height
+    const int SPN_H = 30;  // explicit spin height — ensures both arrows render
 
-    m_play = new wxButton(this, ID_PLAY, "Play", wxDefaultPosition, wxSize(btn_w, btn_h));
-    main_sizer->Add(m_play, 0, wxALL, btn_spacing);
+    auto add_sep = [&]() {
+        auto* sep = new wxStaticLine(this, wxID_ANY, wxDefaultPosition,
+                                     wxDefaultSize, wxLI_VERTICAL);
+        main_sizer->Add(sep, 0, wxEXPAND | wxLEFT | wxRIGHT, GPAD);
+    };
 
-    m_stop = new wxButton(this, ID_STOP, "Stop", wxDefaultPosition, wxSize(btn_w, btn_h));
-    main_sizer->Add(m_stop, 0, wxALL, btn_spacing);
+    // --- Transport buttons ---
+    m_play = new wxButton(this, ID_PLAY, "Play", wxDefaultPosition, wxSize(BTN_W, BTN_H));
+    m_play->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_FORWARD, wxART_BUTTON, wxSize(16, 16)));
+    main_sizer->Add(m_play, 0, wxALIGN_CENTER_VERTICAL | wxALL, PAD);
 
-    m_record = new wxToggleButton(this, ID_RECORD, "Edit", wxDefaultPosition, wxSize(btn_w, btn_h));
-    main_sizer->Add(m_record, 0, wxALL, btn_spacing);
+    m_stop = new wxButton(this, ID_STOP, "Stop", wxDefaultPosition, wxSize(BTN_W, BTN_H));
+    m_stop->SetBitmap(wxArtProvider::GetBitmap(wxART_STOP, wxART_BUTTON, wxSize(16, 16)));
+    main_sizer->Add(m_stop, 0, wxALIGN_CENTER_VERTICAL | wxALL, PAD);
 
-    m_loop = new wxToggleButton(this, ID_LOOP, "Loop", wxDefaultPosition, wxSize(btn_w, btn_h));
+    add_sep();
+
+    // --- Mode toggles ---
+    m_record = new wxToggleButton(this, ID_RECORD, "Edit", wxDefaultPosition, wxSize(BTN_W, BTN_H));
+    main_sizer->Add(m_record, 0, wxALIGN_CENTER_VERTICAL | wxALL, PAD);
+
+    m_loop = new wxToggleButton(this, ID_LOOP, "Loop", wxDefaultPosition, wxSize(BTN_W, BTN_H));
     m_loop->SetValue(false);
-    main_sizer->Add(m_loop, 0, wxALL, btn_spacing);
+    main_sizer->Add(m_loop, 0, wxALIGN_CENTER_VERTICAL | wxALL, PAD);
 
-    m_metronome = new wxToggleButton(this, ID_METRONOME, "Metro", wxDefaultPosition, wxSize(btn_w + 10, btn_h));
+    add_sep();
+
+    // --- Metronome ---
+    m_metronome = new wxToggleButton(this, ID_METRONOME, wxString::FromUTF8("♩"),
+                                     wxDefaultPosition, wxSize(BTN_W, BTN_H));
     m_metronome->SetValue(false);
-    main_sizer->Add(m_metronome, 0, wxALL, btn_spacing);
+    main_sizer->Add(m_metronome, 0, wxALIGN_CENTER_VERTICAL | wxALL, PAD);
 
-    m_metro_visual = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(15, 15), wxBORDER_SIMPLE);
-    m_metro_visual->SetBackgroundColour(*wxBLACK);
-    main_sizer->Add(m_metro_visual, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
+    m_metro_visual = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(14, 14), wxBORDER_SIMPLE);
+    m_metro_visual->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_bg));
+    main_sizer->Add(m_metro_visual, 0, wxALIGN_CENTER_VERTICAL | wxALL, PAD);
 
-    m_metro_vol = new wxSlider(this, wxID_ANY, 40, 0, 100, wxDefaultPosition, wxSize(60, -1));
+    m_metro_vol = new wxSlider(this, wxID_ANY, 40, 0, 100, wxDefaultPosition, wxSize(50, -1));
     m_metro_vol->Bind(wxEVT_SLIDER, &TransportBar::on_metro_vol, this);
-    main_sizer->Add(m_metro_vol, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
+    main_sizer->Add(m_metro_vol, 0, wxALIGN_CENTER_VERTICAL | wxALL, PAD);
 
-    int counter_w = 100;
+    add_sep();
 
-    wxStaticText* tempo_label = new wxStaticText(this, wxID_ANY, "BPM");
-    main_sizer->Add(tempo_label, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
+    // --- Numeric controls ---
+    auto add_spin = [&](const char* label, wxSpinCtrl*& spin, wxWindowID id,
+                        int lo, int hi, int val, int w) {
+        main_sizer->Add(new wxStaticText(this, wxID_ANY, label),
+                        0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 3);
+        spin = new wxSpinCtrl(this, id, wxEmptyString, wxDefaultPosition, wxSize(w, SPN_H));
+        spin->SetRange(lo, hi);
+        spin->SetValue(val);
+        main_sizer->Add(spin, 0, wxALIGN_CENTER_VERTICAL | wxALL, PAD);
+    };
 
-    m_tempo_spin = new wxSpinCtrl(this, ID_TEMPO, wxEmptyString, wxDefaultPosition, wxSize(counter_w, -1));
-    m_tempo_spin->SetRange(30, 300);
-    m_tempo_spin->SetValue((int)m_engine.tempo());
-    main_sizer->Add(m_tempo_spin, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
+    add_spin("BPM",  m_tempo_spin,  ID_TEMPO,   30, 300, (int)m_engine.tempo(),      120);
+    add_spin("LPB",  m_lpb_spin,    ID_LPB,      1, 128, (int)m_engine.lpb(),        120);
+    add_spin("Oct",  m_octave_spin, ID_OCTAVE,   0,   9, (int)m_engine.base_octave(),120);
+    add_spin("Step", m_step_spin,   ID_STEP,     1,  64, 1,                           120);
 
-    wxStaticText* lpb_label = new wxStaticText(this, wxID_ANY, "LPB");
-    main_sizer->Add(lpb_label, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
+    add_sep();
 
-    m_lpb_spin = new wxSpinCtrl(this, ID_LPB, wxEmptyString, wxDefaultPosition, wxSize(counter_w, -1));
-    m_lpb_spin->SetRange(1, 128);
-    m_lpb_spin->SetValue((int)m_engine.lpb());
-    main_sizer->Add(m_lpb_spin, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
-
-    wxStaticText* oct_label = new wxStaticText(this, wxID_ANY, "Oct");
-    main_sizer->Add(oct_label, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
-
-    m_octave_spin = new wxSpinCtrl(this, ID_OCTAVE, wxEmptyString, wxDefaultPosition, wxSize(counter_w, -1));
-    m_octave_spin->SetRange(0, 9);
-    m_octave_spin->SetValue((int)m_engine.base_octave());
-    main_sizer->Add(m_octave_spin, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
-
-    wxStaticText* step_label = new wxStaticText(this, wxID_ANY, "Step");
-    main_sizer->Add(step_label, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
-
-    m_step_spin = new wxSpinCtrl(this, ID_STEP, wxEmptyString, wxDefaultPosition, wxSize(counter_w, -1));
-    m_step_spin->SetRange(1, 64);
-    m_step_spin->SetValue(1);
-    main_sizer->Add(m_step_spin, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
-
-    m_status = new wxStaticText(this, wxID_ANY, "Stopped", wxDefaultPosition, wxSize(70, btn_h));
-    wxFont status_font = m_status->GetFont();
-    status_font.SetWeight(wxFONTWEIGHT_BOLD);
-    m_status->SetFont(status_font);
-    main_sizer->Add(m_status, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
-
-    m_clock = new wxStaticText(this, wxID_ANY, "00:00.000", wxDefaultPosition, wxSize(100, btn_h));
+    // --- Clock ---
+    m_clock = new wxStaticText(this, wxID_ANY, "00:00.000", wxDefaultPosition, wxSize(82, -1));
     wxFont clock_font = m_clock->GetFont();
     clock_font.SetFamily(wxFONTFAMILY_TELETYPE);
     clock_font.SetWeight(wxFONTWEIGHT_BOLD);
     clock_font.SetPointSize(12);
     m_clock->SetFont(clock_font);
-    m_clock->SetForegroundColour(wxColour(0, 0, 0));
-    main_sizer->Add(m_clock, 0, wxALIGN_CENTER_VERTICAL | wxALL, btn_spacing);
+    m_clock->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_fg_color));
+    main_sizer->Add(m_clock, 0, wxALIGN_CENTER_VERTICAL | wxALL, PAD);
 
+    add_sep();
+
+    // --- VU meters ---
     wxBoxSizer* meter_stack = new wxBoxSizer(wxVERTICAL);
-    
+
     wxBoxSizer* l_row = new wxBoxSizer(wxHORIZONTAL);
     wxStaticText* l_lbl = new wxStaticText(this, wxID_ANY, "L");
     wxFont mini_font = l_lbl->GetFont(); mini_font.SetPointSize(8); l_lbl->SetFont(mini_font);
     l_row->Add(l_lbl, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
     m_meter_l = new VUMeter(this, wxID_ANY, m_engine, true);
-    m_meter_l->SetMinSize(wxSize(80, 8));
+    m_meter_l->SetMinSize(wxSize(20, 8));
     l_row->Add(m_meter_l, 1, wxEXPAND);
-    meter_stack->Add(l_row, 1, wxEXPAND | wxBOTTOM, 1);
+    meter_stack->Add(l_row, 1, wxEXPAND | wxBOTTOM, 2);
 
     wxBoxSizer* r_row = new wxBoxSizer(wxHORIZONTAL);
     wxStaticText* r_lbl = new wxStaticText(this, wxID_ANY, "R");
     r_lbl->SetFont(mini_font);
     r_row->Add(r_lbl, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
     m_meter_r = new VUMeter(this, wxID_ANY, m_engine, true);
-    m_meter_r->SetMinSize(wxSize(80, 8));
+    m_meter_r->SetMinSize(wxSize(20, 8));
     r_row->Add(m_meter_r, 1, wxEXPAND);
     meter_stack->Add(r_row, 1, wxEXPAND);
 
-    main_sizer->Add(meter_stack, 1, wxEXPAND | wxALL, btn_spacing);
+    main_sizer->Add(meter_stack, 1, wxEXPAND | wxALL, PAD);
 
     m_clock_str = "00:00.000";
 
@@ -211,15 +216,6 @@ void TransportBar::update() {
     m_record->SetValue(m_engine.m_record_enabled);
 
     auto state = m_engine.transport_state();
-    switch (state) {
-        case TransportState::Stopped:
-            m_status->SetLabel("Stopped");
-            break;
-        case TransportState::Playing:
-            m_status->SetLabel("Playing");
-            break;
-    }
-
     double total_seconds = 0;
     if (state == TransportState::Stopped) {
         WxMainWindow* main_win = dynamic_cast<WxMainWindow*>(GetParent());
@@ -242,9 +238,9 @@ void TransportBar::update() {
     if (m_meter_r) m_meter_r->level(m_engine.master_meter_r());
 
     if (m_engine.is_playing() && m_engine.m_samples_until_next_beat < 1000) {
-        m_metro_visual->SetBackgroundColour(*wxGREEN);
+        m_metro_visual->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_cursor));
     } else {
-        m_metro_visual->SetBackgroundColour(*wxBLACK);
+        m_metro_visual->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_bg));
     }
 
     Refresh();

@@ -19,6 +19,9 @@
 #include <wx/wxprec.h>
 #include <wx/app.h>
 #include <wx/msgdlg.h>
+#include <wx/strconv.h>
+#include <wx/wxcrtbase.h>
+#include <locale.h>
 
 #include "gui/wx_main_window.h"
 #include "core/engine.h"
@@ -27,6 +30,25 @@ namespace disgrace_ns {
 class DisgraceApp : public wxApp {
 public:
     virtual bool OnInit() override;
+
+    // wxApp::SetCLocale() resets to the "C" locale for number formatting.
+    // On FreeBSD this breaks wxString's wchar_t ↔ multibyte conversions
+    // because "C" only covers ASCII.  Override to keep the UTF-8 locale we
+    // established in main().
+    virtual void SetCLocale() override {}
+
+    // Force UTF-8 early.
+    virtual bool Initialize(int& argc, wxChar** argv) override {
+        setenv("LANG", "C.UTF-8", 1);
+        setenv("LC_ALL", "C.UTF-8", 1);
+        setlocale(LC_ALL, "C.UTF-8");
+        
+        bool ok = wxApp::Initialize(argc, argv);
+        
+        wxUpdateLocaleIsUtf8();
+        wxConvCurrent = &wxConvUTF8;
+        return ok;
+    }
 
 private:
     Engine* m_engine = nullptr;
@@ -46,7 +68,7 @@ bool DisgraceApp::OnInit() {
             delete m_engine;
             return false;
         }
-        m_window = new WxMainWindow(1280, 800, wxString::FromUTF8("Disgrace"), *m_engine);
+        m_window = new WxMainWindow(1280, 800, "Disgrace", *m_engine);
         m_window->Show(true);
 
         return true;
@@ -60,5 +82,14 @@ bool DisgraceApp::OnInit() {
 } // namespace disgrace_ns
 
 int main(int argc, char** argv) {
+    // Aggressive locale forcing before wxWidgets takes over.
+    setenv("LANG", "C.UTF-8", 1);
+    setenv("LC_ALL", "C.UTF-8", 1);
+    setlocale(LC_ALL, "C.UTF-8");
+    
+    // On some FreeBSD systems, library version mismatches between GCC and Clang
+    // can cause crashes in std::string/wxString. Using the system compiler (clang++)
+    // is highly recommended.
+    
     return wxEntry(argc, argv);
 }

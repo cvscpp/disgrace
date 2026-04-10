@@ -101,6 +101,11 @@ public:
     std::string name() const override { return "Mastering Filter"; }
     std::string type_name() const override { return "MasteringFilter"; }
 
+    void set_sample_rate(float sr) override {
+        m_sample_rate = sr;
+        update_filters();
+    }
+
     void process(float* l, float* r, size_t nframes) override {
         if (m_bypassed) return;
         for (size_t i = 0; i < nframes; ++i) {
@@ -120,8 +125,8 @@ public:
     }
 
     void update_filters() {
-        m_hpf.set_hpf(hpf_freq, 0.707f, 44100.0f);
-        m_lpf.set_lpf(lpf_freq, 0.707f, 44100.0f);
+        m_hpf.set_hpf(hpf_freq, 0.707f, m_sample_rate);
+        m_lpf.set_lpf(lpf_freq, 0.707f, m_sample_rate);
     }
 
     float hpf_freq = 20.0f;
@@ -154,6 +159,7 @@ public:
 private:
     Biquad m_hpf;
     Biquad m_lpf;
+    float m_sample_rate = 44100.0f;
 };
 
 } // namespace disgrace_ns

@@ -109,6 +109,11 @@ public:
     std::string name() const override { return "Cabinet"; }
     std::string type_name() const override { return "Cabinet"; }
 
+    void set_sample_rate(float sr) override {
+        m_sample_rate = sr;
+        update_filters();
+    }
+
     void process(float* l, float* r, size_t nframes) override
     {
         if (m_bypassed) return;
@@ -167,12 +172,12 @@ public:
 
 private:
     void update_filters() {
-        float sr = 44100.0f;
-        m_filters[0].set_hpf(low_cut, 0.707f, sr);
-        m_filters[1].set_lpf(high_cut, 0.707f, sr);
-        m_filters[2].set_peaking(peak_freq, 0.707f, peak_gain, sr);
+        m_filters[0].set_hpf(low_cut, 0.707f, m_sample_rate);
+        m_filters[1].set_lpf(high_cut, 0.707f, m_sample_rate);
+        m_filters[2].set_peaking(peak_freq, 0.707f, peak_gain, m_sample_rate);
     }
     std::vector<Biquad> m_filters;
+    float m_sample_rate = 44100.0f;
 };
 
 } // namespace disgrace_ns

@@ -2,13 +2,79 @@
 #include "theme.h"
 #include "wx_main_window.h"
 #include "../core/engine.h"
+#include "../core/config_manager.h"
 
 #include <wx/sizer.h>
+#include <wx/statline.h>
 #include <wx/msgdlg.h>
+#include <wx/filedlg.h>
 #include <wx/colordlg.h>
 #include <wx/artprov.h>
+#include <wx/dialog.h>
 
 namespace disgrace_ns {
+
+// Modal dialog that waits for the user to press a single key combination.
+class KeyCaptureDialog : public wxDialog {
+public:
+    KeyCaptureDialog(wxWindow* parent)
+        : wxDialog(parent, wxID_ANY, "Assign Key",
+                   wxDefaultPosition, wxSize(300, 120),
+                   wxDEFAULT_DIALOG_STYLE & ~wxCLOSE_BOX)
+    {
+        m_key = -1;
+        m_mods = 0;
+
+        wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+        m_label = new wxStaticText(this, wxID_ANY, "Press a key combination...",
+                                   wxDefaultPosition, wxDefaultSize, wxALIGN_CENTRE_HORIZONTAL);
+        sizer->Add(m_label, 1, wxALL | wxEXPAND, 12);
+
+        wxButton* cancel = new wxButton(this, wxID_CANCEL, "Cancel");
+        sizer->Add(cancel, 0, wxALIGN_CENTER | wxBOTTOM, 8);
+        SetSizer(sizer);
+
+        // Capture key events on the dialog itself
+        Bind(wxEVT_KEY_DOWN, &KeyCaptureDialog::on_key, this);
+        m_label->Bind(wxEVT_KEY_DOWN, &KeyCaptureDialog::on_key, this);
+        SetFocus();
+    }
+
+    int captured_key()  const { return m_key; }
+    int captured_mods() const { return m_mods; }
+
+private:
+    wxStaticText* m_label;
+    int m_key;
+    int m_mods;
+
+    void on_key(wxKeyEvent& event) {
+        int key = event.GetKeyCode();
+        // Ignore bare modifier presses
+        if (key == WXK_SHIFT || key == WXK_CONTROL || key == WXK_ALT) {
+            event.Skip();
+            return;
+        }
+        m_key  = key;
+        m_mods = 0;
+        if (event.ShiftDown())   m_mods |= 1;
+        if (event.ControlDown()) m_mods |= 2;
+        if (event.AltDown())     m_mods |= 4;
+
+        // Show what was captured before closing
+        wxString label;
+        if (m_mods & 2) label += "Ctrl+";
+        if (m_mods & 1) label += "Shift+";
+        if (m_mods & 4) label += "Alt+";
+        if (key >= 32 && key < 127)
+            label += wxChar(key);
+        else
+            label += wxString::Format("<%d>", key);
+        m_label->SetLabel(label);
+
+        EndModal(wxID_OK);
+    }
+};
 
 wxBEGIN_EVENT_TABLE(SettingsPanel, wxPanel)
     EVT_BUTTON(wxID_ANY, SettingsPanel::on_reinit_audio)
@@ -20,7 +86,6 @@ wxBEGIN_EVENT_TABLE(SettingsPanel, wxPanel)
     EVT_BUTTON(wxID_ANY, SettingsPanel::on_waveform_color)
     EVT_BUTTON(wxID_ANY, SettingsPanel::on_bg_color)
     EVT_BUTTON(wxID_ANY, SettingsPanel::on_fg_color)
-    EVT_BUTTON(wxID_ANY, SettingsPanel::on_assign_key)
 wxEND_EVENT_TABLE()
 
 SettingsPanel::SettingsPanel(wxWindow* parent, Engine& engine)
@@ -32,7 +97,7 @@ SettingsPanel::SettingsPanel(wxWindow* parent, Engine& engine)
 
     init_audio_grp(0, 0, 400, 300);
     init_midi_grp(0, 0, 400, 300);
-    init_mixer_grp(0, 0, 400, 300);
+    m_mixer_grp = nullptr;
     init_gui_grp(0, 0, 400, 300);
     init_kbd_grp(0, 0, 400, 300);
     init_misc_grp(0, 0, 400, 300);
@@ -62,6 +127,7 @@ void SettingsPanel::init_audio_grp(int x, int y, int w, int h) {
     sizer->Add(row, 0, wxALL, 2);
 
     m_reinit_audio_btn = new wxButton(m_audio_grp, wxID_ANY, "Reinitialize Audio", wxDefaultPosition, wxSize(150, 30));
+    m_reinit_audio_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_REFRESH, wxART_BUTTON, wxSize(16, 16)));
     m_reinit_audio_btn->Bind(wxEVT_BUTTON, &SettingsPanel::on_reinit_audio, this);
     sizer->Add(m_reinit_audio_btn, 0, wxALL, 2);
 
@@ -91,6 +157,7 @@ void SettingsPanel::init_midi_grp(int x, int y, int w, int h) {
     sizer->Add(row, 0, wxALL, 2);
 
     m_reinit_midi_btn = new wxButton(m_midi_grp, wxID_ANY, "Reinitialize MIDI", wxDefaultPosition, wxSize(150, 30));
+    m_reinit_midi_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_REFRESH, wxART_BUTTON, wxSize(16, 16)));
     m_reinit_midi_btn->Bind(wxEVT_BUTTON, &SettingsPanel::on_reinit_midi, this);
     sizer->Add(m_reinit_midi_btn, 0, wxALL, 2);
 
@@ -99,11 +166,7 @@ void SettingsPanel::init_midi_grp(int x, int y, int w, int h) {
 }
 
 void SettingsPanel::init_mixer_grp(int x, int y, int w, int h) {
-    m_mixer_grp = new wxPanel(m_sub_tabs, wxID_ANY);
-    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-    sizer->Add(new wxStaticText(m_mixer_grp, wxID_ANY, "Mixer settings coming soon"), 0, wxALL, 2);
-    m_mixer_grp->SetSizer(sizer);
-    m_sub_tabs->AddPage(m_mixer_grp, "Mixer");
+    // No mixer settings currently — tab is hidden
 }
 
 void SettingsPanel::init_gui_grp(int x, int y, int w, int h) {
@@ -148,15 +211,15 @@ void SettingsPanel::init_gui_grp(int x, int y, int w, int h) {
 
     row = new wxBoxSizer(wxHORIZONTAL);
     m_bg_color_btn = new wxButton(m_gui_grp, wxID_ANY, "Background Color", wxDefaultPosition, wxSize(-1, 25));
-    m_bg_color_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_TICK_MARK, wxART_BUTTON, wxSize(16, 16)));
+    m_bg_color_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FIND, wxART_BUTTON, wxSize(16, 16)));
     m_bg_color_btn->Bind(wxEVT_BUTTON, &SettingsPanel::on_bg_color, this);
     
     m_fg_color_btn = new wxButton(m_gui_grp, wxID_ANY, "Foreground Color", wxDefaultPosition, wxSize(-1, 25));
-    m_fg_color_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_TICK_MARK, wxART_BUTTON, wxSize(16, 16)));
+    m_fg_color_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FIND, wxART_BUTTON, wxSize(16, 16)));
     m_fg_color_btn->Bind(wxEVT_BUTTON, &SettingsPanel::on_fg_color, this);
     
     m_waveform_color_btn = new wxButton(m_gui_grp, wxID_ANY, "Waveform Color", wxDefaultPosition, wxSize(-1, 25));
-    m_waveform_color_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_TICK_MARK, wxART_BUTTON, wxSize(16, 16)));
+    m_waveform_color_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FIND, wxART_BUTTON, wxSize(16, 16)));
     m_waveform_color_btn->Bind(wxEVT_BUTTON, &SettingsPanel::on_waveform_color, this);
     
     row->Add(m_bg_color_btn, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
@@ -172,41 +235,202 @@ void SettingsPanel::init_kbd_grp(int x, int y, int w, int h) {
     m_kbd_grp = new wxPanel(m_sub_tabs, wxID_ANY);
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
+    // Layout selector row
     wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
     row->Add(new wxStaticText(m_kbd_grp, wxID_ANY, "Keyboard Layout:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
     m_kbd_layout = new wxChoice(m_kbd_grp, wxID_ANY);
     m_kbd_layout->Append("QWERTY");
     m_kbd_layout->Append("AZERTY");
     m_kbd_layout->Append("QWERTZ");
-    
+
     KeyboardLayout layout = m_engine.m_key_bindings.get_layout();
     if (layout == KeyboardLayout::QWERTZ) m_kbd_layout->SetSelection(2);
-    else if (layout == KeyboardLayout::QWERTY) m_kbd_layout->SetSelection(0);
-    else m_kbd_layout->SetSelection(0); // Default
+    else m_kbd_layout->SetSelection(0);
 
     m_kbd_layout->Bind(wxEVT_CHOICE, &SettingsPanel::on_kbd_layout, this);
     row->Add(m_kbd_layout, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
     sizer->Add(row, 0, wxEXPAND | wxALL, 2);
 
-    row = new wxBoxSizer(wxHORIZONTAL);
-    m_assign_btn = new wxButton(m_kbd_grp, wxID_ANY, "Assign Key", wxDefaultPosition, wxSize(-1, 25));
-    m_assign_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_TICK_MARK, wxART_BUTTON, wxSize(16, 16)));
-    row->Add(m_assign_btn, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
-    sizer->Add(row, 0, wxEXPAND | wxALL, 2);
+    // Shortcut reference list
+    sizer->Add(new wxStaticText(m_kbd_grp, wxID_ANY, "Keyboard Shortcuts:"), 0, wxLEFT | wxTOP, 4);
 
-    m_current_binding_box = new wxStaticText(m_kbd_grp, wxID_ANY, "No key assigned");
-    sizer->Add(m_current_binding_box, 0, wxALL, 2);
+    m_shortcut_list = new wxListCtrl(m_kbd_grp, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                     wxLC_REPORT | wxLC_SINGLE_SEL | wxBORDER_SIMPLE);
+    m_shortcut_list->InsertColumn(0, "Action",  wxLIST_FORMAT_LEFT, 220);
+    m_shortcut_list->InsertColumn(1, "Key",     wxLIST_FORMAT_LEFT, 140);
+    sizer->Add(m_shortcut_list, 1, wxEXPAND | wxALL, 4);
+
+    // Assign Key button row
+    wxBoxSizer* btn_row = new wxBoxSizer(wxHORIZONTAL);
+    m_assign_btn = new wxButton(m_kbd_grp, wxID_ANY, "Assign Key",
+                                wxDefaultPosition, wxSize(-1, 28));
+    m_assign_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_TICK_MARK, wxART_BUTTON, wxSize(16, 16)));
+    m_assign_btn->SetToolTip("Select a row above, then click to assign a new key");
+    m_assign_btn->Bind(wxEVT_BUTTON, &SettingsPanel::on_assign_key, this);
+    btn_row->Add(m_assign_btn, 0, wxALL, 4);
+
+    wxButton* reset_btn = new wxButton(m_kbd_grp, wxID_ANY, "Reset to Defaults",
+                                       wxDefaultPosition, wxSize(-1, 28));
+    reset_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_UNDO, wxART_BUTTON, wxSize(16, 16)));
+    reset_btn->SetToolTip("Restore all key bindings to their defaults");
+    reset_btn->Bind(wxEVT_BUTTON, &SettingsPanel::on_reset_keys, this);
+    btn_row->Add(reset_btn, 0, wxALL, 4);
+
+    sizer->Add(btn_row, 0, wxEXPAND);
 
     m_kbd_grp->SetSizer(sizer);
     m_sub_tabs->AddPage(m_kbd_grp, "Keyboard");
+
+    populate_shortcut_list();
+}
+
+void SettingsPanel::populate_shortcut_list() {
+    m_shortcut_list->DeleteAllItems();
+
+    // Category separators: pairs of (first action in group, label)
+    struct Category {
+        Action first;
+        const char* label;
+    };
+    const Category cats[] = {
+        { Action::Play,       "--- Transport ---" },
+        { Action::Undo,       "--- Edit ---" },
+        { Action::MoveUp,     "--- Navigation ---" },
+        { Action::InsertRow,  "--- Pattern ---" },
+        { Action::MuteTrack,  "--- Track ---" },
+        { Action::OctaveUp,   "--- Octave ---" },
+        { Action::NoteC,      "--- Notes (lower octave) ---" },
+        { Action::NoteC2,     "--- Notes (upper octave) ---" },
+    };
+    const int n_cats = static_cast<int>(sizeof(cats) / sizeof(cats[0]));
+
+    long row = 0;
+    for (Action action : KeyBindings::all_actions()) {
+        // Insert category header if this action starts a new group
+        for (int c = 0; c < n_cats; ++c) {
+            if (cats[c].first == action) {
+                long idx = m_shortcut_list->InsertItem(row, wxString(cats[c].label));
+                m_shortcut_list->SetItem(idx, 1, wxEmptyString);
+                m_shortcut_list->SetItemData(idx, -1); // marks header row
+                ++row;
+                break;
+            }
+        }
+        std::string name = m_engine.m_key_bindings.get_action_name(action);
+        std::string key  = m_engine.m_key_bindings.get_key_name(action);
+        long idx = m_shortcut_list->InsertItem(row, wxString::FromUTF8(("  " + name).c_str()));
+        m_shortcut_list->SetItem(idx, 1, wxString::FromUTF8(key.c_str()));
+        m_shortcut_list->SetItemData(idx, static_cast<long>(action));
+        ++row;
+    }
 }
 
 void SettingsPanel::init_misc_grp(int x, int y, int w, int h) {
     m_misc_grp = new wxPanel(m_sub_tabs, wxID_ANY);
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-    sizer->Add(new wxStaticText(m_misc_grp, wxID_ANY, "Misc settings coming soon"), 0, wxALL, 2);
+
+    // --- Default config file path ---
+    sizer->Add(new wxStaticText(m_misc_grp, wxID_ANY, "Default settings file:"), 0, wxALL, 4);
+
+    std::string cfg_path = ConfigManager::instance().config_path();
+    wxStaticText* path_lbl = new wxStaticText(m_misc_grp, wxID_ANY,
+        wxString::FromUTF8(cfg_path.c_str()),
+        wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_START);
+    path_lbl->SetFont(wxFont(9, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+    sizer->Add(path_lbl, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
+
+    sizer->Add(new wxStaticLine(m_misc_grp), 0, wxEXPAND | wxALL, 4);
+
+    // --- Save / Load defaults ---
+    wxBoxSizer* row1 = new wxBoxSizer(wxHORIZONTAL);
+
+    wxButton* save_btn = new wxButton(m_misc_grp, wxID_ANY, "Save Settings", wxDefaultPosition, wxSize(-1, 28));
+    save_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_SAVE, wxART_BUTTON, wxSize(16, 16)));
+    save_btn->SetToolTip("Save current settings to the default file (auto-saved on exit)");
+    save_btn->Bind(wxEVT_BUTTON, &SettingsPanel::on_save_settings, this);
+    row1->Add(save_btn, 0, wxALL, 4);
+
+    wxButton* load_btn = new wxButton(m_misc_grp, wxID_ANY, "Load Settings", wxDefaultPosition, wxSize(-1, 28));
+    load_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(16, 16)));
+    load_btn->SetToolTip("Reload settings from the default file and apply them");
+    load_btn->Bind(wxEVT_BUTTON, &SettingsPanel::on_load_settings, this);
+    row1->Add(load_btn, 0, wxALL, 4);
+
+    sizer->Add(row1, 0, wxALL, 0);
+
+    sizer->Add(new wxStaticLine(m_misc_grp), 0, wxEXPAND | wxALL, 4);
+
+    // --- Export / Import to custom file ---
+    sizer->Add(new wxStaticText(m_misc_grp, wxID_ANY, "Settings file portability:"), 0, wxALL, 4);
+
+    wxBoxSizer* row2 = new wxBoxSizer(wxHORIZONTAL);
+
+    wxButton* export_btn = new wxButton(m_misc_grp, wxID_ANY, "Export Settings...", wxDefaultPosition, wxSize(-1, 28));
+    export_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_SAVE_AS, wxART_BUTTON, wxSize(16, 16)));
+    export_btn->SetToolTip("Save settings to a custom file");
+    export_btn->Bind(wxEVT_BUTTON, &SettingsPanel::on_export_settings, this);
+    row2->Add(export_btn, 0, wxALL, 4);
+
+    wxButton* import_btn = new wxButton(m_misc_grp, wxID_ANY, "Import Settings...", wxDefaultPosition, wxSize(-1, 28));
+    import_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(16, 16)));
+    import_btn->SetToolTip("Load settings from a custom file");
+    import_btn->Bind(wxEVT_BUTTON, &SettingsPanel::on_import_settings, this);
+    row2->Add(import_btn, 0, wxALL, 4);
+
+    sizer->Add(row2, 0, wxALL, 0);
+
+    sizer->AddStretchSpacer(1);
+
+    sizer->Add(new wxStaticText(m_misc_grp, wxID_ANY,
+        "Note: Audio/MIDI changes take effect after restarting audio."),
+        0, wxALL, 6);
+
     m_misc_grp->SetSizer(sizer);
     m_sub_tabs->AddPage(m_misc_grp, "Misc");
+}
+
+void SettingsPanel::on_save_settings(wxCommandEvent&) {
+    m_engine.save_config();
+    wxMessageBox("Settings saved to:\n" +
+        wxString::FromUTF8(ConfigManager::instance().config_path().c_str()),
+        "Settings Saved", wxOK | wxICON_INFORMATION);
+}
+
+void SettingsPanel::on_load_settings(wxCommandEvent&) {
+    ConfigManager::instance().load();
+    m_engine.load_config();
+    ThemeManager::apply_theme_and_settings(m_engine);
+    wxWindow* top = wxGetTopLevelParent(this);
+    if (top) { top->Refresh(); top->Update(); }
+    wxMessageBox("Settings loaded and applied.", "Settings Loaded", wxOK | wxICON_INFORMATION);
+}
+
+void SettingsPanel::on_export_settings(wxCommandEvent&) {
+    wxFileDialog dlg(this, "Export Settings", "", "disgrace_settings.json",
+        "JSON files (*.json)|*.json|All files (*.*)|*.*",
+        wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    if (dlg.ShowModal() == wxID_OK) {
+        m_engine.save_config(); // Update config from engine first
+        ConfigManager::instance().save_to(dlg.GetPath().ToStdString());
+        wxMessageBox("Settings exported to:\n" + dlg.GetPath(),
+            "Export Complete", wxOK | wxICON_INFORMATION);
+    }
+}
+
+void SettingsPanel::on_import_settings(wxCommandEvent&) {
+    wxFileDialog dlg(this, "Import Settings", "", "",
+        "JSON files (*.json)|*.json|All files (*.*)|*.*",
+        wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (dlg.ShowModal() == wxID_OK) {
+        ConfigManager::instance().load_from(dlg.GetPath().ToStdString());
+        m_engine.load_config();
+        ThemeManager::apply_theme_and_settings(m_engine);
+        wxWindow* top = wxGetTopLevelParent(this);
+        if (top) { top->Refresh(); top->Update(); }
+        wxMessageBox("Settings imported from:\n" + dlg.GetPath() +
+            "\n\nAudio/MIDI changes will take effect after restarting audio.",
+            "Import Complete", wxOK | wxICON_INFORMATION);
+    }
 }
 
 void SettingsPanel::on_reinit_audio(wxCommandEvent& event) {
@@ -307,12 +531,49 @@ void SettingsPanel::on_fg_color(wxCommandEvent& event) {
 void SettingsPanel::on_kbd_layout(wxCommandEvent& event) {
     int idx = event.GetSelection();
     if (idx == 0) m_engine.m_key_bindings.set_layout(KeyboardLayout::QWERTY);
-    else if (idx == 1) /* AZERTY not fully implemented in KeyBindings yet, maybe? */;
     else if (idx == 2) m_engine.m_key_bindings.set_layout(KeyboardLayout::QWERTZ);
-    
+
+    populate_shortcut_list();
     m_engine.save_config();
 }
 
-void SettingsPanel::on_assign_key(wxCommandEvent& event) {}
+void SettingsPanel::on_assign_key(wxCommandEvent& event) {
+    long sel = m_shortcut_list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    if (sel == wxNOT_FOUND) {
+        wxMessageBox("Select a shortcut row first.", "Assign Key", wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+    long data = m_shortcut_list->GetItemData(sel);
+    if (data == -1) {
+        wxMessageBox("Select an action row (not a category header).", "Assign Key", wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+    Action action = static_cast<Action>(data);
+
+    KeyCaptureDialog dlg(this);
+    if (dlg.ShowModal() != wxID_OK) return;
+
+    int key  = dlg.captured_key();
+    int mods = dlg.captured_mods();
+    m_engine.m_key_bindings.assign(action, key, mods);
+    populate_shortcut_list();
+    // Re-select the same row (row index may have shifted; find by data)
+    for (long i = 0; i < m_shortcut_list->GetItemCount(); ++i) {
+        if (m_shortcut_list->GetItemData(i) == static_cast<long>(action)) {
+            m_shortcut_list->SetItemState(i, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+            m_shortcut_list->EnsureVisible(i);
+            break;
+        }
+    }
+    m_engine.save_config();
+}
+
+void SettingsPanel::on_reset_keys(wxCommandEvent& event) {
+    if (wxMessageBox("Reset all key bindings to defaults?", "Reset Keys",
+                     wxYES_NO | wxICON_QUESTION, this) != wxYES) return;
+    m_engine.m_key_bindings.set_defaults();
+    populate_shortcut_list();
+    m_engine.save_config();
+}
 
 } // namespace disgrace_ns

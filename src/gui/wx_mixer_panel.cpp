@@ -17,6 +17,7 @@
  */
 
 #include "wx_mixer_panel.h"
+#include "theme.h"
 #include "wx_vu_meter.h"
 #include "wx_spectral_view.h"
 #include "wx_analog_vu_meter.h"
@@ -113,7 +114,7 @@ MixerPanel::MixerPanel(wxWindow* parent, Engine& engine)
     chain_sizer->Add(new wxStaticText(m_lower_pane, wxID_ANY, "Effect Chain"), 0, wxALL, 2);
     m_fx_chain_group = new wxScrolledWindow(m_lower_pane, wxID_ANY, wxDefaultPosition, wxSize(250, -1), wxVSCROLL);
     m_fx_chain_group->SetScrollRate(0, 20);
-    m_fx_chain_group->SetBackgroundColour(wxColour(30, 30, 30)); 
+    m_fx_chain_group->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_bg)); 
     chain_sizer->Add(m_fx_chain_group, 1, wxEXPAND | wxALL, 2);
 
     wxBoxSizer* chain_btns = new wxBoxSizer(wxHORIZONTAL);
@@ -185,6 +186,7 @@ MixerPanel::MixerPanel(wxWindow* parent, Engine& engine)
 
     // Select Button
     m_master_sel_btn = new wxButton(master_strip, wxID_ANY, "SEL", wxDefaultPosition, wxSize(60, 25));
+    m_master_sel_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_TICK_MARK, wxART_BUTTON, wxSize(14, 14)));
     m_master_sel_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent& ev) {
         this->CallAfter([this]() {
             m_selected_track = kSelectedMaster;
@@ -197,6 +199,7 @@ MixerPanel::MixerPanel(wxWindow* parent, Engine& engine)
 
     // Detach Button
     m_detach_btn = new wxButton(master_strip, wxID_ANY, "[]", wxDefaultPosition, wxSize(30, 25));
+    m_detach_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FULL_SCREEN, wxART_BUTTON, wxSize(14, 14)));
     m_detach_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent& ev) {
         this->on_detach(ev);
     });
@@ -319,8 +322,8 @@ void MixerPanel::update_mixer_ui() {
     
     // Master Selection Button update
     if (m_selected_track == kSelectedMaster) {
-        m_master_sel_btn->SetBackgroundColour(wxColour(255, 255, 0));
-        m_master_sel_btn->SetForegroundColour(*wxBLACK);
+        m_master_sel_btn->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_selection_color));
+        m_master_sel_btn->SetForegroundColour(ThemeManager::contrastColor(m_engine.m_selection_color));
     } else {
         m_master_sel_btn->SetBackgroundColour(wxNullColour);
         m_master_sel_btn->SetForegroundColour(wxNullColour);
@@ -386,9 +389,10 @@ void MixerPanel::update_mixer_ui() {
 
         // Select Button
         wxButton* sel_btn = new wxButton(track_panel, wxID_ANY, "SEL", wxDefaultPosition, wxSize(60, 25));
+        sel_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_TICK_MARK, wxART_BUTTON, wxSize(14, 14)));
         if (m_selected_track == kSelectedTrackBase + (int)i) {
-            sel_btn->SetBackgroundColour(wxColour(255, 255, 0));
-            sel_btn->SetForegroundColour(*wxBLACK);
+            sel_btn->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_selection_color));
+            sel_btn->SetForegroundColour(ThemeManager::contrastColor(m_engine.m_selection_color));
         } else {
             sel_btn->SetBackgroundColour(wxNullColour);
             sel_btn->SetForegroundColour(wxNullColour);
@@ -458,9 +462,10 @@ void MixerPanel::update_mixer_ui() {
 
         // Select Button
         wxButton* sel_btn = new wxButton(bus_panel, wxID_ANY, "SEL", wxDefaultPosition, wxSize(60, 25));
+        sel_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_TICK_MARK, wxART_BUTTON, wxSize(14, 14)));
         if (m_selected_track == kSelectedBusBase + (int)i) {
-            sel_btn->SetBackgroundColour(wxColour(255, 255, 0));
-            sel_btn->SetForegroundColour(*wxBLACK);
+            sel_btn->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_selection_color));
+            sel_btn->SetForegroundColour(ThemeManager::contrastColor(m_engine.m_selection_color));
         } else {
             sel_btn->SetBackgroundColour(wxNullColour);
             sel_btn->SetForegroundColour(wxNullColour);
@@ -552,6 +557,7 @@ void MixerPanel::update_effect_editor() {
             ref_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "(No reference loaded)"), 1, wxALL | wxALIGN_CENTER_VERTICAL, 5);
         }
         wxButton* load_ref_btn = new wxButton(m_fx_params_group, wxID_ANY, "Load");
+        load_ref_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(14, 14)));
         load_ref_btn->Bind(wxEVT_BUTTON, [this, &matcher](wxCommandEvent& ev) {
             wxFileDialog dlg(this, "Load Reference Track", "", "", "Audio files (*.wav;*.flac;*.ogg;*.mp3)|*.wav;*.flac;*.ogg;*.mp3", wxFD_OPEN);
             if (dlg.ShowModal() == wxID_OK) {
@@ -630,7 +636,7 @@ void MixerPanel::update_effect_editor() {
             DSP* dsp = get_fx(i);
             if (dsp) {
                 wxPanel* row = new wxPanel(m_fx_chain_group, wxID_ANY);
-                row->SetBackgroundColour(wxColour(50, 50, 50));
+                row->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_lpb_highlight));
                 wxBoxSizer* row_sizer = new wxBoxSizer(wxHORIZONTAL);
 
                 wxCheckBox* bypass = new wxCheckBox(row, wxID_ANY, "");
@@ -645,8 +651,8 @@ void MixerPanel::update_effect_editor() {
 
                 wxButton* sel_btn = new wxButton(row, wxID_ANY, dsp->name(), wxDefaultPosition, wxSize(100, 25));
                 if ((int)i == m_selected_fx_slot) {
-                    sel_btn->SetBackgroundColour(wxColour(255, 255, 0));
-                    sel_btn->SetForegroundColour(*wxBLACK);
+                    sel_btn->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_selection_color));
+                    sel_btn->SetForegroundColour(ThemeManager::contrastColor(m_engine.m_selection_color));
                 }
                 sel_btn->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent& ev) {
                     m_selected_fx_slot = (int)i;
@@ -655,6 +661,7 @@ void MixerPanel::update_effect_editor() {
                 row_sizer->Add(sel_btn, 1, wxALL, 2);
 
                 wxButton* up = new wxButton(row, wxID_ANY, "^", wxDefaultPosition, wxSize(25, 25));
+                up->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_UP, wxART_BUTTON, wxSize(14, 14)));
                 up->Bind(wxEVT_BUTTON, [this, i, is_bus, is_track, track_idx, bus_idx](wxCommandEvent& ev) {
                     if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count()) m_engine.bus(bus_idx).move_effect_up(i);
                     else if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count()) m_engine.track(track_idx).move_effect_up(i);
@@ -663,6 +670,7 @@ void MixerPanel::update_effect_editor() {
                 row_sizer->Add(up, 0, wxALL, 1);
 
                 wxButton* down = new wxButton(row, wxID_ANY, "v", wxDefaultPosition, wxSize(25, 25));
+                down->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_DOWN, wxART_BUTTON, wxSize(14, 14)));
                 down->Bind(wxEVT_BUTTON, [this, i, is_bus, is_track, track_idx, bus_idx](wxCommandEvent& ev) {
                     if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count()) m_engine.bus(bus_idx).move_effect_down(i);
                     else if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count()) m_engine.track(track_idx).move_effect_down(i);
@@ -671,7 +679,8 @@ void MixerPanel::update_effect_editor() {
                 row_sizer->Add(down, 0, wxALL, 1);
 
                 wxButton* rem = new wxButton(row, wxID_ANY, "X", wxDefaultPosition, wxSize(25, 25));
-                rem->SetForegroundColour(*wxRED);
+                rem->SetBitmap(wxArtProvider::GetBitmap(wxART_DELETE, wxART_BUTTON, wxSize(14, 14)));
+                rem->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_warning_color));
                 rem->Bind(wxEVT_BUTTON, [this, i, is_bus, is_track, track_idx, bus_idx](wxCommandEvent& ev) {
                     if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count()) m_engine.bus(bus_idx).remove_effect(i);
                     else if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count()) m_engine.track(track_idx).remove_effect(i);
@@ -818,6 +827,7 @@ void MixerPanel::update_effect_editor() {
                     ref_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "(None)"), 1, wxALL | wxALIGN_CENTER_VERTICAL, 5);
                 }
                 wxButton* load_ref_btn = new wxButton(m_fx_params_group, wxID_ANY, "Load");
+                load_ref_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(14, 14)));
                 load_ref_btn->Bind(wxEVT_BUTTON, [this, rm](wxCommandEvent& ev) {
                     wxFileDialog dlg(this, "Load Reference Track", "", "", "Audio files (*.wav;*.flac;*.ogg;*.mp3)|*.wav;*.flac;*.ogg;*.mp3", wxFD_OPEN);
                     if (dlg.ShowModal() == wxID_OK) {

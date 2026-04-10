@@ -18,6 +18,7 @@
 
 #include "theme.h"
 #include "../core/engine.h"
+#include <wx/colour.h>
 
 namespace disgrace_ns {
 
@@ -50,6 +51,8 @@ void ThemeManager::init_themes() {
     m_themes[0].tracker_sample = 0x4EC9B0FF;
     m_themes[0].tracker_volume = 0xCE9178FF;
     m_themes[0].tracker_effect = 0xC586C0FF;
+    m_themes[0].selection_color = 0x0078D4FF;
+    m_themes[0].warning_color   = 0xFF5555FF;
 
     // Modern Light
     m_themes[1].name = "Modern Light";
@@ -71,6 +74,8 @@ void ThemeManager::init_themes() {
     m_themes[1].tracker_sample = 0x008000FF;
     m_themes[1].tracker_volume = 0xA31515FF;
     m_themes[1].tracker_effect = 0xAF5700FF;
+    m_themes[1].selection_color = 0x007ACCFF;
+    m_themes[1].warning_color   = 0xCC0000FF;
 
     // Classic (FastTracker II inspired)
     m_themes[2].name = "Classic";
@@ -92,6 +97,8 @@ void ThemeManager::init_themes() {
     m_themes[2].tracker_sample = 0x00FF00FF;
     m_themes[2].tracker_volume = 0x00FFFFFF;
     m_themes[2].tracker_effect = 0xFFFF00FF;
+    m_themes[2].selection_color = 0x4040C0FF;
+    m_themes[2].warning_color   = 0xCC0000FF;
 
     // Custom (Placeholder)
     m_themes[3] = m_themes[0];
@@ -135,7 +142,21 @@ void ThemeManager::apply_theme_and_settings(Engine& engine) {
         engine.m_tracker_sample = theme.tracker_sample;
         engine.m_tracker_volume = theme.tracker_volume;
         engine.m_tracker_effect = theme.tracker_effect;
+
+        engine.m_selection_color = theme.selection_color;
+        engine.m_warning_color   = theme.warning_color;
+        engine.m_input_bg_color  = theme.input_background;
+        engine.m_label_color     = theme.label_color;
     }
+}
+
+wxColour ThemeManager::contrastColor(uint32_t bg) {
+    uint8_t r = (bg >> 24) & 0xFF;
+    uint8_t g = (bg >> 16) & 0xFF;
+    uint8_t b = (bg >>  8) & 0xFF;
+    // Perceived luminance (sRGB)
+    double lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    return (lum >= 128.0) ? wxColour(0, 0, 0) : wxColour(255, 255, 255);
 }
 
 const std::vector<Theme>& ThemeManager::get_available_themes() {

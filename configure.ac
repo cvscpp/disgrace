@@ -3,6 +3,22 @@ AC_INIT([disgrace], [0.1.0], [miroslav.shaltev@shaltev.de])
 AC_CONFIG_SRCDIR([src/main.cpp])
 AC_CONFIG_HEADERS([config.h])
 
+# Detect host OS for platform-specific configuration
+AC_CANONICAL_HOST
+
+# On FreeBSD, GCC mishandles wxWidgets' wchar_t/mbstate conversions at
+# runtime.  Clang is the system compiler and must be used instead.
+case "$host_os" in
+    freebsd*)
+        if test -z "$CXX"; then
+            AC_CHECK_PROGS([CXX], [clang++ g++])
+        fi
+        if test -z "$CC"; then
+            AC_CHECK_PROGS([CC], [clang gcc])
+        fi
+        ;;
+esac
+
 AM_INIT_AUTOMAKE([foreign subdir-objects -Wall -Werror])
 AC_CONFIG_MACRO_DIR([m4])
 
@@ -37,15 +53,16 @@ PKG_CHECK_MODULES([NLOHMANN_JSON], [nlohmann_json])
 # JACK
 PKG_CHECK_MODULES([JACK], [jack >= 1.9.0])
 
-# wxWidgets
-AC_CHECK_PROG([WX_CONFIG], [wx-config], [wx-config])
+# wxWidgets — the config helper is named differently on FreeBSD
+# (e.g. wxgtk3u-3.2-config) vs Linux (wx-config).
+AC_CHECK_PROGS([WX_CONFIG], [wx-config wxgtk3u-3.2-config wxgtk3u-config])
 if test -n "$WX_CONFIG"; then
     WXWIDGETS_CFLAGS=`$WX_CONFIG --cxxflags`
     WXWIDGETS_LIBS=`$WX_CONFIG --libs`
     AC_SUBST([WXWIDGETS_CFLAGS])
     AC_SUBST([WXWIDGETS_LIBS])
 else
-    AC_MSG_ERROR([wxWidgets not found. Please install wxWidgets or ensure wx-config is in your PATH.])
+    AC_MSG_ERROR([wxWidgets not found. Please install wxWidgets or ensure wx-config / wxgtk3u-3.2-config is in your PATH.])
 fi
 
 # libsndfile
@@ -57,22 +74,32 @@ PKG_CHECK_MODULES([SAMPLERATE], [samplerate])
 # espeak-ng
 PKG_CHECK_MODULES([ESPEAK], [espeak-ng])
 
-# Festival
+# Festival — header lives under /usr/include/speech_tools on Linux and
+# /usr/local/include/speech_tools on FreeBSD.
 AC_LANG_PUSH([C++])
 saved_CPPFLAGS="$CPPFLAGS"
-CPPFLAGS="$CPPFLAGS -I/usr/include/speech_tools"
-AC_CHECK_HEADER([festival/festival.h], [
-    AC_CHECK_LIB([estbase], [main], [
-        FESTIVAL_LIBS="-lFestival -lestools -lestbase -leststring -lncurses"
-        FESTIVAL_CFLAGS="-I/usr/include/speech_tools"
-        AC_SUBST([FESTIVAL_LIBS])
-        AC_SUBST([FESTIVAL_CFLAGS])
-        AC_DEFINE([HAVE_FESTIVAL], [1], [Define if festival is available])
-    ], [], [-lestools -leststring -lncurses])
-], [], [
+FESTIVAL_INCLUDE_DIR=""
+for dir in /usr/include/speech_tools /usr/local/include/speech_tools; do
+    if test -f "$dir/festival/festival.h"; then
+        FESTIVAL_INCLUDE_DIR="$dir"
+        break
+    fi
+done
+if test -n "$FESTIVAL_INCLUDE_DIR"; then
+    CPPFLAGS="$CPPFLAGS -I$FESTIVAL_INCLUDE_DIR"
+    AC_CHECK_HEADER([festival/festival.h], [
+        AC_CHECK_LIB([estbase], [main], [
+            FESTIVAL_LIBS="-lFestival -lestools -lestbase -leststring -lncurses"
+            FESTIVAL_CFLAGS="-I$FESTIVAL_INCLUDE_DIR"
+            AC_SUBST([FESTIVAL_LIBS])
+            AC_SUBST([FESTIVAL_CFLAGS])
+            AC_DEFINE([HAVE_FESTIVAL], [1], [Define if festival is available])
+        ], [], [-lestools -leststring -lncurses])
+    ], [], [
 #include <cstdio>
 #include <fstream>
 ])
+fi
 CPPFLAGS="$saved_CPPFLAGS"
 AC_LANG_POP([C++])
 
@@ -82,8 +109,16 @@ PKG_CHECK_MODULES([FFTW3], [fftw3])
 # libarchive
 PKG_CHECK_MODULES([LIBARCHIVE], [libarchive])
 
-# ALSA
-PKG_CHECK_MODULES([ALSA], [alsa])
+# ALSA — required on Linux, optional on FreeBSD (provided by the alsa-lib port)
+case "$host_os" in
+    freebsd*)
+        PKG_CHECK_MODULES([ALSA], [alsa], [],
+            [AC_MSG_WARN([ALSA not found on FreeBSD — DSSI support may be limited])])
+        ;;
+    *)
+        PKG_CHECK_MODULES([ALSA], [alsa])
+        ;;
+esac
 
 # FluidSynth
 PKG_CHECK_MODULES([FLUIDSYNTH], [fluidsynth])

@@ -33,6 +33,7 @@
 #include <wx/stattext.h>
 #include <wx/filedlg.h>
 #include <wx/splitter.h>
+#include <wx/timer.h>
 #include <map>
 
 namespace disgrace_ns {
@@ -94,6 +95,9 @@ private:
     wxChoice* m_rec_mode_ch;
     wxCheckBox* m_mono_btn;
     wxChoice* m_rec_input_ch;
+    class VUMeter* m_input_vu_l = nullptr;
+    class VUMeter* m_input_vu_r = nullptr;
+    wxTimer* m_vu_timer = nullptr;
     class WaveformView* m_waveform_view;
 
     wxPanel* m_sfont_editor;

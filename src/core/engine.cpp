@@ -44,7 +44,7 @@ namespace disgrace_ns {
 
 Engine::Engine() : m_initialized(false), m_timing(44100) {
     m_transport = std::make_unique<Transport>(*this);
-    m_backend = std::make_unique<JackBackend>(this);
+    // Backend is created in initialize() once the config is loaded.
     m_export_progress.store(0.0f);
     m_is_exporting.store(false);
 }
@@ -86,6 +86,8 @@ bool Engine::initialize() {
     m_key_bindings.set_layout((KeyboardLayout)conf.keyboard_layout);
     ThemeManager::apply_theme_and_settings(*this);
 
+    // Create the backend with the configured port counts.
+    m_backend = std::make_unique<JackBackend>(this, m_num_ins, m_num_outs, m_num_midi_ins, m_num_midi_outs);
     new_project();
     if (!m_backend->start()) {
         std::cerr << "Failed to start JACK backend, falling back to null backend." << std::endl;
@@ -525,27 +527,44 @@ void Engine::render_block_multi(float** out_bufs, uint32_t num_outs, size_t fram
             }
         }
 
-        if (should_record && in_bufs && m_recording_sample_data) {
-            uint32_t ch = m_recording_input_channel;
-            if (m_recording_is_mono) {
-                if (ch < m_num_ins) {
-                    for (size_t i = 0; i < frames; ++i) {
-                        m_recording_sample_data->left.push_back(in_bufs[ch][i]);
+        if (should_record && in_bufs) {
+            SampleData* sd = m_recording_sample_ptr.load(std::memory_order_acquire);
+            if (sd) {
+                uint32_t ch = m_recording_input_channel;
+                if (m_recording_is_mono) {
+                    if (ch < m_num_ins && in_bufs[ch]) {
+                        for (size_t i = 0; i < frames; ++i)
+                            sd->left.push_back(in_bufs[ch][i]);
                     }
-                }
-            } else {
-                if (ch < m_num_ins - 1) {
-                    for (size_t i = 0; i < frames; ++i) {
-                        m_recording_sample_data->left.push_back(in_bufs[ch][i]);
-                        m_recording_sample_data->right.push_back(in_bufs[ch+1][i]);
-                    }
-                } else if (ch < m_num_ins) {
-                     for (size_t i = 0; i < frames; ++i) {
-                        m_recording_sample_data->left.push_back(in_bufs[ch][i]);
-                        m_recording_sample_data->right.push_back(in_bufs[ch][i]);
+                } else {
+                    if (ch < m_num_ins - 1 && in_bufs[ch] && in_bufs[ch+1]) {
+                        for (size_t i = 0; i < frames; ++i) {
+                            sd->left.push_back(in_bufs[ch][i]);
+                            sd->right.push_back(in_bufs[ch+1][i]);
+                        }
+                    } else if (ch < m_num_ins && in_bufs[ch]) {
+                        for (size_t i = 0; i < frames; ++i) {
+                            sd->left.push_back(in_bufs[ch][i]);
+                            sd->right.push_back(in_bufs[ch][i]);
+                        }
                     }
                 }
             }
+        }
+    }
+
+    // Update per-channel input peak levels for GUI meters.
+    if (in_bufs) {
+        for (uint32_t ch = 0; ch < m_num_ins && ch < MAX_INS; ++ch) {
+            float peak = 0.0f;
+            if (in_bufs[ch]) {
+                for (size_t i = 0; i < frames; ++i)
+                    peak = std::max(peak, std::abs(in_bufs[ch][i]));
+            }
+            float prev = m_input_levels[ch].load(std::memory_order_relaxed);
+            // Fast attack, ~1.5 s decay at 48 kHz / 256 frames (≈187 blocks/s).
+            float next = (peak > prev) ? peak : prev * 0.9985f;
+            m_input_levels[ch].store(next, std::memory_order_relaxed);
         }
     }
 
@@ -832,6 +851,11 @@ void Engine::set_master_gain(float g) { m_master.set_gain(g); }
 float Engine::master_gain() const { return m_master.gain(); }
 float Engine::master_meter_l() const { return m_master.meter_l(); }
 float Engine::master_meter_r() const { return m_master.meter_r(); }
+
+float Engine::input_level(uint32_t ch) const {
+    if (ch < MAX_INS) return m_input_levels[ch].load(std::memory_order_relaxed);
+    return 0.0f;
+}
 Transport& Engine::transport() { return *m_transport; }
 const Transport& Engine::transport() const { return *m_transport; }
 
@@ -980,15 +1004,26 @@ void Engine::start_recording_sample(SampleRecordMode mode, uint32_t channel, boo
     m_recording_sample_mode.store(mode);
     m_recording_input_channel = channel;
     m_recording_is_mono = mono;
-    m_recording_sample_data = std::make_shared<SampleData>();
-    m_recording_sample_data->sample_rate = (int)m_sample_rate;
+    auto sd = std::make_shared<SampleData>();
+    sd->sample_rate = (int)m_sample_rate;
+    // Pre-reserve 30 s of audio to avoid RT-thread reallocations.
+    size_t reserve_frames = (size_t)m_sample_rate * 30;
+    sd->left.reserve(reserve_frames);
+    if (!mono) sd->right.reserve(reserve_frames);
+    m_recording_sample_data = sd;
     m_recording_synced_active.store(false);
-    m_is_recording_sample.store(true);
+    // Publish raw pointer BEFORE setting the recording flag so the RT thread
+    // always sees a valid pointer when m_is_recording_sample is true.
+    m_recording_sample_ptr.store(sd.get(), std::memory_order_release);
+    m_is_recording_sample.store(true, std::memory_order_release);
 }
 
 void Engine::stop_recording_sample() {
-    m_is_recording_sample.store(false);
+    // Clear the flag first so the RT thread stops appending.
+    m_is_recording_sample.store(false, std::memory_order_release);
     m_recording_synced_active.store(false);
+    // Null the raw pointer after stopping so there's no dangling access.
+    m_recording_sample_ptr.store(nullptr, std::memory_order_release);
 }
 
 bool Engine::write_wav(const std::string& path, const std::vector<float>& l, const std::vector<float>& r, size_t frames, uint32_t sample_rate) {

@@ -164,7 +164,9 @@ public:
     ::std::atomic<bool> m_is_recording_sample{false};
     ::std::atomic<SampleRecordMode> m_recording_sample_mode{SampleRecordMode::Free};
     ::std::atomic<bool> m_recording_synced_active{false};
+    // Owned by the GUI thread; the RT thread uses m_recording_sample_ptr (atomic).
     ::std::shared_ptr<SampleData> m_recording_sample_data;
+    ::std::atomic<SampleData*>    m_recording_sample_ptr{nullptr};
     uint32_t m_recording_input_channel = 0;
     bool m_recording_is_mono = false;
 
@@ -201,6 +203,11 @@ public:
     float master_gain() const;
     float master_meter_l() const;
     float master_meter_r() const;
+    float input_level(uint32_t ch) const;
+
+    // Returns the live recording buffer during recording, nullptr otherwise.
+    std::shared_ptr<SampleData> recording_sample_data() const { return m_recording_sample_data; }
+    bool is_recording_sample() const { return m_is_recording_sample.load(std::memory_order_relaxed); }
 
     struct ExportOptions {
         uint32_t sample_rate = 44100;
@@ -239,6 +246,10 @@ public:
     uint32_t m_num_outs = 2;
     uint32_t m_num_midi_ins = 1;
     uint32_t m_num_midi_outs = 1;
+
+    // Per-channel input peak levels — updated by the RT thread, read by the GUI.
+    static constexpr uint32_t MAX_INS = 16;
+    std::atomic<float> m_input_levels[MAX_INS]{};
 
     int m_gui_button_height = 25;
     int m_gui_font_size = 12;

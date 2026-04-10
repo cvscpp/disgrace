@@ -20,6 +20,7 @@
 #include "wx_waveform_view.h"
 #include "wx_main_window.h"
 #include "wx_detached_frame.h"
+#include "wx_vu_meter.h"
 #include "../core/engine.h"
 #include "../instrument/sample_instrument.h"
 #include "../instrument/soundfont_instrument.h"
@@ -194,9 +195,49 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     mode_sizer->Add(m_rec_mode_ch, 0, wxALIGN_CENTER_VERTICAL);
     rec_sizer->Add(mode_sizer, 0, wxTOP | wxBOTTOM, 4);
 
+    // Input VU meters — L and R for the selected input channel pair
+    auto* vu_label_l = new wxStaticText(rec_panel, wxID_ANY, "L");
+    auto* vu_label_r = new wxStaticText(rec_panel, wxID_ANY, "R");
+    m_input_vu_l = new VUMeter(rec_panel, wxID_ANY, m_engine, true);
+    m_input_vu_r = new VUMeter(rec_panel, wxID_ANY, m_engine, true);
+    m_input_vu_l->SetMinSize(wxSize(80, 14));
+    m_input_vu_r->SetMinSize(wxSize(80, 14));
+
+    wxFlexGridSizer* vu_grid = new wxFlexGridSizer(2, 2, 3, 4);
+    vu_grid->AddGrowableCol(1, 1);
+    vu_grid->Add(vu_label_l, 0, wxALIGN_CENTER_VERTICAL);
+    vu_grid->Add(m_input_vu_l, 1, wxEXPAND);
+    vu_grid->Add(vu_label_r, 0, wxALIGN_CENTER_VERTICAL);
+    vu_grid->Add(m_input_vu_r, 1, wxEXPAND);
+    rec_sizer->Add(vu_grid, 0, wxEXPAND | wxTOP, 6);
+
     rec_panel->SetSizer(rec_sizer);
     top_sampler_sizer->Add(rec_panel, 1, wxEXPAND | wxLEFT, 10);
     sampler_sizer->Add(top_sampler_sizer, 0, wxEXPAND | wxALL, 2);
+
+    // Start VU meter update timer (fires every 50 ms → ~20 fps)
+    m_vu_timer = new wxTimer(this);
+    Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
+        if (m_input_vu_l && m_input_vu_r) {
+            int sel = m_rec_input_ch ? m_rec_input_ch->GetSelection() : 0;
+            if (sel < 0) sel = 0;
+            bool mono = m_mono_btn && m_mono_btn->GetValue();
+            uint32_t ch = (uint32_t)sel;
+            float lvl_l = m_engine.input_level(ch);
+            float lvl_r = mono ? lvl_l : m_engine.input_level(ch + 1);
+            m_input_vu_l->level(lvl_l);
+            m_input_vu_r->level(lvl_r);
+        }
+        // Live waveform update during recording.
+        if (m_waveform_view && m_engine.is_recording_sample()) {
+            auto data = m_engine.recording_sample_data();
+            if (data) {
+                m_waveform_view->set_sample(data);
+            }
+        }
+    }, m_vu_timer->GetId());
+    m_vu_timer->Start(50);
+    m_vu_timer->Start(50);
 
     // Processing Controls - Using a FlexGridSizer for better alignment
     wxFlexGridSizer* proc_sizer = new wxFlexGridSizer(3, 2, 5, 5);

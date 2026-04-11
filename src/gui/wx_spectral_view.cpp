@@ -47,10 +47,14 @@ void SpectralView::update() {
     m_analyzer->process(windowed.data());
     const auto& new_mags = m_analyzer->magnitudes();
 
+    // Normalize by N/2 (Hanning window coherent gain) so 0 dBFS signal → magnitude 1.0,
+    // matching the calibration of the digital VU meters.
+    const float norm_factor = 1.0f / (float)(m_fft_size / 2);
+
     // Dampen sensitivity with smoothing (Exponential moving average)
     float alpha = 0.25f; // Lower = slower, less sensitive
     for (size_t i = 0; i < m_magnitudes.size(); ++i) {
-        m_magnitudes[i] = alpha * new_mags[i] + (1.0f - alpha) * m_magnitudes[i];
+        m_magnitudes[i] = alpha * (new_mags[i] * norm_factor) + (1.0f - alpha) * m_magnitudes[i];
     }
 
     Refresh(false);
@@ -96,9 +100,9 @@ void SpectralView::OnPaint(wxPaintEvent& event) {
             max_mag = std::max(max_mag, m_magnitudes[idx]);
         }
 
-        // dB scaling for Y axis
+        // dB scaling — same reference as digital VU meters: -60 to 0 dBFS
         float db = 20.0f * log10f(max_mag + 1e-6f);
-        float db_min = -80.0f;
+        float db_min = -60.0f;
         float db_max = 0.0f;
         float norm_y = (db - db_min) / (db_max - db_min);
         norm_y = std::max(0.0f, std::min(1.0f, norm_y));
@@ -107,9 +111,10 @@ void SpectralView::OnPaint(wxPaintEvent& event) {
         int x = i * (bar_w + gap);
 
         if (bar_h > 0) {
-            int green_h = std::min(bar_h, (int)(0.6f * h));
-            int yellow_h = std::min(bar_h, (int)(0.85f * h)) - green_h;
-            int red_h = bar_h - (green_h + yellow_h);
+            // Color zones match the digital VU meter: green 0–70%, yellow 70–90%, red 90–100%
+            int green_h  = std::min(bar_h, (int)(0.7f * h));
+            int yellow_h = std::min(bar_h, (int)(0.9f * h)) - green_h;
+            int red_h    = bar_h - (green_h + yellow_h);
 
             if (green_h > 0) {
                 dc.SetBrush(wxBrush(wxColour(0, 255, 0)));

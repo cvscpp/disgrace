@@ -29,6 +29,8 @@
 #include "wx_help_panel.h"
 #include "../core/engine.h"
 #include <wx/combobox.h>
+#include <wx/filedlg.h>
+#include <wx/msgdlg.h>
 #include <iostream>
 
 namespace disgrace_ns {
@@ -166,6 +168,29 @@ void WxMainWindow::OnTimer(wxTimerEvent& event) {
 }
 
 void WxMainWindow::OnClose(wxCloseEvent& event) {
+    if (event.CanVeto() && m_engine.is_dirty()) {
+        int answer = wxMessageBox(
+            "The project has unsaved changes.\nDo you want to save before closing?",
+            "Unsaved Changes",
+            wxYES_NO | wxCANCEL | wxICON_QUESTION, this);
+
+        if (answer == wxCANCEL) {
+            event.Veto();
+            return;
+        }
+
+        if (answer == wxYES) {
+            wxFileDialog dlg(this, "Save Project", "", "",
+                             "Disgrace Projects (*.dg)|*.dg",
+                             wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+            if (dlg.ShowModal() != wxID_OK) {
+                event.Veto();
+                return;
+            }
+            m_engine.save_project(dlg.GetPath().ToStdString());
+        }
+    }
+
     m_engine.shutdown();
     Destroy();
 }

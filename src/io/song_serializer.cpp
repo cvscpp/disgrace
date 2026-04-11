@@ -177,6 +177,8 @@ namespace disgrace_ns
             jt["audio_input_l"] = in_l;
             jt["audio_input_r"] = in_r;
             jt["input_delay_ms"] = engine.track(t).input_delay();
+            jt["humanize_vel"]    = engine.track(t).humanize_vel();
+            jt["humanize_timing"] = engine.track(t).humanize_timing();
             
             json jchain;
             engine.track(t).chain().to_json(&jchain);
@@ -354,6 +356,8 @@ namespace disgrace_ns
                 track.set_minimized(jt.value("minimized", false));
                 track.set_audio_input(jt.value("audio_input_l", -1), jt.value("audio_input_r", -1));
                 track.set_input_delay(jt.value("input_delay_ms", 0.0f), engine.sample_rate());
+                track.set_humanize_vel   (jt.value("humanize_vel",    (int)0));
+                track.set_humanize_timing(jt.value("humanize_timing", (int)0));
 
                 if (jt.contains("dsp_chain")) {
                     track.chain().from_json(&jt["dsp_chain"]);

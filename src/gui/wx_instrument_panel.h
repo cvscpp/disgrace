@@ -91,7 +91,7 @@ private:
     wxButton* m_add_sample_btn;
     wxButton* m_sample_play_btn;
     wxButton* m_sample_stop_btn;
-    wxToggleButton* m_rec_btn;
+    wxButton* m_rec_btn;
     wxChoice* m_rec_mode_ch;
     wxCheckBox* m_mono_btn;
     wxChoice* m_rec_input_ch;
@@ -99,6 +99,7 @@ private:
     class VUMeter* m_input_vu_r = nullptr;
     wxTimer* m_vu_timer = nullptr;
     class WaveformView* m_waveform_view;
+    wxStaticText* m_sample_name_label = nullptr;
 
     wxPanel* m_sfont_editor;
     wxButton* m_sfont_load_btn;

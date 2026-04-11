@@ -39,6 +39,7 @@ void Engine::save_project(const ::std::string& path)
         if (SongSerializer::save(*this, tmp_dir.string())) {
             if (ProjectArchive::save(path, tmp_dir.string())) {
                 std::cout << "Project saved successfully to " << path << std::endl;
+                mark_saved();
             } else {
                 std::cerr << "Failed to archive project to " << path << std::endl;
             }
@@ -68,6 +69,7 @@ void Engine::load_project(const ::std::string& path)
         if (ProjectArchive::extract(path, tmp_dir.string())) {
             if (SongSerializer::load(*this, tmp_dir.string())) {
                 m_project_temp_dir = tmp_dir.string();
+                mark_saved();
                 std::cout << "Project loaded successfully from " << path << std::endl;
             } else {
                 std::cerr << "Failed to deserialize song from " << path << std::endl;

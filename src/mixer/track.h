@@ -113,6 +113,22 @@ public:
     float note_to_frequency(uint8_t note);
     void process_tick(uint32_t engine_current_tick);
 
+    // --- Humanization (applies to SoundFont / Plugin / MIDI tracks) ---
+    // Velocity spread: ± this many velocity units (0 = off, max 64)
+    void set_humanize_vel(uint8_t v) { m_humanize_vel = v; }
+    uint8_t humanize_vel() const { return m_humanize_vel; }
+
+    // Timing jitter: max random onset delay in milliseconds (0 = off, max 100)
+    void set_humanize_timing(uint8_t ms) { m_humanize_timing = ms; }
+    uint8_t humanize_timing() const { return m_humanize_timing; }
+
+    // Called by the engine's process_tick to queue or immediately fire a note.
+    void schedule_note_on(uint8_t note, uint8_t velocity, size_t column,
+                          uint8_t sample_idx, size_t samples_per_row);
+
+    // Called at the start of every audio block to fire any pending delayed notes.
+    void fire_pending_notes(size_t frames);
+
     // Track minimization
     void set_minimized(bool min) { m_minimized = min; }
     bool is_minimized() const { return m_minimized; }
@@ -158,6 +174,30 @@ private:
     std::vector<float> m_delay_buf_l;
     std::vector<float> m_delay_buf_r;
     size_t m_delay_ptr = 0;
+
+    // Humanization
+    uint8_t m_humanize_vel    = 0; // ± velocity units
+    uint8_t m_humanize_timing = 0; // max delay in ms
+
+    struct PendingNote {
+        bool    active     = false;
+        uint8_t note       = 0;
+        uint8_t velocity   = 0;
+        uint8_t sample_idx = 0;
+        size_t  column     = 0;
+        int32_t delay_samples = 0; // counts down; fires when <= 0
+    };
+    static constexpr size_t MAX_PENDING = 16;
+    PendingNote m_pending[MAX_PENDING]{};
+
+    // Tiny xorshift RNG — lock-free, no heap, safe for the RT thread.
+    mutable uint32_t m_rng_state = 0x12345678u;
+    uint32_t rng_next() const {
+        m_rng_state ^= m_rng_state << 13;
+        m_rng_state ^= m_rng_state >> 17;
+        m_rng_state ^= m_rng_state << 5;
+        return m_rng_state;
+    }
 
     ::std::atomic<float> m_meter_l {0.0f};
     ::std::atomic<float> m_meter_r {0.0f};

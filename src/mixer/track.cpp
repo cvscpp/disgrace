@@ -19,6 +19,7 @@
 #include "track.h"
 #include "../instrument/instrument.h"
 #include <cmath> // Added for powf and fabs
+#include <algorithm>
 
 namespace disgrace_ns
 {
@@ -429,6 +430,55 @@ void disgrace_ns::Track::set_input_delay(float ms, uint32_t sample_rate)
 float disgrace_ns::Track::input_delay() const
 {
     return m_input_delay_ms;
+}
+
+void disgrace_ns::Track::schedule_note_on(uint8_t note, uint8_t velocity,
+                                           size_t column, uint8_t sample_idx,
+                                           size_t samples_per_row)
+{
+    // Apply velocity humanization first (always; independent of timing).
+    int vel = velocity;
+    if (m_humanize_vel > 0) {
+        int spread = m_humanize_vel;
+        int delta  = (int)(rng_next() % (2 * spread + 1)) - spread;
+        vel = std::max(1, std::min(127, vel + delta));
+    }
+
+    // If timing humanization is disabled, fire immediately.
+    if (m_humanize_timing == 0) {
+        note_on(note, (uint8_t)vel, column, 0, sample_idx);
+        return;
+    }
+
+    // Compute random delay in samples (0 … max_ms * sr / 1000).
+    // samples_per_row is passed as a proxy for sample_rate context;
+    // cap delay to at most half a row so notes never arrive late for the next row.
+    int32_t max_delay = (int32_t)((m_humanize_timing / 1000.0) * 48000.0);
+    int32_t delay     = (int32_t)(rng_next() % (uint32_t)(max_delay + 1));
+    delay = std::min(delay, (int32_t)(samples_per_row / 2));
+
+    // Find a free slot in the pending queue.
+    for (size_t s = 0; s < MAX_PENDING; ++s) {
+        if (!m_pending[s].active) {
+            m_pending[s] = {true, note, (uint8_t)vel, sample_idx, column, delay};
+            return;
+        }
+    }
+    // No free slot — fire immediately rather than dropping the note.
+    note_on(note, (uint8_t)vel, column, 0, sample_idx);
+}
+
+void disgrace_ns::Track::fire_pending_notes(size_t frames)
+{
+    for (size_t s = 0; s < MAX_PENDING; ++s) {
+        if (!m_pending[s].active) continue;
+        m_pending[s].delay_samples -= (int32_t)frames;
+        if (m_pending[s].delay_samples <= 0) {
+            note_on(m_pending[s].note, m_pending[s].velocity,
+                    m_pending[s].column, 0, m_pending[s].sample_idx);
+            m_pending[s].active = false;
+        }
+    }
 }
 
 } // namespace disgrace_ns

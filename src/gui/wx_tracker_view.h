@@ -41,6 +41,8 @@ public:
     void OnMouseDown(wxMouseEvent& event);
     void OnMouseDrag(wxMouseEvent& event);
     void OnMouseUp(wxMouseEvent& event);
+    void OnRightClick(wxMouseEvent& event);
+    void do_transpose(int semitones);
 
     void set_current_row(int row);
     int get_cursor_row() const { return m_cursor_row; }

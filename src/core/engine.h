@@ -222,6 +222,18 @@ public:
     void process_block(float* l, float* r, size_t nframes, const float* const* in_bufs = nullptr);
     void save_project(const ::std::string& path);
     void load_project(const ::std::string& path);
+
+    // Returns true if the project has unsaved changes.
+    bool is_dirty() const {
+        return m_dirty_extra || (m_undo.generation() != m_saved_generation);
+    }
+    // Call after save or load to clear the dirty flag.
+    void mark_saved() {
+        m_saved_generation = m_undo.generation();
+        m_dirty_extra = false;
+    }
+    // Call for non-undoable changes (mixer settings, track names, etc.).
+    void mark_dirty() { m_dirty_extra = true; }
     void import_audio(const ::std::string& path);
     void handle_midi(uint8_t* data, size_t size);
 
@@ -306,6 +318,8 @@ private:
     void propagate_sample_rate(uint32_t sr);
 
     disgrace_ns::UndoStack m_undo;
+    size_t m_saved_generation = 0;
+    bool   m_dirty_extra      = false;
     bool m_initialized;
     ::std::unique_ptr<disgrace_ns::AudioBackend> m_backend;
     disgrace_ns::BlockClipboard m_clipboard;

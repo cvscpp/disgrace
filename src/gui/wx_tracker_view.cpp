@@ -23,6 +23,7 @@
 #include "../instrument/voice_instrument.h"
 
 #include <wx/dcclient.h>
+#include <wx/menu.h>
 #include <wx/msgdlg.h>
 #include <wx/settings.h>
 
@@ -34,7 +35,19 @@ wxBEGIN_EVENT_TABLE(TrackerView, wxScrolledWindow)
     EVT_LEFT_DOWN(TrackerView::OnMouseDown)
     EVT_MOTION(TrackerView::OnMouseDrag)
     EVT_LEFT_UP(TrackerView::OnMouseUp)
+    EVT_RIGHT_DOWN(TrackerView::OnRightClick)
 wxEND_EVENT_TABLE()
+
+namespace {
+    enum {
+        ID_TRANSPOSE_UP1   = wxID_HIGHEST + 200,
+        ID_TRANSPOSE_DOWN1,
+        ID_TRANSPOSE_UP12,
+        ID_TRANSPOSE_DOWN12,
+        ID_SEL_SUBCOLUMN,
+        ID_SEL_TRACK,
+    };
+}
 
 static const char* note_names[] = {"C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-"};
 
@@ -42,6 +55,8 @@ TrackerView::TrackerView(wxWindow* parent, wxWindowID id, Pattern& pattern, Engi
     : wxScrolledWindow(parent, id), m_engine(engine), m_pattern(&pattern)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
+    // wxWANTS_CHARS ensures Tab and other special keys reach OnKeyDown
+    SetWindowStyle(GetWindowStyle() | wxWANTS_CHARS);
     // Use a fixed-width font for the grid
     SetFont(wxFont(10, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
     recalculate_size();
@@ -412,12 +427,14 @@ void TrackerView::OnKeyDown(wxKeyEvent& event) {
 
     switch (key) {
         case WXK_UP:
-            m_cursor_row -= m_engine.step_size();
+            // Always move 1 row up (Renoise convention); step only applies after note entry
+            m_cursor_row--;
             if (m_cursor_row < 0) m_cursor_row = (int)m_pattern->row_count() - 1;
             navigated = true;
             break;
         case WXK_DOWN:
-            m_cursor_row += m_engine.step_size();
+            // Always move 1 row down (Renoise convention)
+            m_cursor_row++;
             if (m_cursor_row >= (int)m_pattern->row_count()) m_cursor_row = 0;
             navigated = true;
             break;
@@ -455,16 +472,58 @@ void TrackerView::OnKeyDown(wxKeyEvent& event) {
             }
             navigated = true;
             break;
-        case WXK_PAGEUP: m_cursor_row = std::max(0, m_cursor_row - 16); navigated = true; break;
-        case WXK_PAGEDOWN: m_cursor_row = std::min((int)m_pattern->row_count() - 1, m_cursor_row + 16); navigated = true; break;
-        case WXK_HOME: m_cursor_row = 0; navigated = true; break;
-        case WXK_END: m_cursor_row = (int)m_pattern->row_count() - 1; navigated = true; break;
+        case WXK_TAB:
+            // Tab/Shift+Tab: jump to note field of next/previous track (Renoise convention)
+            if (shift) {
+                if (m_cursor_track > 0) m_cursor_track--;
+            } else {
+                if (m_cursor_track < (int)m_engine.track_count() - 1) m_cursor_track++;
+            }
+            m_cursor_col   = 0;
+            m_cursor_field = 0;
+            navigated = true;
+            break;
+        case WXK_PAGEUP:
+            m_cursor_row = std::max(0, m_cursor_row - 16);
+            navigated = true;
+            break;
+        case WXK_PAGEDOWN:
+            m_cursor_row = std::min((int)m_pattern->row_count() - 1, m_cursor_row + 16);
+            navigated = true;
+            break;
+        case WXK_HOME:
+            if (wx_mods & wxMOD_CONTROL) {
+                // Ctrl+Home: go to very beginning
+                m_cursor_track = 0;
+                m_cursor_col   = 0;
+                m_cursor_field = 0;
+                m_cursor_row   = 0;
+            } else if (m_cursor_col != 0 || m_cursor_field != 0) {
+                // First press: go to first field of this track
+                m_cursor_col   = 0;
+                m_cursor_field = 0;
+            } else {
+                // Already at first field: go to row 0
+                m_cursor_row = 0;
+            }
+            navigated = true;
+            break;
+        case WXK_END:
+            if (wx_mods & wxMOD_CONTROL) {
+                // Ctrl+End: go to very end
+                m_cursor_track = (int)m_engine.track_count() - 1;
+                m_cursor_row   = (int)m_pattern->row_count() - 1;
+            } else {
+                m_cursor_row = (int)m_pattern->row_count() - 1;
+            }
+            navigated = true;
+            break;
         case WXK_DELETE:
         case WXK_BACK:
             if (m_engine.m_record_enabled.load()) {
                 delete_current_field();
                 if (key == WXK_BACK) {
-                    m_cursor_row -= m_engine.step_size();
+                    m_cursor_row--;
                     if (m_cursor_row < 0) m_cursor_row = (int)m_pattern->row_count() - 1;
                 }
             }
@@ -1014,6 +1073,138 @@ void TrackerView::on_text_enter(wxCommandEvent& event) {
 
 void TrackerView::on_text_kill_focus(wxFocusEvent& event) {
     stop_text_edit(true);
+}
+
+void TrackerView::OnRightClick(wxMouseEvent& event) {
+    if (!m_pattern) return;
+    SetFocus();
+
+    // Translate mouse to pattern cell
+    int mx, my;
+    CalcUnscrolledPosition(event.GetX(), event.GetY(), &mx, &my);
+
+    if (my >= 20) {
+        int row_h = 18;
+        int center_y = get_center_row_y();
+        bool is_playing = m_engine.transport_state() != TransportState::Stopped;
+        int center_row = is_playing ? (int)m_engine.current_row() : m_cursor_row;
+        int row = center_row + (my - center_y) / row_h;
+        row = std::max(0, std::min((int)m_pattern->row_count() - 1, row));
+        m_cursor_row = row;
+
+        for (size_t t = 0; t < m_track_ui.size(); ++t) {
+            if (mx >= m_track_ui[t].x && mx < m_track_ui[t].x + m_track_ui[t].w) {
+                m_cursor_track = (int)t; break;
+            }
+        }
+        int field = get_field_at(m_cursor_track, mx);
+        int num_cols = (int)m_pattern->column_count(m_cursor_track);
+        if (field < num_cols * 3) {
+            m_cursor_col = field / 3;
+            m_cursor_field = field % 3;
+        } else {
+            m_cursor_col = 0;
+            m_cursor_field = 3 + (field - num_cols * 3);
+        }
+        Refresh();
+    }
+
+    wxMenu menu;
+
+    // Transpose sub-menu
+    wxMenu* trans_menu = new wxMenu;
+    trans_menu->Append(ID_TRANSPOSE_UP1,   wxT("Semitone Up\t+1"));
+    trans_menu->Append(ID_TRANSPOSE_DOWN1, wxT("Semitone Down\t-1"));
+    trans_menu->AppendSeparator();
+    trans_menu->Append(ID_TRANSPOSE_UP12,   wxT("Octave Up\t+12"));
+    trans_menu->Append(ID_TRANSPOSE_DOWN12, wxT("Octave Down\t-12"));
+    menu.AppendSubMenu(trans_menu, wxT("Transpose"));
+
+    menu.AppendSeparator();
+
+    // Selection sub-menu
+    wxMenu* sel_menu = new wxMenu;
+    sel_menu->Append(ID_SEL_SUBCOLUMN, wxT("Select this Sub-column"));
+    sel_menu->Append(ID_SEL_TRACK,     wxT("Select Entire Track"));
+    menu.AppendSubMenu(sel_menu, wxT("Select"));
+
+    // Bind handlers
+    menu.Bind(wxEVT_MENU, [&](wxCommandEvent& ev) {
+        int semitones = 0;
+        if      (ev.GetId() == ID_TRANSPOSE_UP1)   semitones = +1;
+        else if (ev.GetId() == ID_TRANSPOSE_DOWN1)  semitones = -1;
+        else if (ev.GetId() == ID_TRANSPOSE_UP12)   semitones = +12;
+        else if (ev.GetId() == ID_TRANSPOSE_DOWN12) semitones = -12;
+
+        if (semitones != 0) {
+            do_transpose(semitones);
+        } else if (ev.GetId() == ID_SEL_SUBCOLUMN) {
+            // Select all rows of the current sub-column (3 fields: note, sample, vol)
+            int num_cols_sc = (int)m_pattern->column_count(m_cursor_track);
+            int base_f = (m_cursor_field < 3)
+                         ? (m_cursor_col * 3)
+                         : (num_cols_sc * 3 + (m_cursor_field - 3));
+            int end_f  = (m_cursor_field < 3)
+                         ? (m_cursor_col * 3 + 2)
+                         : (num_cols_sc * 3 + (m_cursor_field - 3));
+            m_sel_start = {m_cursor_track, 0, base_f};
+            m_sel_end   = {m_cursor_track, (int)m_pattern->row_count() - 1, end_f};
+            m_sel_active = true;
+            Refresh();
+        } else if (ev.GetId() == ID_SEL_TRACK) {
+            // Select all rows and all fields of the current track
+            int num_cols_st = (int)m_pattern->column_count(m_cursor_track);
+            int last_f = num_cols_st * 3 + 3; // includes 4 fx/param fields
+            m_sel_start = {m_cursor_track, 0, 0};
+            m_sel_end   = {m_cursor_track, (int)m_pattern->row_count() - 1, last_f};
+            m_sel_active = true;
+            Refresh();
+        }
+    });
+
+    PopupMenu(&menu);
+}
+
+void TrackerView::do_transpose(int semitones) {
+    if (!m_pattern) return;
+
+    int row_count = (int)m_pattern->row_count();
+    int r0, r1, t0, t1;
+
+    if (m_sel_active) {
+        t0 = std::min(m_sel_start.track, m_sel_end.track);
+        t1 = std::max(m_sel_start.track, m_sel_end.track);
+        r0 = std::min(m_sel_start.row,   m_sel_end.row);
+        r1 = std::max(m_sel_start.row,   m_sel_end.row);
+    } else {
+        // Operate on the entire current track
+        t0 = t1 = m_cursor_track;
+        r0 = 0;
+        r1 = row_count - 1;
+    }
+
+    std::vector<CmdEditBlock::CellEdit> edits;
+
+    for (int t = t0; t <= t1; ++t) {
+        int num_cols = (int)m_pattern->column_count(t);
+        for (int r = r0; r <= r1; ++r) {
+            for (int c = 0; c < num_cols; ++c) {
+                int abs_f = c * 3 + 0; // note field
+                uint8_t note = m_pattern->get_field(t, r, abs_f);
+                if (note == 255 || note == 254) continue; // empty or note-off
+
+                int new_note = (int)note + semitones;
+                new_note = std::max(0, std::min(119, new_note));
+                if ((uint8_t)new_note != note)
+                    edits.push_back({(size_t)t, (size_t)r, (size_t)abs_f, note, (uint8_t)new_note});
+            }
+        }
+    }
+
+    if (!edits.empty()) {
+        m_engine.undo_stack().execute(std::make_unique<CmdEditBlock>(*m_pattern, edits));
+        Refresh();
+    }
 }
 
 } // namespace disgrace_ns

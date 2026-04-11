@@ -365,7 +365,9 @@ void Engine::process_tick()
                 if (ev.note == 254) {
                     m_tracks[t].note_off(c);
                 } else if (ev.note != 255) {
-                    m_tracks[t].note_on(ev.note, ev.volume == 255 ? 100 : ev.volume, c, 0, ev.sample_idx); 
+                    m_tracks[t].schedule_note_on(ev.note, ev.volume == 255 ? 100 : ev.volume,
+                                                 c, ev.sample_idx,
+                                                 m_timing.samples_per_row());
                 }
                 if (c == 0) handle_effect_row_start(t, ev);
             }
@@ -586,6 +588,7 @@ void Engine::render_block_multi(float** out_bufs, uint32_t num_outs, size_t fram
 
     // Pass 1: Tracks to Buses
     for (size_t t = 0; t < m_tracks.size(); ++t) {
+        m_tracks[t].fire_pending_notes(frames);
         m_tracks[t].process(m_track_l[t], m_track_r[t], frames, in_bufs);
         
         bool should_play = true;
@@ -715,19 +718,21 @@ void Engine::add_track() {
     for (auto& pat : m_patterns) {
         pat->resize_tracks(m_tracks.size());
     }
+    mark_dirty();
 }
-void Engine::remove_track(size_t index) { if (index < m_tracks.size()) m_tracks.erase(m_tracks.begin() + index); }
+void Engine::remove_track(size_t index) { if (index < m_tracks.size()) { m_tracks.erase(m_tracks.begin() + index); mark_dirty(); } }
 void Engine::move_track(size_t from, size_t to) {
-    if (from < m_tracks.size() && to < m_tracks.size()) std::swap(m_tracks[from], m_tracks[to]);
+    if (from < m_tracks.size() && to < m_tracks.size()) { std::swap(m_tracks[from], m_tracks[to]); mark_dirty(); }
 }
 size_t Engine::bus_count() const { return m_buses.size(); }
 MixerBus& Engine::bus(size_t index) { return m_buses[index]; }
 const MixerBus& Engine::bus(size_t index) const { return m_buses[index]; }
-void Engine::add_bus() { m_buses.emplace_back(); }
+void Engine::add_bus() { m_buses.emplace_back(); mark_dirty(); }
 void Engine::remove_bus(size_t index) { 
     // Prevent removal of master bus (index 0)
     if (index > 0 && index < m_buses.size()) {
         m_buses.erase(m_buses.begin() + index);
+        mark_dirty();
     }
 }
 void Engine::move_bus(size_t from, size_t to) {
@@ -741,9 +746,9 @@ size_t Engine::track_count() const { return m_tracks.size(); }
 Track& Engine::track(size_t index) { return m_tracks[index]; }
 const Track& Engine::track(size_t index) const { return m_tracks[index]; }
 
-void Engine::add_instrument() { m_instruments.push_back(std::make_unique<NoneInstrument>()); }
-void Engine::add_instrument(::std::unique_ptr<disgrace_ns::Instrument> inst) { m_instruments.push_back(std::move(inst)); }
-void Engine::remove_instrument(size_t index) { if (index < m_instruments.size()) m_instruments.erase(m_instruments.begin() + index); }
+void Engine::add_instrument() { m_instruments.push_back(std::make_unique<NoneInstrument>()); mark_dirty(); }
+void Engine::add_instrument(::std::unique_ptr<disgrace_ns::Instrument> inst) { m_instruments.push_back(std::move(inst)); mark_dirty(); }
+void Engine::remove_instrument(size_t index) { if (index < m_instruments.size()) { m_instruments.erase(m_instruments.begin() + index); mark_dirty(); } }
 Instrument& Engine::instrument(size_t index) { return *m_instruments[index]; }
 const Instrument& Engine::instrument(size_t index) const { return *m_instruments[index]; }
 size_t Engine::instrument_count() const { return m_instruments.size(); }
@@ -819,13 +824,15 @@ std::vector<size_t> Engine::order_list() const {
 }
 void Engine::set_order(const std::vector<size_t>& o) {
     m_order = o;
+    mark_dirty();
 }
 size_t Engine::add_pattern_to_order() { 
     size_t new_pat = create_pattern();
-    m_order.push_back(new_pat); 
+    m_order.push_back(new_pat);
+    mark_dirty();
     return m_order.size() - 1; 
 }
-void Engine::remove_pattern_from_order(size_t pos) { if (pos < m_order.size()) m_order.erase(m_order.begin() + pos); }
+void Engine::remove_pattern_from_order(size_t pos) { if (pos < m_order.size()) { m_order.erase(m_order.begin() + pos); mark_dirty(); } }
 size_t Engine::copy_pattern_in_order(size_t pos) {
     if (pos < m_order.size()) { 
         size_t new_pat = copy_pattern(m_order[pos]);
@@ -836,9 +843,9 @@ size_t Engine::copy_pattern_in_order(size_t pos) {
 }
 
 double Engine::tempo() const { return m_timing.tempo(); }
-void Engine::set_tempo(double bpm) { m_timing.set_bpm((int)bpm); }
+void Engine::set_tempo(double bpm) { m_timing.set_bpm((int)bpm); mark_dirty(); }
 uint32_t Engine::lpb() const { return m_timing.lpb(); }
-void Engine::set_lpb(uint32_t l) { m_timing.set_lpb(l); }
+void Engine::set_lpb(uint32_t l) { m_timing.set_lpb(l); mark_dirty(); }
 
 void Engine::toggle_metronome() { m_metronome_enabled = !m_metronome_enabled; }
 void Engine::set_metronome_enabled(bool e) { m_metronome_enabled = e; }

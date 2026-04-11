@@ -23,6 +23,7 @@
 #include "wx_analog_vu_meter.h"
 #include "wx_detached_frame.h"
 #include "../core/engine.h"
+#include <wx/spinctrl.h>
 #include "../dsp/gain.h"
 #include "../dsp/delay.h"
 #include "../dsp/reverb.h"
@@ -347,6 +348,7 @@ void MixerPanel::update_mixer_ui() {
         vol->Bind(wxEVT_SLIDER, [this, i](wxCommandEvent& ev) {
             float val = (float)ev.GetInt() / 100.0f;
             m_engine.track(i).set_volume(val);
+            m_engine.mark_dirty();
         });
         track_controls->Add(vol, 0, wxEXPAND | wxALL, 2);
 
@@ -367,6 +369,7 @@ void MixerPanel::update_mixer_ui() {
         pan->Bind(wxEVT_SLIDER, [this, i](wxCommandEvent& ev) {
             float val = (float)ev.GetInt() / 100.0f;
             m_engine.track(i).set_pan(val);
+            m_engine.mark_dirty();
         });
         track_sizer->Add(pan, 0, wxALIGN_CENTER | wxALL, 2);
 
@@ -376,6 +379,7 @@ void MixerPanel::update_mixer_ui() {
         mute->SetValue(m_engine.track(i).muted());
         mute->Bind(wxEVT_CHECKBOX, [this, i](wxCommandEvent& ev) {
             m_engine.track(i).set_mute(ev.IsChecked());
+            m_engine.mark_dirty();
         });
         ms_sizer->Add(mute, 0, wxALL, 2);
 
@@ -383,6 +387,7 @@ void MixerPanel::update_mixer_ui() {
         solo->SetValue(m_engine.track(i).solo());
         solo->Bind(wxEVT_CHECKBOX, [this, i](wxCommandEvent& ev) {
             m_engine.track(i).set_solo(ev.IsChecked());
+            m_engine.mark_dirty();
         });
         ms_sizer->Add(solo, 0, wxALL, 2);
         track_sizer->Add(ms_sizer, 0, wxALIGN_CENTER | wxALL, 2);

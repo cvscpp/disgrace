@@ -8,6 +8,7 @@
 #include <wx/filedlg.h>
 #include <wx/dir.h>
 #include <wx/artprov.h>
+#include <wx/spinctrl.h>
 
 namespace disgrace_ns {
 
@@ -156,12 +157,32 @@ void ProjectPanel::update_metadata() {
 void ProjectPanel::update_track_list() {
     m_track_container->DestroyChildren();
 
-    wxFlexGridSizer* grid_sizer = new wxFlexGridSizer(0, 8, 5, 5);
+    wxFlexGridSizer* grid_sizer = new wxFlexGridSizer(0, 10, 5, 5);
     grid_sizer->AddGrowableCol(1); // Track name should grow
 
     size_t num_tracks = m_engine.track_count();
     size_t num_insts = m_engine.instrument_count();
     size_t num_buses = m_engine.bus_count();
+
+    // Header row
+    auto make_hdr = [&](const wxString& text, const wxString& tip = wxEmptyString) {
+        wxStaticText* lbl = new wxStaticText(m_track_container, wxID_ANY, text);
+        wxFont f = lbl->GetFont();
+        f.SetWeight(wxFONTWEIGHT_BOLD);
+        lbl->SetFont(f);
+        if (!tip.IsEmpty()) lbl->SetToolTip(tip);
+        return lbl;
+    };
+    grid_sizer->Add(make_hdr(""),          0, wxALIGN_CENTER_VERTICAL | wxALL, 2); // index
+    grid_sizer->Add(make_hdr("Name"),      0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+    grid_sizer->Add(make_hdr("Instrument"),0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+    grid_sizer->Add(make_hdr("Notation"),  0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+    grid_sizer->Add(make_hdr("Output"),    0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+    grid_sizer->Add(make_hdr("V\u00b1",   "Velocity humanization: \u00b1 spread in units (0 = off, SF/Plugin/MIDI only)"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+    grid_sizer->Add(make_hdr("T ms",       "Timing humanization: max random onset delay in ms (0 = off, SF/Plugin/MIDI only)"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+    grid_sizer->AddSpacer(1); // up
+    grid_sizer->AddSpacer(1); // down
+    grid_sizer->AddSpacer(1); // remove
 
     // Display tracks
     for (size_t i = 0; i < num_tracks; ++i) {
@@ -244,7 +265,35 @@ void ProjectPanel::update_track_list() {
         });
         grid_sizer->Add(out_ch, 0, wxEXPAND | wxALL, 2);
 
-        // Column 5, 6, 7: Control Buttons
+        // Columns 5, 6: Velocity & timing humanization - active only for SoundFont/Plugin/MIDI
+        bool hum_enabled = inst_ptr &&
+                           (inst_ptr->type() == InstrumentType::SoundFont ||
+                            inst_ptr->type() == InstrumentType::Plugin ||
+                            inst_ptr->type() == InstrumentType::Midi);
+
+        wxSpinCtrl* vel_spin = new wxSpinCtrl(m_track_container, wxID_ANY, wxEmptyString,
+                                               wxDefaultPosition, wxSize(55, -1),
+                                               wxSP_ARROW_KEYS, 0, 64, track_obj.humanize_vel());
+        vel_spin->SetToolTip("Velocity humanization: +/- spread in velocity units (0 = off)");
+        vel_spin->Enable(hum_enabled);
+        vel_spin->Bind(wxEVT_SPINCTRL, [this, i](wxSpinEvent& ev) {
+            m_engine.track(i).set_humanize_vel((uint8_t)ev.GetValue());
+            m_engine.mark_dirty();
+        });
+        grid_sizer->Add(vel_spin, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+
+        wxSpinCtrl* tim_spin = new wxSpinCtrl(m_track_container, wxID_ANY, wxEmptyString,
+                                               wxDefaultPosition, wxSize(55, -1),
+                                               wxSP_ARROW_KEYS, 0, 100, track_obj.humanize_timing());
+        tim_spin->SetToolTip("Timing humanization: max random onset delay in ms (0 = off)");
+        tim_spin->Enable(hum_enabled);
+        tim_spin->Bind(wxEVT_SPINCTRL, [this, i](wxSpinEvent& ev) {
+            m_engine.track(i).set_humanize_timing((uint8_t)ev.GetValue());
+            m_engine.mark_dirty();
+        });
+        grid_sizer->Add(tim_spin, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+
+        // Columns 7, 8, 9: Control Buttons
         auto create_small_btn = [&](const wxArtID& art, const wxString& backup_label, auto func) {
             wxButton* btn = new wxButton(m_track_container, wxID_ANY, backup_label, wxDefaultPosition, wxSize(30, 25));
             btn->SetBitmap(wxArtProvider::GetBitmap(art, wxART_BUTTON, wxSize(14, 14)));
@@ -283,7 +332,7 @@ void ProjectPanel::update_track_list() {
         });
         grid_sizer->Add(name_in, 1, wxEXPAND | wxALL, 2);
 
-        // Column 2, 3: Spacers
+        // Columns 2, 3: Spacers (instrument/notation - N/A for buses)
         grid_sizer->AddSpacer(10);
         grid_sizer->AddSpacer(10);
 
@@ -335,8 +384,11 @@ void ProjectPanel::update_track_list() {
             }
         });
         grid_sizer->Add(out_ch, 0, wxEXPAND | wxALL, 2);
+        // Columns 5, 6: Spacers (humanization - N/A for buses)
+        grid_sizer->AddSpacer(10);
+        grid_sizer->AddSpacer(10);
 
-        // Column 5, 6, 7: Control Buttons
+        // Columns 7, 8, 9: Control Buttons
         auto create_small_btn = [&](const wxArtID& art, const wxString& backup_label, auto func) {
             wxButton* btn = new wxButton(m_track_container, wxID_ANY, backup_label, wxDefaultPosition, wxSize(30, 25));
             btn->SetBitmap(wxArtProvider::GetBitmap(art, wxART_BUTTON, wxSize(14, 14)));

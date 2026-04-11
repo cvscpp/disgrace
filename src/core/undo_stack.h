@@ -31,11 +31,15 @@ namespace disgrace_ns
         void execute(::std::unique_ptr<disgrace_ns::Command> cmd);
         void undo();
         void redo();
-        void execute_group(::std::vector<EditCommandPtr> cmds); // Add this line
+        void execute_group(::std::vector<EditCommandPtr> cmds);
+
+        size_t generation() const { return m_generation; }
+        void   reset_generation()  { m_generation = 0; }
 
     private:
         ::std::vector<::std::unique_ptr<disgrace_ns::Command>> m_undo;
         ::std::vector<::std::unique_ptr<disgrace_ns::Command>> m_redo;
+        size_t m_generation = 0;
     };
 
 } // namespace disgrace_ns

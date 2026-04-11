@@ -65,8 +65,9 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     wxBoxSizer* inst_list_sizer = new wxBoxSizer(wxVERTICAL);
 
     wxBoxSizer* top_btn_sizer = new wxBoxSizer(wxHORIZONTAL);
-    m_detach_btn = new wxButton(m_inst_list_pane, wxID_ANY, "[]", wxDefaultPosition, wxSize(30, 20));
-    m_detach_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FULL_SCREEN, wxART_BUTTON, wxSize(14, 14)));
+    m_detach_btn = new wxButton(m_inst_list_pane, wxID_ANY, "", wxDefaultPosition, wxSize(28, 28));
+    m_detach_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FULL_SCREEN, wxART_BUTTON, wxSize(16, 16)));
+    m_detach_btn->SetToolTip("Detach");
     m_detach_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_detach, this);
     top_btn_sizer->Add(new wxStaticText(m_inst_list_pane, wxID_ANY, "Instruments"), 1, wxALL | wxALIGN_CENTER_VERTICAL, 2);
     top_btn_sizer->Add(m_detach_btn, 0, wxALL, 2);
@@ -129,7 +130,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     wxBoxSizer* top_sampler_sizer = new wxBoxSizer(wxHORIZONTAL);
     
     // Sample List
-    m_sample_list_grp = new wxPanel(m_sampler_editor, wxID_ANY, wxDefaultPosition, wxSize(220, -1), wxBORDER_THEME);
+    m_sample_list_grp = new wxPanel(m_sampler_editor, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
     wxBoxSizer* sample_list_sizer = new wxBoxSizer(wxVERTICAL);
     m_add_sample_btn = new wxButton(m_sample_list_grp, wxID_ANY, "Add Sample");
     m_add_sample_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_PLUS, wxART_BUTTON, wxSize(16, 16)));
@@ -141,7 +142,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_sample_scroll->SetSizer(new wxBoxSizer(wxVERTICAL));
     sample_list_sizer->Add(m_sample_scroll, 1, wxEXPAND | wxALL, 0);
     m_sample_list_grp->SetSizer(sample_list_sizer);
-    top_sampler_sizer->Add(m_sample_list_grp, 0, wxEXPAND | wxALL, 2);
+    top_sampler_sizer->Add(m_sample_list_grp, 1, wxEXPAND | wxALL, 2);
 
     // Recording / Playback
     wxPanel* rec_panel = new wxPanel(m_sampler_editor, wxID_ANY);
@@ -157,8 +158,9 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_sample_stop_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_STOP, wxART_BUTTON, wxSize(16, 16)));
     m_sample_stop_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_sample_stop, this);
     
-    m_rec_btn = new wxToggleButton(rec_panel, wxID_ANY, "Record", wxDefaultPosition, wxSize(-1, 25));
-    m_rec_btn->Bind(wxEVT_TOGGLEBUTTON, &InstrumentPanel::on_record_sample, this);
+    m_rec_btn = new wxButton(rec_panel, wxID_ANY, "Record", wxDefaultPosition, wxSize(-1, 25));
+    m_rec_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_FORWARD, wxART_BUTTON, wxSize(16, 16)));
+    m_rec_btn->Bind(wxEVT_BUTTON, &InstrumentPanel::on_record_sample, this);
     
     m_undo_btn = new wxButton(rec_panel, wxID_ANY, "Undo", wxDefaultPosition, wxSize(-1, 25));
     m_undo_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_UNDO, wxART_BUTTON, wxSize(16, 16)));
@@ -223,6 +225,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
             if (sel < 0) sel = 0;
             bool mono = m_mono_btn && m_mono_btn->GetValue();
             uint32_t ch = (uint32_t)sel;
+            if (!mono) ch *= 2;  // dropdown index → physical channel
             float lvl_l = m_engine.input_level(ch);
             float lvl_r = mono ? lvl_l : m_engine.input_level(ch + 1);
             m_input_vu_l->level(lvl_l);
@@ -306,6 +309,10 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     proc_sizer->Add(edit_sizer, 0, wxEXPAND);
 
     sampler_sizer->Add(proc_sizer, 0, wxEXPAND | wxALL, 5);
+
+    // Sample name label shown above the waveform when a sample is selected.
+    m_sample_name_label = new wxStaticText(m_sampler_editor, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_END);
+    sampler_sizer->Add(m_sample_name_label, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 4);
 
     // Waveform View
     m_waveform_view = new WaveformView(m_sampler_editor, wxID_ANY, m_engine);
@@ -862,6 +869,7 @@ void InstrumentPanel::update_editor() {
     m_plugin_editor->Hide();
     m_midi_editor->Hide();
     m_voice_editor->Hide();
+    if (m_sample_name_label) m_sample_name_label->SetLabel("");
 
     if (m_selected_instrument >= 0 && m_selected_instrument < (int)m_engine.instrument_count()) {
         auto& inst = m_engine.instrument(m_selected_instrument);
@@ -987,8 +995,12 @@ void InstrumentPanel::update_editor() {
             m_waveform_view->set_color(m_engine.m_waveform_color);
             if (m_selected_sample >= 0 && m_selected_sample < (int)sampler->sample_count()) {
                 sampler->set_selected_sample(m_selected_sample);
-                m_waveform_view->set_sample(sampler->get_sample(m_selected_sample).data);
+                auto const& smp = sampler->get_sample(m_selected_sample);
+                if (m_sample_name_label)
+                    m_sample_name_label->SetLabel(wxString::Format("[%d] %s", m_selected_sample + 1, smp.name));
+                m_waveform_view->set_sample(smp.data);
             } else {
+                if (m_sample_name_label) m_sample_name_label->SetLabel("");
                 m_waveform_view->set_sample(nullptr);
             }
         } 
@@ -1169,34 +1181,38 @@ void InstrumentPanel::on_sample_play(wxCommandEvent& event) {
 }
 
 void InstrumentPanel::on_sample_stop(wxCommandEvent& event) {
-    if (m_selected_instrument >= 0) {
+    // Stop playback.
+    if (m_selected_instrument >= 0)
         m_engine.instrument(m_selected_instrument).note_off();
+
+    // Stop recording and commit data if active.
+    if (!m_engine.is_recording_sample()) return;
+    m_engine.stop_recording_sample();
+    if (m_selected_instrument < 0) return;
+    auto& inst = m_engine.instrument(m_selected_instrument);
+    if (inst.type() != InstrumentType::Sampler) return;
+    auto* sampler = static_cast<SampleInstrument*>(&inst);
+    if (m_engine.m_recording_sample_data && !m_engine.m_recording_sample_data->left.empty()) {
+        if (m_selected_sample >= 0 && m_selected_sample < (int)sampler->sample_count()) {
+            sampler->push_undo(m_selected_sample);
+            sampler->get_sample(m_selected_sample).data = m_engine.m_recording_sample_data;
+        } else {
+            sampler->add_sample("Recorded Sample", m_engine.m_recording_sample_data);
+            m_selected_sample = (int)sampler->sample_count() - 1;
+        }
+        update_editor();
     }
 }
 
 void InstrumentPanel::on_record_sample(wxCommandEvent& event) {
-    if (m_rec_btn->GetValue()) {
-        uint32_t channel = 0;
-        int sel = m_rec_input_ch->GetSelection();
-        if (sel != wxNOT_FOUND) channel = (uint32_t)sel;
-        bool mono = m_mono_btn->GetValue();
-        if (!mono) channel *= 2; 
-        Engine::SampleRecordMode mode = (Engine::SampleRecordMode)m_rec_mode_ch->GetSelection();
-        m_engine.start_recording_sample(mode, channel, mono);
-    } else {
-        m_engine.stop_recording_sample();
-        if (m_selected_instrument >= 0) {
-            auto& inst = m_engine.instrument(m_selected_instrument);
-            if (inst.type() == InstrumentType::Sampler) {
-                auto* sampler = static_cast<SampleInstrument*>(&inst);
-                if (m_engine.m_recording_sample_data && !m_engine.m_recording_sample_data->left.empty()) {
-                    sampler->add_sample("Recorded Sample", m_engine.m_recording_sample_data);
-                    m_selected_sample = (int)sampler->sample_count() - 1;
-                    update_editor();
-                }
-            }
-        }
-    }
+    if (m_engine.is_recording_sample()) return; // already recording
+    uint32_t channel = 0;
+    int sel = m_rec_input_ch->GetSelection();
+    if (sel != wxNOT_FOUND) channel = (uint32_t)sel;
+    bool mono = m_mono_btn->GetValue();
+    if (!mono) channel *= 2;
+    Engine::SampleRecordMode mode = (Engine::SampleRecordMode)m_rec_mode_ch->GetSelection();
+    m_engine.start_recording_sample(mode, channel, mono);
 }
 
 void InstrumentPanel::on_mono_toggle(wxCommandEvent& event) {

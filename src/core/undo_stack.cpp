@@ -29,6 +29,7 @@ void UndoStack::execute(::std::unique_ptr<disgrace_ns::Command> cmd)
     cmd->execute();
     m_undo.push_back(::std::move(cmd));
     m_redo.clear();
+    ++m_generation;
 }
 
 void UndoStack::undo()
@@ -41,6 +42,7 @@ void UndoStack::undo()
 
     cmd->undo();
     m_redo.push_back(::std::move(cmd));
+    ++m_generation;
 }
 
 void UndoStack::redo()
@@ -53,6 +55,7 @@ void UndoStack::redo()
 
     cmd->execute();
     m_undo.push_back(::std::move(cmd));
+    ++m_generation;
 }
 
 void UndoStack::execute_group(::std::vector<EditCommandPtr> cmds)
@@ -61,11 +64,12 @@ void UndoStack::execute_group(::std::vector<EditCommandPtr> cmds)
     {
         cmd->execute();
     }
-    for (auto& cmd : cmds) // Loop to cast and move
+    for (auto& cmd : cmds)
     {
         m_undo.push_back(static_cast<::std::unique_ptr<disgrace_ns::Command>>(::std::move(cmd)));
     }
     m_redo.clear();
+    ++m_generation;
 }
 
 } // namespace disgrace_ns

@@ -1064,7 +1064,8 @@ void InstrumentPanel::update_editor() {
                 };
                 name->Bind(wxEVT_TEXT_ENTER, [smp_name_commit](wxCommandEvent&){ smp_name_commit(); });
                 name->Bind(wxEVT_KILL_FOCUS,  [smp_name_commit](wxFocusEvent& ev){ ev.Skip(); smp_name_commit(); });
-                
+                rs->Add(name, 1, wxALIGN_CENTER_VERTICAL | wxALL, 1);
+
                 wxButton* load = new wxButton(row, wxID_ANY, "L", wxDefaultPosition, wxSize(25, 25));
                 load->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(14, 14)));
                 load->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent& ev){ 

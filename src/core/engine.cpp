@@ -27,6 +27,8 @@
 #include "../mixer/track.h"
 #include "../instrument/sample_instrument.h"
 #include "../instrument/soundfont_instrument.h"
+#include "../instrument/sfz_instrument.h"
+#include "../instrument/xrni_instrument.h"
 #include "../instrument/dssi_instrument.h"
 #include "../instrument/lv2_instrument.h"
 #include "../instrument/midi_instrument.h"
@@ -755,6 +757,8 @@ void Engine::set_instrument_type(size_t index, InstrumentType type) {
     switch (type) {
         case InstrumentType::Sampler: new_inst = std::make_unique<SampleInstrument>((double)m_sample_rate); break;
         case InstrumentType::SoundFont: new_inst = std::make_unique<SoundFontInstrument>((double)m_sample_rate); break;
+        case InstrumentType::SFZ:       new_inst = std::make_unique<SfzInstrument>((double)m_sample_rate); break;
+        case InstrumentType::XRNI:      new_inst = std::make_unique<XrniInstrument>((double)m_sample_rate); break;
         case InstrumentType::Plugin: new_inst = std::make_unique<DSSIInstrument>((double)m_sample_rate); break;
         case InstrumentType::Midi: new_inst = std::make_unique<MidiInstrument>(this); break;
         case InstrumentType::Voice: new_inst = std::make_unique<VoiceInstrument>(this); break;

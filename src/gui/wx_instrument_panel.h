@@ -108,6 +108,18 @@ private:
     wxListBox* m_sfont_browser;
     wxSlider* m_sfont_vol_slider;
 
+    wxPanel*   m_sfz_editor     = nullptr;
+    wxButton*  m_sfz_load_btn   = nullptr;
+    wxListBox* m_sfz_browser    = nullptr;  // group list
+    wxSlider*  m_sfz_vol_slider = nullptr;
+    wxStaticText* m_sfz_path_label = nullptr;
+
+    wxPanel*   m_xrni_editor     = nullptr;
+    wxButton*  m_xrni_load_btn   = nullptr;
+    wxListBox* m_xrni_browser    = nullptr;  // sample list
+    wxSlider*  m_xrni_vol_slider = nullptr;
+    wxStaticText* m_xrni_path_label = nullptr;
+
     wxPanel* m_plugin_editor;
     wxButton* m_plugin_scan_btn;
     wxListBox* m_plugin_browser;

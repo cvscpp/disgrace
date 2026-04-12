@@ -366,6 +366,16 @@ void TrackerPanel::update_pattern_list() {
                 }
             }
         });
+        len_inp->Bind(wxEVT_KILL_FOCUS, [this, pat_idx, len_inp](wxFocusEvent& ev) {
+            ev.Skip();
+            long new_len = 0;
+            if (len_inp->GetValue().ToLong(&new_len) && new_len > 0 && new_len <= 512) {
+                this->m_engine.resize_pattern(pat_idx, (size_t)new_len);
+                len_inp->SetValue(wxString::Format("%zu", this->m_engine.pattern(pat_idx).row_count()));
+                this->m_tracker->recalculate_size();
+                this->m_tracker->Refresh();
+            }
+        });
         m_pattern_length_inputs[pat_idx] = len_inp;
     }
 

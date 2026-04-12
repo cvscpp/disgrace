@@ -23,6 +23,8 @@
 #include "../mixer/track.h"
 #include "../instrument/sample_instrument.h"
 #include "../instrument/soundfont_instrument.h"
+#include "../instrument/sfz_instrument.h"
+#include "../instrument/xrni_instrument.h"
 #include "../instrument/midi_instrument.h"
 #include "../instrument/voice_instrument.h"
 #include "../instrument/dssi_instrument.h"
@@ -114,6 +116,21 @@ namespace disgrace_ns
                     }
                 }
                 jinst["preset"] = sf.current_preset();
+            } else if (inst.type() == InstrumentType::SFZ) {
+                // SFZ: save only the absolute path — sample files are NOT copied into the project
+                const auto& sfz = static_cast<const SfzInstrument&>(inst);
+                if (!sfz.path().empty()) {
+                    jinst["sfz_path"] = sfz.path();
+                    jinst["sfz_group"] = sfz.current_group();
+                    jinst["sfz_volume"] = sfz.get_volume();
+                }
+            } else if (inst.type() == InstrumentType::XRNI) {
+                // XRNI: save only the absolute path — samples are inside the XRNI archive
+                const auto& xrni = static_cast<const XrniInstrument&>(inst);
+                if (!xrni.path().empty()) {
+                    jinst["xrni_path"]   = xrni.path();
+                    jinst["xrni_volume"] = xrni.get_volume();
+                }
             } else if (inst.type() == InstrumentType::Midi) {
                 const auto& midi = static_cast<const MidiInstrument&>(inst);
                 jinst["channel"] = midi.channel();
@@ -276,6 +293,18 @@ namespace disgrace_ns
                     fs::path sf_path = base_path / ji["soundfont"].get<std::string>();
                     if (sf.load_soundfont(sf_path.string())) {
                         sf.set_preset(ji.value("preset", 0));
+                    }
+                } else if (type == InstrumentType::SFZ && ji.contains("sfz_path")) {
+                    SfzInstrument& sfz = static_cast<SfzInstrument&>(inst);
+                    // SFZ path is stored as absolute — load directly
+                    if (sfz.load_sfz(ji["sfz_path"].get<std::string>())) {
+                        sfz.set_group(ji.value("sfz_group", -1));
+                        sfz.set_volume(ji.value("sfz_volume", 1.0f));
+                    }
+                } else if (type == InstrumentType::XRNI && ji.contains("xrni_path")) {
+                    XrniInstrument& xrni = static_cast<XrniInstrument&>(inst);
+                    if (xrni.load_xrni(ji["xrni_path"].get<std::string>())) {
+                        xrni.set_volume(ji.value("xrni_volume", 1.0f));
                     }
                 } else if (type == InstrumentType::Midi) {
                     MidiInstrument& midi = static_cast<MidiInstrument&>(inst);

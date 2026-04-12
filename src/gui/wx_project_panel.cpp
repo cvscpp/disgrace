@@ -194,7 +194,7 @@ void ProjectPanel::update_track_list() {
         grid_sizer->Add(new wxStaticText(m_track_container, wxID_ANY, idx_str), 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
 
         // Column 1: Name Input
-        wxTextCtrl* name_in = new wxTextCtrl(m_track_container, wxID_ANY, track_obj.name());
+        wxTextCtrl* name_in = new wxTextCtrl(m_track_container, wxID_ANY, track_obj.name(), wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
         name_in->Bind(wxEVT_TEXT, [this, i, name_in](wxCommandEvent&) {
             m_engine.track(i).set_name(name_in->GetValue().ToStdString());
         });
@@ -231,7 +231,9 @@ void ProjectPanel::update_track_list() {
         });
         
         Instrument* inst_ptr = track_obj.instrument();
-        if (inst_ptr && (inst_ptr->type() == InstrumentType::SoundFont || 
+        if (inst_ptr && (inst_ptr->type() == InstrumentType::SoundFont ||
+                         inst_ptr->type() == InstrumentType::SFZ ||
+                         inst_ptr->type() == InstrumentType::XRNI ||
                          inst_ptr->type() == InstrumentType::Plugin || 
                          inst_ptr->type() == InstrumentType::Midi)) {
             notation_ch->Enable(true);
@@ -265,9 +267,11 @@ void ProjectPanel::update_track_list() {
         });
         grid_sizer->Add(out_ch, 0, wxEXPAND | wxALL, 2);
 
-        // Columns 5, 6: Velocity & timing humanization - active only for SoundFont/Plugin/MIDI
+        // Columns 5, 6: Velocity & timing humanization - active only for SoundFont/SFZ/Plugin/MIDI
         bool hum_enabled = inst_ptr &&
                            (inst_ptr->type() == InstrumentType::SoundFont ||
+                            inst_ptr->type() == InstrumentType::SFZ ||
+                            inst_ptr->type() == InstrumentType::XRNI ||
                             inst_ptr->type() == InstrumentType::Plugin ||
                             inst_ptr->type() == InstrumentType::Midi);
 
@@ -326,7 +330,7 @@ void ProjectPanel::update_track_list() {
         grid_sizer->Add(new wxStaticText(m_track_container, wxID_ANY, idx_str), 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
 
         // Column 1: Name Input
-        wxTextCtrl* name_in = new wxTextCtrl(m_track_container, wxID_ANY, bus_obj.name());
+        wxTextCtrl* name_in = new wxTextCtrl(m_track_container, wxID_ANY, bus_obj.name(), wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
         name_in->Bind(wxEVT_TEXT, [this, i, name_in](wxCommandEvent&) {
             m_engine.bus(i).set_name(name_in->GetValue().ToStdString());
         });

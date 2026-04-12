@@ -24,6 +24,8 @@
 #include "../core/engine.h"
 #include "../instrument/sample_instrument.h"
 #include "../instrument/soundfont_instrument.h"
+#include "../instrument/sfz_instrument.h"
+#include "../instrument/xrni_instrument.h"
 #include "../instrument/dssi_instrument.h"
 #include "../instrument/midi_instrument.h"
 #include "../instrument/voice_instrument.h"
@@ -418,8 +420,105 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_sfont_editor->Hide();
     right_sizer->Add(m_sfont_editor, 1, wxEXPAND | wxALL, 2);
 
-    // 3. Plugin Editor
-    m_plugin_editor = new wxPanel(m_right_panel, wxID_ANY);
+    // 3. SFZ Editor
+    m_sfz_editor = new wxPanel(m_right_panel, wxID_ANY);
+    wxBoxSizer* sfz_sizer = new wxBoxSizer(wxVERTICAL);
+
+    wxBoxSizer* sfz_top = new wxBoxSizer(wxHORIZONTAL);
+    m_sfz_load_btn = new wxButton(m_sfz_editor, wxID_ANY, "Load SFZ");
+    m_sfz_load_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(16, 16)));
+    m_sfz_load_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        wxFileDialog dlg(this, "Load SFZ Instrument", "", "",
+                         "SFZ files (*.sfz)|*.sfz", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        if (dlg.ShowModal() != wxID_OK) return;
+        if (m_selected_instrument < 0) return;
+        auto& inst = m_engine.instrument(m_selected_instrument);
+        if (inst.type() == InstrumentType::SFZ) {
+            auto& sfz = static_cast<SfzInstrument&>(inst);
+            if (sfz.load_sfz(dlg.GetPath().ToStdString()))
+                update_editor();
+        }
+    });
+    sfz_top->Add(m_sfz_load_btn, 0, wxALL, 5);
+    m_sfz_path_label = new wxStaticText(m_sfz_editor, wxID_ANY, "(no file)",
+                                         wxDefaultPosition, wxSize(200, -1),
+                                         wxST_ELLIPSIZE_START | wxST_NO_AUTORESIZE);
+    sfz_top->Add(m_sfz_path_label, 1, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    sfz_sizer->Add(sfz_top, 0, wxEXPAND);
+
+    sfz_sizer->Add(new wxStaticText(m_sfz_editor, wxID_ANY, "Groups"), 0, wxLEFT | wxTOP, 5);
+    m_sfz_browser = new wxListBox(m_sfz_editor, wxID_ANY);
+    m_sfz_browser->Bind(wxEVT_LISTBOX, [this](wxCommandEvent& ev) {
+        if (m_selected_instrument < 0) return;
+        auto& inst = m_engine.instrument(m_selected_instrument);
+        if (inst.type() == InstrumentType::SFZ) {
+            // -1 = all; index 0 = "All groups", rest are real group indices
+            int idx = m_sfz_browser->GetSelection();
+            static_cast<SfzInstrument&>(inst).set_group(idx - 1);
+        }
+    });
+    sfz_sizer->Add(m_sfz_browser, 1, wxEXPAND | wxALL, 5);
+
+    sfz_sizer->Add(new wxStaticText(m_sfz_editor, wxID_ANY, "Volume"), 0, wxLEFT, 5);
+    m_sfz_vol_slider = new wxSlider(m_sfz_editor, wxID_ANY, 100, 0, 128);
+    m_sfz_vol_slider->Bind(wxEVT_SLIDER, [this](wxCommandEvent&) {
+        if (m_selected_instrument < 0) return;
+        auto& inst = m_engine.instrument(m_selected_instrument);
+        if (inst.type() == InstrumentType::SFZ)
+            static_cast<SfzInstrument&>(inst).set_volume((float)m_sfz_vol_slider->GetValue() / 100.0f);
+    });
+    sfz_sizer->Add(m_sfz_vol_slider, 0, wxEXPAND | wxALL, 5);
+
+    m_sfz_editor->SetSizer(sfz_sizer);
+    m_sfz_editor->Hide();
+    right_sizer->Add(m_sfz_editor, 1, wxEXPAND | wxALL, 2);
+
+    // 4. XRNI Editor
+    m_xrni_editor = new wxPanel(m_right_panel, wxID_ANY);
+    wxBoxSizer* xrni_sizer = new wxBoxSizer(wxVERTICAL);
+
+    wxBoxSizer* xrni_top = new wxBoxSizer(wxHORIZONTAL);
+    m_xrni_load_btn = new wxButton(m_xrni_editor, wxID_ANY, "Load XRNI");
+    m_xrni_load_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(16, 16)));
+    m_xrni_load_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        wxFileDialog dlg(this, "Load XRNI Instrument", "", "",
+                         "XRNI files (*.xrni)|*.xrni", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        if (dlg.ShowModal() != wxID_OK) return;
+        if (m_selected_instrument < 0) return;
+        auto& inst = m_engine.instrument(m_selected_instrument);
+        if (inst.type() == InstrumentType::XRNI) {
+            auto& xrni = static_cast<XrniInstrument&>(inst);
+            if (xrni.load_xrni(dlg.GetPath().ToStdString()))
+                update_editor();
+        }
+    });
+    xrni_top->Add(m_xrni_load_btn, 0, wxALL, 5);
+    m_xrni_path_label = new wxStaticText(m_xrni_editor, wxID_ANY, "(no file)",
+                                         wxDefaultPosition, wxDefaultSize,
+                                         wxST_ELLIPSIZE_START | wxST_NO_AUTORESIZE);
+    xrni_top->Add(m_xrni_path_label, 1, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    xrni_sizer->Add(xrni_top, 0, wxEXPAND);
+
+    xrni_sizer->Add(new wxStaticText(m_xrni_editor, wxID_ANY, "Samples"), 0, wxLEFT | wxTOP, 5);
+    m_xrni_browser = new wxListBox(m_xrni_editor, wxID_ANY);
+    xrni_sizer->Add(m_xrni_browser, 1, wxEXPAND | wxALL, 5);
+
+    xrni_sizer->Add(new wxStaticText(m_xrni_editor, wxID_ANY, "Volume"), 0, wxLEFT, 5);
+    m_xrni_vol_slider = new wxSlider(m_xrni_editor, wxID_ANY, 100, 0, 128);
+    m_xrni_vol_slider->Bind(wxEVT_SLIDER, [this](wxCommandEvent&) {
+        if (m_selected_instrument < 0) return;
+        auto& inst = m_engine.instrument(m_selected_instrument);
+        if (inst.type() == InstrumentType::XRNI)
+            static_cast<XrniInstrument&>(inst).set_volume(
+                (float)m_xrni_vol_slider->GetValue() / 100.0f);
+    });
+    xrni_sizer->Add(m_xrni_vol_slider, 0, wxEXPAND | wxALL, 5);
+
+    m_xrni_editor->SetSizer(xrni_sizer);
+    m_xrni_editor->Hide();
+    right_sizer->Add(m_xrni_editor, 1, wxEXPAND | wxALL, 2);
+
+
     wxBoxSizer* plugin_sizer = new wxBoxSizer(wxVERTICAL);
     m_plugin_scan_btn = new wxButton(m_plugin_editor, wxID_ANY, "Scan Plugins");
     m_plugin_scan_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FIND, wxART_BUTTON, wxSize(16, 16)));
@@ -822,7 +921,7 @@ void InstrumentPanel::update_instrument_list() {
         wxPanel* row = new wxPanel(m_inst_scroll, wxID_ANY);
         wxBoxSizer* row_sizer = new wxBoxSizer(wxHORIZONTAL);
         
-        wxButton* sel = new wxButton(row, wxID_ANY, wxString::Format("%zu:", i + 1), wxDefaultPosition, wxSize(40, 25), wxBORDER_NONE);
+        wxButton* sel = new wxButton(row, wxID_ANY, wxString::Format("%zu", i + 1), wxDefaultPosition, wxSize(36, -1), wxBORDER_NONE);
         if ((int)i == m_selected_instrument) {
             sel->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_selection_color));
             sel->SetForegroundColour(ThemeManager::contrastColor(m_engine.m_selection_color));
@@ -831,23 +930,38 @@ void InstrumentPanel::update_instrument_list() {
             sel->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_fg_color));
         }
         sel->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&){ 
-            this->CallAfter([this, i](){
-                on_inst_select_idx(i); 
-            });
+            this->CallAfter([this, i](){ on_inst_select_idx(i); });
+        });
+        // Clicking the row background also selects it
+        row->Bind(wxEVT_LEFT_DOWN, [this, i](wxMouseEvent& ev){
+            ev.Skip();
+            this->CallAfter([this, i](){ on_inst_select_idx(i); });
         });
         row_sizer->Add(sel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
         
         wxTextCtrl* name = new wxTextCtrl(row, wxID_ANY, inst.name(), wxDefaultPosition, wxSize(120, -1), wxTE_PROCESS_ENTER);
         name->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_bg));
         name->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_tracker_text));
-        name->Bind(wxEVT_TEXT_ENTER, [this, i](wxCommandEvent& ev){
-            m_engine.instrument(i).set_name(ev.GetString().ToStdString());
+        // Clicking/focusing the name field also selects the row
+        name->Bind(wxEVT_SET_FOCUS, [this, i](wxFocusEvent& ev){
+            ev.Skip();
+            if (m_selected_instrument != (int)i)
+                this->CallAfter([this, i](){ on_inst_select_idx(i); });
         });
+        auto inst_name_commit = [this, i, name](){ m_engine.instrument(i).set_name(name->GetValue().ToStdString()); };
+        name->Bind(wxEVT_TEXT_ENTER, [inst_name_commit](wxCommandEvent&){ inst_name_commit(); });
+        name->Bind(wxEVT_KILL_FOCUS,  [inst_name_commit](wxFocusEvent& ev){ ev.Skip(); inst_name_commit(); });
         row_sizer->Add(name, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
         
         wxChoice* type = new wxChoice(row, wxID_ANY);
-        type->Append("None"); type->Append("Sampler"); type->Append("SoundFont"); type->Append("Plugin"); type->Append("Midi"); type->Append("Voice");
+        type->Append("None"); type->Append("Sampler"); type->Append("SoundFont"); type->Append("SFZ"); type->Append("Plugin"); type->Append("Midi"); type->Append("Voice"); type->Append("XRNI");
         type->SetSelection((int)inst.type());
+        // Clicking/focusing the type choice also selects the row
+        type->Bind(wxEVT_LEFT_DOWN, [this, i](wxMouseEvent& ev){
+            ev.Skip();
+            if (m_selected_instrument != (int)i)
+                this->CallAfter([this, i](){ on_inst_select_idx(i); });
+        });
         type->Bind(wxEVT_CHOICE, [this, i](wxCommandEvent& ev){
             int sel_idx = ev.GetSelection();
             this->CallAfter([this, i, sel_idx](){
@@ -877,6 +991,8 @@ void InstrumentPanel::on_inst_select_idx(int idx) {
 void InstrumentPanel::update_editor() {
     m_sampler_editor->Hide();
     m_sfont_editor->Hide();
+    if (m_sfz_editor) m_sfz_editor->Hide();
+    if (m_xrni_editor) m_xrni_editor->Hide();
     m_plugin_editor->Hide();
     m_midi_editor->Hide();
     m_voice_editor->Hide();
@@ -913,7 +1029,7 @@ void InstrumentPanel::update_editor() {
                 wxPanel* row = new wxPanel(m_sample_scroll, wxID_ANY);
                 wxBoxSizer* rs = new wxBoxSizer(wxHORIZONTAL);
                 
-                wxButton* sel = new wxButton(row, wxID_ANY, wxString::Format("%zu", i + 1), wxDefaultPosition, wxSize(25, 25), wxBORDER_NONE);
+                wxButton* sel = new wxButton(row, wxID_ANY, wxString::Format("%zu", i + 1), wxDefaultPosition, wxSize(36, -1), wxBORDER_NONE);
                 if ((int)i == m_selected_sample) {
                     sel->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_selection_color));
                     sel->SetForegroundColour(ThemeManager::contrastColor(m_engine.m_selection_color));
@@ -921,20 +1037,32 @@ void InstrumentPanel::update_editor() {
                     sel->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_bg_color));
                     sel->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_fg_color));
                 }
-                sel->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent&){
+                auto select_sample_row = [this, i](){
                     m_selected_sample = (int)i;
                     static_cast<SampleInstrument*>(&m_engine.instrument(m_selected_instrument))->set_selected_sample(i);
                     update_editor();
+                };
+                sel->Bind(wxEVT_BUTTON, [this, select_sample_row](wxCommandEvent&){ select_sample_row(); });
+                // Clicking the row background also selects it
+                row->Bind(wxEVT_LEFT_DOWN, [this, select_sample_row](wxMouseEvent& ev){
+                    ev.Skip(); select_sample_row();
                 });
                 rs->Add(sel, 0, wxALL, 1);
                 
                 wxTextCtrl* name = new wxTextCtrl(row, wxID_ANY, entry.name, wxDefaultPosition, wxSize(80, -1), wxTE_PROCESS_ENTER);
                 name->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_bg));
                 name->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_tracker_text));
-                name->Bind(wxEVT_TEXT_ENTER, [this, i](wxCommandEvent& ev){
-                    static_cast<SampleInstrument*>(&m_engine.instrument(m_selected_instrument))->set_sample_name(i, ev.GetString().ToStdString());
+                // Clicking/focusing the name field also selects the row
+                name->Bind(wxEVT_SET_FOCUS, [this, i, select_sample_row](wxFocusEvent& ev){
+                    ev.Skip();
+                    if (m_selected_sample != (int)i) select_sample_row();
                 });
-                rs->Add(name, 1, wxALL, 1);
+                auto smp_name_commit = [this, i, name](){
+                    if (m_selected_instrument >= 0)
+                        static_cast<SampleInstrument*>(&m_engine.instrument(m_selected_instrument))->set_sample_name(i, name->GetValue().ToStdString());
+                };
+                name->Bind(wxEVT_TEXT_ENTER, [smp_name_commit](wxCommandEvent&){ smp_name_commit(); });
+                name->Bind(wxEVT_KILL_FOCUS,  [smp_name_commit](wxFocusEvent& ev){ ev.Skip(); smp_name_commit(); });
                 
                 wxButton* load = new wxButton(row, wxID_ANY, "L", wxDefaultPosition, wxSize(25, 25));
                 load->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(14, 14)));
@@ -1037,6 +1165,34 @@ void InstrumentPanel::update_editor() {
             }
             m_sfont_vol_slider->SetValue((int)(sf->get_volume() * 128));
             m_sfont_editor->Layout();
+        }
+        else if (inst.type() == InstrumentType::SFZ && m_sfz_editor) {
+            m_sfz_editor->Show();
+            SfzInstrument* sfz = static_cast<SfzInstrument*>(&inst);
+            // Path label
+            m_sfz_path_label->SetLabel(sfz->path().empty() ? "(no file)" :
+                wxString::FromUTF8(sfz->path()));
+            // Group browser
+            m_sfz_browser->Clear();
+            m_sfz_browser->Append("(All groups)");
+            for (const auto& g : sfz->group_names())
+                m_sfz_browser->Append(wxString::FromUTF8(g));
+            int sel = sfz->current_group() + 1; // -1 → 0 ("All")
+            if (sel >= 0 && sel < (int)m_sfz_browser->GetCount())
+                m_sfz_browser->SetSelection(sel);
+            m_sfz_vol_slider->SetValue((int)(sfz->get_volume() * 100.0f));
+            m_sfz_editor->Layout();
+        }
+        else if (inst.type() == InstrumentType::XRNI && m_xrni_editor) {
+            m_xrni_editor->Show();
+            XrniInstrument* xrni = static_cast<XrniInstrument*>(&inst);
+            m_xrni_path_label->SetLabel(xrni->path().empty() ? "(no file)" :
+                wxString::FromUTF8(xrni->path()));
+            m_xrni_browser->Clear();
+            for (const auto& s : xrni->sample_names())
+                m_xrni_browser->Append(wxString::FromUTF8(s));
+            m_xrni_vol_slider->SetValue((int)(xrni->get_volume() * 100.0f));
+            m_xrni_editor->Layout();
         }
         else if (inst.type() == InstrumentType::Midi) {
             m_midi_editor->Show();

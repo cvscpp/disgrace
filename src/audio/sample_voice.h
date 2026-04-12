@@ -57,6 +57,10 @@ namespace disgrace_ns
                        m_loop_enabled = loop;
                        m_loop_start = loop_start;
                    }
+                   // Override ADSR envelope parameters
+                   void set_adsr(float attack, float decay, float sustain, float release) {
+                       m_env.set(attack, decay, sustain, release);
+                   }
 
     private:
         std::shared_ptr<disgrace_ns::SampleData> m_sample;

@@ -33,9 +33,11 @@ enum class InstrumentType {
     None,
     Sampler,
     SoundFont,
+    SFZ,
     Plugin,
     Midi,
-    Voice
+    Voice,
+    XRNI
 };
 
 class Instrument

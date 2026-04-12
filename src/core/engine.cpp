@@ -566,8 +566,8 @@ void Engine::render_block_multi(float** out_bufs, uint32_t num_outs, size_t fram
         if (m_recording_sample_mode.load() == SampleRecordMode::Free) {
             should_record = true;
         } else {
-            // Detect row 0 at the very first sample of a tick — this is the sync point.
-            if (m_current_row == 0 && m_samples_until_next_tick == m_timing.samples_per_tick()) {
+            // Detect pattern start: tick 0 of row 0, at the very first sample of that tick.
+            if (m_current_row == 0 && m_current_tick == 0 && m_samples_until_next_tick == m_timing.samples_per_tick()) {
                 if (!m_recording_synced_active.load()) {
                     // First pattern start: begin recording
                     m_recording_synced_active.store(true);

@@ -298,6 +298,23 @@ void Engine::play_from_position(size_t row) {
     start();
 }
 
+void Engine::set_play_position(size_t order_pos, size_t row) {
+    bool was_playing = is_playing();
+    bool was_looping = transport().m_loop_pattern.load();
+    stop();
+    if (order_pos < m_order.size()) {
+        m_order_pos.store(order_pos);
+        set_active_pattern(m_order[order_pos]);
+    }
+    m_current_row = row;
+    m_current_tick = 0;
+    if (was_playing) {
+        transport().set_loop(was_looping);
+        auto_seek();
+        start();
+    }
+}
+
 void Engine::auto_seek() {
     size_t pat_idx = m_active_pattern.load();
     if (pat_idx >= m_patterns.size()) return;

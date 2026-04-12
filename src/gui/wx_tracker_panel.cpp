@@ -333,8 +333,12 @@ void TrackerPanel::update_pattern_list() {
             auto ord = eng.order_list();
             if (i < ord.size()) {
                 eng.m_edit_order_pos.store(i);
-                eng.set_active_pattern(ord[i]);
                 this->m_selected_order_idx = (int)i;
+                if (eng.is_playing()) {
+                    eng.set_play_position(i, 0);
+                } else {
+                    eng.set_active_pattern(ord[i]);
+                }
                 this->m_tracker->set_pattern(eng.pattern());
                 this->update_pattern_list();
             }

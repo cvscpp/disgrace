@@ -1265,6 +1265,10 @@ void InstrumentPanel::update_editor() {
             bool is_zyn = (!p_name.empty() && p_name.find("ZynAddSubFX") != std::string::npos);
             if (is_zyn) {
                 m_zyn_editor->Show();
+                auto* dssi_zyn = dynamic_cast<DSSIInstrument*>(&inst);
+                unsigned long saved_bank = dssi_zyn ? dssi_zyn->bank() : 0;
+                unsigned long saved_prog = dssi_zyn ? dssi_zyn->program() : 0;
+
                 if (m_zyn_bank_ch->GetCount() == 0) {
                     std::vector<std::string> bank_paths = {"/usr/share/zynaddsubfx/banks", "/usr/local/share/zynaddsubfx/banks"};
                     for (const auto& bp : bank_paths) {
@@ -1277,9 +1281,16 @@ void InstrumentPanel::update_editor() {
                             cont = dir.GetNext(&dirname);
                         }
                     }
-                    if (m_zyn_bank_ch->GetCount() > 0) {
-                        m_zyn_bank_ch->SetSelection(0);
-                        wxCommandEvent dummy; on_zyn_bank(dummy);
+                }
+
+                // Restore saved bank/program selection
+                if (m_zyn_bank_ch->GetCount() > 0) {
+                    int bidx = (saved_bank < (unsigned long)m_zyn_bank_ch->GetCount()) ? (int)saved_bank : 0;
+                    m_zyn_bank_ch->SetSelection(bidx);
+                    wxCommandEvent dummy; on_zyn_bank(dummy);
+                    if (saved_prog < (unsigned long)m_zyn_preset_browser->GetCount()) {
+                        m_zyn_preset_browser->SetSelection((int)saved_prog);
+                        m_zyn_preset_browser->EnsureVisible((int)saved_prog);
                     }
                 }
             } else {

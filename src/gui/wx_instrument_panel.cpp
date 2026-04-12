@@ -519,6 +519,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     right_sizer->Add(m_xrni_editor, 1, wxEXPAND | wxALL, 2);
 
 
+    m_plugin_editor = new wxPanel(m_right_panel, wxID_ANY);
     wxBoxSizer* plugin_sizer = new wxBoxSizer(wxVERTICAL);
     m_plugin_scan_btn = new wxButton(m_plugin_editor, wxID_ANY, "Scan Plugins");
     m_plugin_scan_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FIND, wxART_BUTTON, wxSize(16, 16)));

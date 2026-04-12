@@ -10,6 +10,8 @@
 #include <wx/stattext.h>
 #include <wx/filepicker.h>
 #include <wx/listbox.h>
+#include <wx/timer.h>
+#include <atomic>
 
 namespace disgrace_ns {
 
@@ -48,6 +50,8 @@ private:
     wxCheckBox* m_separate_tracks_btn;
     wxCheckBox* m_realtime_btn;
     wxGauge* m_export_progress_bar;
+    wxTimer* m_export_timer{nullptr};
+    std::atomic<int> m_export_result{-1};
 
     wxScrolledWindow* m_track_scroll;
     wxPanel* m_track_container;
@@ -59,6 +63,7 @@ private:
     void on_import(wxCommandEvent& event);
     void on_save(wxCommandEvent& event);
     void on_export(wxCommandEvent& event);
+    void on_export_timer(wxTimerEvent& event);
     void on_export_ly(wxCommandEvent& event);
     void on_file_select(wxCommandEvent& event);
     void on_dir_changed(wxFileDirPickerEvent& event);

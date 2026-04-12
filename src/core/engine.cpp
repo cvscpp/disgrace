@@ -952,10 +952,6 @@ size_t Engine::total_song_samples() const {
 
 bool Engine::render_to_wav(const std::string& path, const ExportOptions& opts) {
     if (m_order.empty()) return false;
-    
-    m_is_exporting.store(true);
-    m_export_progress.store(0.0f);
-    m_master.m_export_mute.store(true);
 
     // Save current state
     bool was_playing = transport().is_playing();
@@ -964,11 +960,21 @@ bool Engine::render_to_wav(const std::string& path, const ExportOptions& opts) {
     size_t old_tick = m_current_tick;
     bool old_loop = transport().m_loop_pattern.load();
     uint32_t old_sr = m_sample_rate;
+    size_t old_order_start = m_order_start.load();
+    size_t old_order_end   = m_order_end.load();
+
+    m_is_exporting.store(true);
+    m_export_progress.store(0.0f);
+    m_master.m_export_mute.store(true);
 
     // Prepare for rendering
     stop();
     m_sample_rate = opts.sample_rate;
     m_timing.set_sample_rate(opts.sample_rate);
+
+    // Export always covers the full song, ignoring any loop range
+    m_order_start.store(0);
+    m_order_end.store(0); // 0 = "end of order list" sentinel
 
     m_order_pos.store(0);
     set_active_pattern(m_order[0]);
@@ -979,7 +985,21 @@ bool Engine::render_to_wav(const std::string& path, const ExportOptions& opts) {
 
     // Estimate length
     size_t total_frames = total_song_samples();
-    if (total_frames == 0) return false;
+    if (total_frames == 0) {
+        m_order_start.store(old_order_start);
+        m_order_end.store(old_order_end);
+        m_sample_rate = old_sr;
+        m_timing.set_sample_rate(old_sr);
+        m_order_pos.store(old_order_pos);
+        if (old_order_pos < m_order.size()) set_active_pattern(m_order[old_order_pos]);
+        m_current_row = old_row;
+        m_current_tick = (int)old_tick;
+        transport().set_loop(old_loop);
+        if (was_playing) start();
+        m_is_exporting.store(false);
+        m_master.m_export_mute.store(false);
+        return false;
+    }
 
     // Buffers for export
     std::vector<float> final_l, final_r;
@@ -1053,7 +1073,10 @@ bool Engine::render_to_wav(const std::string& path, const ExportOptions& opts) {
         fs::path parent = p.parent_path();
         
         for (size_t t = 0; t < m_tracks.size(); ++t) {
-            std::string filename = stem + "_" + std::to_string(t) + ext;
+            std::string tname = track(t).name();
+            for (auto& c : tname) { if (!std::isalnum((unsigned char)c) && c != '_') c = '_'; }
+            if (tname.empty()) tname = std::to_string(t);
+            std::string filename = stem + "_" + tname + ext;
             fs::path track_path = parent / filename;
             write_wav(track_path.string(), tracks_l[t], tracks_r[t], tracks_l[t].size(), opts.sample_rate);
         }
@@ -1063,6 +1086,8 @@ bool Engine::render_to_wav(const std::string& path, const ExportOptions& opts) {
     stop();
     m_sample_rate = old_sr;
     m_timing.set_sample_rate(old_sr);
+    m_order_start.store(old_order_start);
+    m_order_end.store(old_order_end);
     m_order_pos.store(old_order_pos);
     set_active_pattern(m_order[old_order_pos]);
     m_current_row = old_row;

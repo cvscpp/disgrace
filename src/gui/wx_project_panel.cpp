@@ -9,6 +9,9 @@
 #include <wx/dir.h>
 #include <wx/artprov.h>
 #include <wx/spinctrl.h>
+#include <wx/timer.h>
+#include <thread>
+#include <atomic>
 
 namespace disgrace_ns {
 
@@ -456,18 +459,44 @@ void ProjectPanel::on_save(wxCommandEvent& event) {
 
 void ProjectPanel::on_export(wxCommandEvent& event) {
     wxFileDialog dlg(this, "Export to WAV", "", "", "WAV Files|*.wav", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
-    if (dlg.ShowModal() == wxID_OK) {
-        Engine::ExportOptions opts;
-        wxString sr = m_sample_rate_ch->GetStringSelection();
-        if (!sr.empty()) opts.sample_rate = wxAtoi(sr);
-        opts.separate_tracks = m_separate_tracks_btn->GetValue();
-        opts.realtime = m_realtime_btn->GetValue();
-        
-        if (m_engine.render_to_wav(dlg.GetPath().ToStdString(), opts)) {
+    if (dlg.ShowModal() != wxID_OK) return;
+
+    Engine::ExportOptions opts;
+    wxString sr = m_sample_rate_ch->GetStringSelection();
+    if (!sr.empty()) opts.sample_rate = wxAtoi(sr);
+    opts.separate_tracks = m_separate_tracks_btn->GetValue();
+    opts.realtime = m_realtime_btn->GetValue();
+
+    std::string path = dlg.GetPath().ToStdString();
+    m_export_btn->Disable();
+    m_export_progress_bar->SetValue(0);
+    m_export_result.store(-1);
+
+    std::thread([this, path, opts]() {
+        bool ok = m_engine.render_to_wav(path, opts);
+        m_export_result.store(ok ? 1 : 0);
+    }).detach();
+
+    if (!m_export_timer) {
+        m_export_timer = new wxTimer(this, wxID_ANY);
+        Bind(wxEVT_TIMER, &ProjectPanel::on_export_timer, this, m_export_timer->GetId());
+    }
+    m_export_timer->Start(200);
+}
+
+void ProjectPanel::on_export_timer(wxTimerEvent& /*event*/) {
+    float prog = m_engine.m_export_progress.load();
+    m_export_progress_bar->SetValue((int)(prog * 100.0f));
+
+    int result = m_export_result.load();
+    if (result >= 0) {
+        m_export_timer->Stop();
+        m_export_btn->Enable();
+        m_export_progress_bar->SetValue(result > 0 ? 100 : 0);
+        if (result > 0)
             wxMessageBox("Export completed successfully", "Success", wxOK | wxICON_INFORMATION);
-        } else {
+        else
             wxMessageBox("Export failed", "Error", wxOK | wxICON_ERROR);
-        }
     }
 }
 

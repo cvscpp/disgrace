@@ -44,6 +44,16 @@ namespace {
         ID_TRANSPOSE_DOWN1,
         ID_TRANSPOSE_UP12,
         ID_TRANSPOSE_DOWN12,
+        // Pattern-scope (whole current track in current pattern)
+        ID_TRANS_PAT_UP1,
+        ID_TRANS_PAT_DOWN1,
+        ID_TRANS_PAT_UP12,
+        ID_TRANS_PAT_DOWN12,
+        // Song-scope (whole track across all patterns)
+        ID_TRANS_SONG_UP1,
+        ID_TRANS_SONG_DOWN1,
+        ID_TRANS_SONG_UP12,
+        ID_TRANS_SONG_DOWN12,
         ID_SEL_SUBCOLUMN,
         ID_SEL_TRACK,
     };
@@ -1111,13 +1121,28 @@ void TrackerView::OnRightClick(wxMouseEvent& event) {
 
     wxMenu menu;
 
-    // Transpose sub-menu
+    // Transpose sub-menu — three sections: Selection / Pattern / Song
     wxMenu* trans_menu = new wxMenu;
-    trans_menu->Append(ID_TRANSPOSE_UP1,   wxT("Semitone Up\t+1"));
-    trans_menu->Append(ID_TRANSPOSE_DOWN1, wxT("Semitone Down\t-1"));
+
+    if (m_sel_active) {
+        trans_menu->Append(ID_TRANSPOSE_UP1,    wxT("Selection +1 Semitone"));
+        trans_menu->Append(ID_TRANSPOSE_DOWN1,  wxT("Selection -1 Semitone"));
+        trans_menu->Append(ID_TRANSPOSE_UP12,   wxT("Selection +12 Semitones (Octave Up)"));
+        trans_menu->Append(ID_TRANSPOSE_DOWN12, wxT("Selection -12 Semitones (Octave Down)"));
+        trans_menu->AppendSeparator();
+    }
+
+    trans_menu->Append(ID_TRANS_PAT_UP1,    wxT("Pattern Track +1 Semitone"));
+    trans_menu->Append(ID_TRANS_PAT_DOWN1,  wxT("Pattern Track -1 Semitone"));
+    trans_menu->Append(ID_TRANS_PAT_UP12,   wxT("Pattern Track +12 Semitones (Octave Up)"));
+    trans_menu->Append(ID_TRANS_PAT_DOWN12, wxT("Pattern Track -12 Semitones (Octave Down)"));
     trans_menu->AppendSeparator();
-    trans_menu->Append(ID_TRANSPOSE_UP12,   wxT("Octave Up\t+12"));
-    trans_menu->Append(ID_TRANSPOSE_DOWN12, wxT("Octave Down\t-12"));
+
+    trans_menu->Append(ID_TRANS_SONG_UP1,    wxT("Song Track +1 Semitone"));
+    trans_menu->Append(ID_TRANS_SONG_DOWN1,  wxT("Song Track -1 Semitone"));
+    trans_menu->Append(ID_TRANS_SONG_UP12,   wxT("Song Track +12 Semitones (Octave Up)"));
+    trans_menu->Append(ID_TRANS_SONG_DOWN12, wxT("Song Track -12 Semitones (Octave Down)"));
+
     menu.AppendSubMenu(trans_menu, wxT("Transpose"));
 
     menu.AppendSeparator();
@@ -1130,15 +1155,39 @@ void TrackerView::OnRightClick(wxMouseEvent& event) {
 
     // Bind handlers
     menu.Bind(wxEVT_MENU, [&](wxCommandEvent& ev) {
-        int semitones = 0;
-        if      (ev.GetId() == ID_TRANSPOSE_UP1)   semitones = +1;
-        else if (ev.GetId() == ID_TRANSPOSE_DOWN1)  semitones = -1;
-        else if (ev.GetId() == ID_TRANSPOSE_UP12)   semitones = +12;
-        else if (ev.GetId() == ID_TRANSPOSE_DOWN12) semitones = -12;
+        int id = ev.GetId();
 
-        if (semitones != 0) {
+        // Selection-scope transpose
+        if (id == ID_TRANSPOSE_UP1 || id == ID_TRANSPOSE_DOWN1 ||
+            id == ID_TRANSPOSE_UP12 || id == ID_TRANSPOSE_DOWN12) {
+            int semitones = 0;
+            if      (id == ID_TRANSPOSE_UP1)   semitones = +1;
+            else if (id == ID_TRANSPOSE_DOWN1)  semitones = -1;
+            else if (id == ID_TRANSPOSE_UP12)   semitones = +12;
+            else if (id == ID_TRANSPOSE_DOWN12) semitones = -12;
             do_transpose(semitones);
-        } else if (ev.GetId() == ID_SEL_SUBCOLUMN) {
+
+        // Pattern-scope transpose (whole track in current pattern)
+        } else if (id == ID_TRANS_PAT_UP1 || id == ID_TRANS_PAT_DOWN1 ||
+                   id == ID_TRANS_PAT_UP12 || id == ID_TRANS_PAT_DOWN12) {
+            int semitones = 0;
+            if      (id == ID_TRANS_PAT_UP1)   semitones = +1;
+            else if (id == ID_TRANS_PAT_DOWN1)  semitones = -1;
+            else if (id == ID_TRANS_PAT_UP12)   semitones = +12;
+            else if (id == ID_TRANS_PAT_DOWN12) semitones = -12;
+            do_transpose_pattern(semitones);
+
+        // Song-scope transpose (track across all patterns)
+        } else if (id == ID_TRANS_SONG_UP1 || id == ID_TRANS_SONG_DOWN1 ||
+                   id == ID_TRANS_SONG_UP12 || id == ID_TRANS_SONG_DOWN12) {
+            int semitones = 0;
+            if      (id == ID_TRANS_SONG_UP1)   semitones = +1;
+            else if (id == ID_TRANS_SONG_DOWN1)  semitones = -1;
+            else if (id == ID_TRANS_SONG_UP12)   semitones = +12;
+            else if (id == ID_TRANS_SONG_DOWN12) semitones = -12;
+            do_transpose_song(semitones);
+
+        } else if (id == ID_SEL_SUBCOLUMN) {
             // Select all rows of the current sub-column (3 fields: note, sample, vol)
             int num_cols_sc = (int)m_pattern->column_count(m_cursor_track);
             int base_f = (m_cursor_field < 3)
@@ -1205,6 +1254,61 @@ void TrackerView::do_transpose(int semitones) {
         m_engine.undo_stack().execute(std::make_unique<CmdEditBlock>(*m_pattern, edits));
         Refresh();
     }
+}
+
+void TrackerView::do_transpose_pattern(int semitones) {
+    if (!m_pattern) return;
+    int track = m_cursor_track;
+    int num_cols = (int)m_pattern->column_count(track);
+    int row_count = (int)m_pattern->row_count();
+
+    std::vector<CmdEditBlock::CellEdit> edits;
+    for (int r = 0; r < row_count; ++r) {
+        for (int c = 0; c < num_cols; ++c) {
+            int abs_f = c * 3;
+            uint8_t note = m_pattern->get_field(track, r, abs_f);
+            if (note == 255 || note == 254) continue;
+            int new_note = std::max(0, std::min(119, (int)note + semitones));
+            if ((uint8_t)new_note != note)
+                edits.push_back({(size_t)track, (size_t)r, (size_t)abs_f, note, (uint8_t)new_note});
+        }
+    }
+    if (!edits.empty()) {
+        m_engine.undo_stack().execute(std::make_unique<CmdEditBlock>(*m_pattern, edits));
+        Refresh();
+    }
+}
+
+void TrackerView::do_transpose_song(int semitones) {
+    int track = m_cursor_track;
+    size_t pat_count = m_engine.pattern_count();
+
+    // Collect edits per pattern (one undo step per pattern, batched together
+    // by applying them sequentially; the current pattern refreshes the view)
+    bool any = false;
+    for (size_t pi = 0; pi < pat_count; ++pi) {
+        Pattern& pat = m_engine.pattern(pi);
+        if (track >= (int)pat.track_count()) continue;
+        int num_cols = (int)pat.column_count(track);
+        int row_count = (int)pat.row_count();
+
+        std::vector<CmdEditBlock::CellEdit> edits;
+        for (int r = 0; r < row_count; ++r) {
+            for (int c = 0; c < num_cols; ++c) {
+                int abs_f = c * 3;
+                uint8_t note = pat.get_field(track, r, abs_f);
+                if (note == 255 || note == 254) continue;
+                int new_note = std::max(0, std::min(119, (int)note + semitones));
+                if ((uint8_t)new_note != note)
+                    edits.push_back({(size_t)track, (size_t)r, (size_t)abs_f, note, (uint8_t)new_note});
+            }
+        }
+        if (!edits.empty()) {
+            m_engine.undo_stack().execute(std::make_unique<CmdEditBlock>(pat, edits));
+            any = true;
+        }
+    }
+    if (any) Refresh();
 }
 
 } // namespace disgrace_ns

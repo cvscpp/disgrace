@@ -43,6 +43,8 @@ public:
     void OnMouseUp(wxMouseEvent& event);
     void OnRightClick(wxMouseEvent& event);
     void do_transpose(int semitones);
+    void do_transpose_pattern(int semitones);
+    void do_transpose_song(int semitones);
 
     void set_current_row(int row);
     int get_cursor_row() const { return m_cursor_row; }

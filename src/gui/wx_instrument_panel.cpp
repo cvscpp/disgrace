@@ -206,6 +206,11 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     mode_sizer->Add(m_rec_mode_ch, 0, wxALIGN_CENTER_VERTICAL);
     rec_sizer->Add(mode_sizer, 0, wxTOP | wxBOTTOM, 4);
 
+    // Row 4: Recording status indicator (waiting / active / loop counter)
+    m_rec_status_lbl = new wxStaticText(rec_panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT);
+    m_rec_status_lbl->SetMinSize(wxSize(-1, 18));
+    rec_sizer->Add(m_rec_status_lbl, 0, wxEXPAND | wxTOP | wxBOTTOM, 2);
+
     // Input VU meters — L and R for the selected input channel pair
     auto* vu_label_l = new wxStaticText(rec_panel, wxID_ANY, "L");
     auto* vu_label_r = new wxStaticText(rec_panel, wxID_ANY, "R");
@@ -250,6 +255,40 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
         // Update waveform playback cursor
         if (m_waveform_view) {
             m_waveform_view->set_playback_pos(m_engine.preview_playback_pos());
+        }
+        // Recording status label
+        if (m_rec_status_lbl) {
+            if (!m_engine.is_recording_sample()) {
+                if (!m_rec_status_lbl->GetLabel().empty()) {
+                    m_rec_status_lbl->SetLabel("");
+                    m_rec_status_lbl->SetForegroundColour(wxNullColour);
+                }
+            } else {
+                Engine::SampleRecordMode mode = m_engine.m_recording_sample_mode.load();
+                if (mode == Engine::SampleRecordMode::Free) {
+                    auto data = m_engine.recording_sample_data();
+                    size_t frames = data ? data->left.size() : 0;
+                    float secs = frames / (float)std::max(1u, m_engine.sample_rate());
+                    m_rec_status_lbl->SetLabel(wxString::Format("\u25cf REC  %.1fs", secs));
+                    m_rec_status_lbl->SetForegroundColour(*wxRED);
+                } else {
+                    size_t row   = m_engine.m_recording_synced_row.load();
+                    size_t total = m_engine.pattern().row_count();
+                    if (m_engine.m_recording_synced_active.load()) {
+                        size_t loops = m_engine.m_recording_loop_count.load();
+                        m_rec_status_lbl->SetLabel(wxString::Format(
+                            "\u25cf REC  row %zu/%zu  loop %zu",
+                            row + 1, total, loops + 1));
+                        m_rec_status_lbl->SetForegroundColour(*wxRED);
+                    } else {
+                        size_t rows_to_go = (row == 0) ? 0 : (total - row);
+                        m_rec_status_lbl->SetLabel(wxString::Format(
+                            "Waiting...  row %zu/%zu  (%zu to go)",
+                            row + 1, total, rows_to_go));
+                        m_rec_status_lbl->SetForegroundColour(wxColour(180, 140, 0));
+                    }
+                }
+            }
         }
     }, m_vu_timer->GetId());
     m_vu_timer->Start(50);

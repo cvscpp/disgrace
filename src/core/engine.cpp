@@ -566,13 +566,24 @@ void Engine::render_block_multi(float** out_bufs, uint32_t num_outs, size_t fram
         if (m_recording_sample_mode.load() == SampleRecordMode::Free) {
             should_record = true;
         } else {
+            // Detect row 0 at the very first sample of a tick — this is the sync point.
             if (m_current_row == 0 && m_samples_until_next_tick == m_timing.samples_per_tick()) {
-                m_recording_synced_active.store(true);
+                if (!m_recording_synced_active.load()) {
+                    // First pattern start: begin recording
+                    m_recording_synced_active.store(true);
+                    m_recording_loop_count.store(0);
+                } else {
+                    // Subsequent pattern starts: count a new loop
+                    m_recording_loop_count.fetch_add(1);
+                }
             }
             if (m_recording_synced_active.load()) {
                 should_record = true;
             }
         }
+
+        // Always expose the current row so the GUI can show progress/countdown.
+        m_recording_synced_row.store(m_current_row);
 
         if (should_record && in_bufs) {
             SampleData* sd = m_recording_sample_ptr.load(std::memory_order_acquire);
@@ -1117,6 +1128,8 @@ void Engine::start_recording_sample(SampleRecordMode mode, uint32_t channel, boo
     if (!mono) sd->right.reserve(reserve_frames);
     m_recording_sample_data = sd;
     m_recording_synced_active.store(false);
+    m_recording_synced_row.store(0);
+    m_recording_loop_count.store(0);
     // Publish raw pointer BEFORE setting the recording flag so the RT thread
     // always sees a valid pointer when m_is_recording_sample is true.
     m_recording_sample_ptr.store(sd.get(), std::memory_order_release);

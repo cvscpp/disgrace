@@ -171,6 +171,10 @@ public:
     ::std::atomic<bool> m_is_recording_sample{false};
     ::std::atomic<SampleRecordMode> m_recording_sample_mode{SampleRecordMode::Free};
     ::std::atomic<bool> m_recording_synced_active{false};
+    // Current pattern row during recording (updated by RT thread, read by GUI).
+    ::std::atomic<size_t> m_recording_synced_row{0};
+    // Number of complete pattern loops elapsed since synced recording became active.
+    ::std::atomic<size_t> m_recording_loop_count{0};
     // Owned by the GUI thread; the RT thread uses m_recording_sample_ptr (atomic).
     ::std::shared_ptr<SampleData> m_recording_sample_data;
     ::std::atomic<SampleData*>    m_recording_sample_ptr{nullptr};

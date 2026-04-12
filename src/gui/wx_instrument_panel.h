@@ -100,6 +100,7 @@ private:
     class VUMeter* m_input_vu_l = nullptr;
     class VUMeter* m_input_vu_r = nullptr;
     wxTimer* m_vu_timer = nullptr;
+    wxStaticText* m_rec_status_lbl = nullptr;
     class WaveformView* m_waveform_view;
     wxStaticText* m_sample_name_label = nullptr;
 

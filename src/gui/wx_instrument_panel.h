@@ -94,6 +94,8 @@ private:
     wxButton* m_rec_btn;
     wxChoice* m_rec_mode_ch;
     wxCheckBox* m_mono_btn;
+    wxCheckBox* m_preview_fx_check = nullptr;
+    wxCheckBox* m_preview_loop_check = nullptr;
     wxChoice* m_rec_input_ch;
     class VUMeter* m_input_vu_l = nullptr;
     class VUMeter* m_input_vu_r = nullptr;

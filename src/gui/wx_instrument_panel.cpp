@@ -173,6 +173,13 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     playback_sizer->Add(m_sample_play_btn, 0, wxRIGHT, 2);
     playback_sizer->Add(m_sample_stop_btn, 0, wxRIGHT, 2);
     playback_sizer->Add(m_rec_btn, 0, wxRIGHT, 10);
+    m_preview_fx_check = new wxCheckBox(rec_panel, wxID_ANY, "Use FX Chain");
+    m_preview_fx_check->SetToolTip("Play preview through the track's effect chain (only when instrument is assigned to a track)");
+    m_preview_fx_check->Enable(false);
+    playback_sizer->Add(m_preview_fx_check, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 8);
+    m_preview_loop_check = new wxCheckBox(rec_panel, wxID_ANY, "Loop");
+    m_preview_loop_check->SetToolTip("Loop the sample (or selection) during preview");
+    playback_sizer->Add(m_preview_loop_check, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 8);
     playback_sizer->Add(m_undo_btn, 0, wxRIGHT, 2);
     playback_sizer->Add(m_redo_btn, 0, wxRIGHT, 2);
     rec_sizer->Add(playback_sizer, 0, wxTOP | wxBOTTOM, 4);
@@ -237,6 +244,10 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
             if (data) {
                 m_waveform_view->set_sample(data);
             }
+        }
+        // Update waveform playback cursor
+        if (m_waveform_view) {
+            m_waveform_view->set_playback_pos(m_engine.preview_playback_pos());
         }
     }, m_vu_timer->GetId());
     m_vu_timer->Start(50);
@@ -877,6 +888,15 @@ void InstrumentPanel::update_editor() {
         if (inst.type() == InstrumentType::Sampler) {
             m_sampler_editor->Show();
             SampleInstrument* sampler = static_cast<SampleInstrument*>(&inst);
+
+            if (m_preview_fx_check) {
+                bool on_track = false;
+                for (size_t t = 0; t < m_engine.track_count(); ++t) {
+                    if (m_engine.track(t).instrument() == &inst) { on_track = true; break; }
+                }
+                m_preview_fx_check->Enable(on_track);
+                if (!on_track) m_preview_fx_check->SetValue(false);
+            }
             
             // Safety: Reparent the format choice back to the editor before clearing the scroll panel
             // to avoid it being destroyed when the rows are deleted.
@@ -1173,14 +1193,57 @@ void InstrumentPanel::on_add_sample(wxCommandEvent& event) {
 }
 
 void InstrumentPanel::on_sample_play(wxCommandEvent& event) {
-    if (m_selected_instrument >= 0) {
-        auto& inst = m_engine.instrument(m_selected_instrument);
+    if (m_selected_instrument < 0) return;
+    auto& inst = m_engine.instrument(m_selected_instrument);
+    if (inst.type() != InstrumentType::Sampler) return;
+    auto* sampler = static_cast<SampleInstrument*>(&inst);
+
+    bool use_fx = m_preview_fx_check && m_preview_fx_check->GetValue();
+    bool do_loop = m_preview_loop_check && m_preview_loop_check->GetValue();
+
+    // Determine selection region
+    size_t sel_start = 0, sel_end = 0;
+    bool has_sel = false;
+    if (m_waveform_view) {
+        size_t ws = m_waveform_view->selection_start();
+        size_t we = m_waveform_view->selection_end();
+        if (ws != we) {
+            sel_start = ws;
+            sel_end   = we;
+            has_sel   = true;
+        }
+    }
+
+    int track_for_fx = -1;
+    if (use_fx) {
+        for (size_t t = 0; t < m_engine.track_count(); ++t) {
+            if (m_engine.track(t).instrument() == &inst) {
+                track_for_fx = (int)t;
+                break;
+            }
+        }
+    }
+
+    if (track_for_fx >= 0) {
         inst.note_off();
-        inst.note_on(60, 100);
+        inst.note_on(69, 100, 0, has_sel ? sel_start : 0);
+        m_engine.start_sample_preview(nullptr, track_for_fx);
+    } else {
+        inst.note_off();
+        int sel = (m_selected_sample >= 0 && m_selected_sample < (int)sampler->sample_count())
+                  ? m_selected_sample : 0;
+        if ((int)sampler->sample_count() > 0) {
+            auto data = sampler->get_sample(sel).data;
+            if (data) {
+                m_engine.start_sample_preview(data, -1, sel_start, sel_end, do_loop);
+            }
+        }
     }
 }
 
 void InstrumentPanel::on_sample_stop(wxCommandEvent& event) {
+    m_engine.stop_sample_preview();
+
     // Stop playback.
     if (m_selected_instrument >= 0)
         m_engine.instrument(m_selected_instrument).note_off();

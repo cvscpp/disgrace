@@ -69,6 +69,8 @@ namespace disgrace_ns
         bool can_undo(size_t index) const;
         bool can_redo(size_t index) const;
 
+        double voice_position() const;
+
     protected:
         ::std::unique_ptr<disgrace_ns::Voice> create_voice() override;
 

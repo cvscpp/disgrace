@@ -33,6 +33,7 @@ public:
     size_t selection_start() const { return m_sel_start < m_sel_end ? m_sel_start : m_sel_end; }
     size_t selection_end()   const { return m_sel_start < m_sel_end ? m_sel_end : m_sel_start; }
     void set_channel_mode(ChannelMode mode) { m_mode = mode; Refresh(); }
+    void set_playback_pos(int64_t pos) { m_playback_pos = pos; Refresh(false); }
 
 private:
     void get_view_range(size_t& start, size_t& end);
@@ -50,6 +51,8 @@ private:
     size_t m_offset = 0;
 
     ChannelMode m_mode = ChannelMode::Both;
+
+    int64_t m_playback_pos = -1;
 
     enum class DragMode { None, NewSel, DragStart, DragEnd };
     DragMode m_drag_mode = DragMode::None;

@@ -105,12 +105,19 @@ namespace disgrace_ns
         const size_t sample_size =
         m_sample->left.size();
 
+        const size_t effective_end =
+            (m_end_pos > 0 && m_end_pos < sample_size) ? m_end_pos : (sample_size - 1);
+
         for (size_t i = 0; i < frames; ++i)
         {
-            if (m_position >= sample_size - 1)
+            if (m_position >= (double)effective_end)
             {
-                m_active = false;
-                return;
+                if (m_loop_enabled) {
+                    m_position = (double)m_loop_start;
+                } else {
+                    m_active = false;
+                    return;
+                }
             }
 
             size_t idx = size_t(m_position);

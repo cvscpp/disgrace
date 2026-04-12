@@ -341,6 +341,32 @@ void Engine::stop_preview(size_t t, size_t column) {
     if (t < m_tracks.size()) m_tracks[t].note_off(column);
 }
 
+void Engine::start_sample_preview(std::shared_ptr<SampleData> data, int via_track,
+                                    size_t sel_start, size_t sel_end, bool loop) {
+    std::lock_guard<std::mutex> lock(m_preview_mutex);
+    m_preview_via_track = via_track;
+    if (via_track >= 0) {
+        m_preview_voice.reset();
+        m_preview_playback_pos.store(-1);
+    } else {
+        m_preview_voice = std::make_unique<SampleVoice>(data, m_sample_rate);
+        m_preview_voice->start(69, 100, 440.0f, sel_start);
+        size_t data_size = data ? data->left.size() : 0;
+        size_t end = (sel_end > sel_start && sel_end <= data_size) ? sel_end : 0;
+        m_preview_voice->set_region(end, loop, sel_start);
+    }
+}
+
+void Engine::stop_sample_preview() {
+    std::lock_guard<std::mutex> lock(m_preview_mutex);
+    if (m_preview_voice) {
+        m_preview_voice->panic();
+        m_preview_voice.reset();
+    }
+    m_preview_playback_pos.store(-1);
+    m_preview_via_track = -1;
+}
+
 void Engine::record_note(uint8_t note, size_t column)
 {
     size_t row = current_row();
@@ -678,6 +704,32 @@ void Engine::render_block_multi(float** out_bufs, uint32_t num_outs, size_t fram
                 for (size_t i = 0; i < frames; ++i) {
                     out_bufs[0][i] += m_bus_l[b][i];
                     out_bufs[1][i] += m_bus_r[b][i];
+                }
+            }
+        }
+    }
+
+    // Standalone preview voice (bypasses track/DSP)
+    {
+        std::unique_lock<std::mutex> lock(m_preview_mutex, std::try_to_lock);
+        if (lock.owns_lock()) {
+            if (m_preview_voice && m_preview_voice->active()) {
+                float pv_l[MAX_BLOCK] = {}, pv_r[MAX_BLOCK] = {};
+                m_preview_voice->process(pv_l, pv_r, frames);
+                m_preview_playback_pos.store((int64_t)m_preview_voice->position());
+                if (num_outs >= 2 && out_bufs[0] && out_bufs[1]) {
+                    for (size_t i = 0; i < frames; ++i) {
+                        out_bufs[0][i] += pv_l[i];
+                        out_bufs[1][i] += pv_r[i];
+                    }
+                }
+            } else if (m_preview_voice && !m_preview_voice->active()) {
+                m_preview_playback_pos.store(-1);
+            } else if (m_preview_via_track >= 0 && m_preview_via_track < (int)m_tracks.size()) {
+                auto* inst = m_tracks[m_preview_via_track].instrument();
+                if (inst && inst->type() == InstrumentType::Sampler) {
+                    double pos = static_cast<SampleInstrument*>(inst)->voice_position();
+                    m_preview_playback_pos.store(pos >= 0 ? (int64_t)pos : -1);
                 }
             }
         }

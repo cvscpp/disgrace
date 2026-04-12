@@ -183,6 +183,17 @@ void WaveformView::OnPaint(wxPaintEvent&) {
             dc.DrawLine(x2, TSH, x2, H);
         }
     }
+
+    // Playback position cursor line
+    if (m_playback_pos >= 0) {
+        size_t vstart, vend;
+        get_view_range(vstart, vend);
+        int px = sample_to_x((size_t)m_playback_pos, vstart, vend, W);
+        if (px >= 0 && px < W) {
+            dc.SetPen(wxPen(wxColour(255, 220, 0), 2)); // bright yellow
+            dc.DrawLine(px, TSH, px, H);
+        }
+    }
 }
 
 void WaveformView::OnMouseDown(wxMouseEvent& event) {

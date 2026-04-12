@@ -219,4 +219,12 @@ namespace disgrace_ns
             m_engine_rate);
     }
 
+    double disgrace_ns::SampleInstrument::voice_position() const {
+        for (auto& v : m_voices) {
+            if (v && v->active())
+                return static_cast<const disgrace_ns::SampleVoice*>(v.get())->position();
+        }
+        return -1.0;
+    }
+
 } // namespace disgrace_ns

@@ -49,6 +49,14 @@ namespace disgrace_ns
                                 size_t frames) override;
 
                                 bool active() const override;
+                   double position() const { return m_position; }
+
+                   // Set end position (0 = whole sample) and optional loop
+                   void set_region(size_t end_pos, bool loop, size_t loop_start) {
+                       m_end_pos = end_pos;
+                       m_loop_enabled = loop;
+                       m_loop_start = loop_start;
+                   }
 
     private:
         std::shared_ptr<disgrace_ns::SampleData> m_sample;
@@ -60,6 +68,10 @@ namespace disgrace_ns
 
         float m_volume = 1.f;
         bool m_active = false;
+
+        size_t m_end_pos = 0;       // 0 = full sample
+        bool m_loop_enabled = false;
+        size_t m_loop_start = 0;
     };
 
 } // namespace disgrace_ns

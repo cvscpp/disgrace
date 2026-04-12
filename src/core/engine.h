@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 #include <atomic>
+#include <mutex>
 
 #include "../sequencer/timing.h"
 #include "../sequencer/pattern.h"
@@ -31,6 +32,7 @@
 #include "../mixer/track_clipboard.h"
 #include "../instrument/instrument.h"
 #include "../audio/sample_data.h"
+#include "../audio/sample_voice.h"
 #include "undo_stack.h"
 #include "transport.h"
 #include "key_bindings.h"
@@ -136,6 +138,11 @@ public:
     size_t active_pattern() const;
     void preview_note(size_t track, uint8_t note, size_t column = 0);
     void stop_preview(size_t track, size_t column = 0);
+
+    void start_sample_preview(std::shared_ptr<SampleData> data, int via_track = -1,
+                               size_t sel_start = 0, size_t sel_end = 0, bool loop = false);
+    void stop_sample_preview();
+    int64_t preview_playback_pos() const { return m_preview_playback_pos.load(); }
 
     disgrace_ns::Pattern& pattern();
 
@@ -316,6 +323,11 @@ public:
 
 private:
     void propagate_sample_rate(uint32_t sr);
+
+    std::mutex m_preview_mutex;
+    std::unique_ptr<SampleVoice> m_preview_voice;
+    std::atomic<int64_t> m_preview_playback_pos{-1};
+    int m_preview_via_track = -1;
 
     disgrace_ns::UndoStack m_undo;
     size_t m_saved_generation = 0;

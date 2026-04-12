@@ -185,7 +185,10 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
     for (xmlNodePtr node = root->children; node; node = node->next) {
         if (xmlStrEqual(node->name, (const xmlChar*)"GlobalSongData")) {
             for (xmlNodePtr child = node->children; child; child = child->next) {
-                if (xmlStrEqual(child->name, (const xmlChar*)"BeatsPerMinute")) engine.set_tempo(std::atof(get_node_content(child).c_str()));
+                if (xmlStrEqual(child->name, (const xmlChar*)"BeatsPerMinute"))
+                    engine.set_tempo(std::atof(get_node_content(child).c_str()));
+                else if (xmlStrEqual(child->name, (const xmlChar*)"LinesPerBeat"))
+                    engine.set_lpb((uint32_t)std::atoi(get_node_content(child).c_str()));
             }
         } else if (xmlStrEqual(node->name, (const xmlChar*)"Instruments")) {
             for (xmlNodePtr inst_node = node->children; inst_node; inst_node = inst_node->next) {
@@ -290,7 +293,28 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
                     }
                 }
             }
+        } else if (xmlStrEqual(node->name, (const xmlChar*)"PatternSequence")) {
+            // Renoise: <PatternSequence><SequenceEntries><SequenceEntry><Pattern>N</Pattern>...
+            for (xmlNodePtr child = node->children; child; child = child->next) {
+                if (xmlStrEqual(child->name, (const xmlChar*)"SequenceEntries")) {
+                    for (xmlNodePtr sec = child->children; sec; sec = sec->next) {
+                        if (xmlStrEqual(sec->name, (const xmlChar*)"SequenceEntry")) {
+                            for (xmlNodePtr pat = sec->children; pat; pat = pat->next) {
+                                if (xmlStrEqual(pat->name, (const xmlChar*)"Pattern"))
+                                    sequence.push_back(std::atoi(get_node_content(pat).c_str()));
+                            }
+                        }
+                    }
+                } else if (xmlStrEqual(child->name, (const xmlChar*)"SequenceEntry")) {
+                    // Some Renoise versions put entries directly under PatternSequence
+                    for (xmlNodePtr pat = child->children; pat; pat = pat->next) {
+                        if (xmlStrEqual(pat->name, (const xmlChar*)"Pattern"))
+                            sequence.push_back(std::atoi(get_node_content(pat).c_str()));
+                    }
+                }
+            }
         } else if (xmlStrEqual(node->name, (const xmlChar*)"Sequencer")) {
+            // Older Renoise format fallback
             for (xmlNodePtr child = node->children; child; child = child->next) {
                 if (xmlStrEqual(child->name, (const xmlChar*)"SequenceEntry")) {
                     for (xmlNodePtr sec = child->children; sec; sec = sec->next) {
@@ -305,6 +329,8 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
     // CLEAR ENGINE
     engine.m_tracks.clear();
     engine.m_buses.clear();
+    engine.m_buses.emplace_back();          // always need master bus at index 0
+    engine.m_buses[0].set_name("Master");
     engine.m_instruments.clear();
     engine.clear_patterns();
     engine.m_order.clear();
@@ -401,6 +427,10 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
         const auto& rp = rp_list[i];
         engine.add_pattern(std::make_unique<Pattern>(rp.num_lines, engine.track_count()));
         Pattern& pat = engine.pattern(engine.pattern_count() - 1);
+
+        // Track max note columns used per disgrace track in this pattern
+        std::map<size_t, size_t> max_cols_used;
+
         for (size_t rt = 0; rt < rp.tracks_data.size(); rt++) {
             const auto& renoise_track_data = rp.tracks_data[rt];
             for (size_t row = 0; row < renoise_track_data.size() && row < MAX_ROWS; row++) {
@@ -410,13 +440,17 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
                     if (rn.instrument != 255 && rn.instrument < ri_list.size()) {
                         if (ri_list[rn.instrument].type == "Sampler") {
                             size_t dt = sampler_track_map[rt];
-                            TrackEvent& ev = pat.event(dt, row, col < MAX_COLS ? col : 0);
+                            size_t write_col = col < MAX_COLS ? col : MAX_COLS - 1;
+                            TrackEvent& ev = pat.event(dt, row, write_col);
                             ev.note = rn.note; ev.volume = rn.volume; ev.sample_idx = sampler_inst_to_sample_idx[rt][rn.instrument];
+                            max_cols_used[dt] = std::max(max_cols_used[dt], write_col + 1);
                         } else {
                             auto itm = plugin_track_map.find({rt, rn.instrument});
                             if (itm != plugin_track_map.end()) {
-                                TrackEvent& ev = pat.event(itm->second, row, col < MAX_COLS ? col : 0);
+                                size_t write_col = col < MAX_COLS ? col : MAX_COLS - 1;
+                                TrackEvent& ev = pat.event(itm->second, row, write_col);
                                 ev.note = rn.note; ev.volume = rn.volume;
+                                max_cols_used[itm->second] = std::max(max_cols_used[itm->second], write_col + 1);
                             }
                         }
                     } else if (rn.note == 254) {
@@ -425,6 +459,11 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
                     }
                 }
             }
+        }
+
+        // Apply column counts discovered above
+        for (auto const& [dt, ncols] : max_cols_used) {
+            if (ncols > 1) pat.set_column_count(dt, ncols);
         }
     }
 
@@ -443,6 +482,7 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
     engine.m_order_pos.store(0);
 
     std::cout << "XRNS import complete: " << engine.track_count() << " tracks, " << engine.pattern_count() << " patterns" << std::endl;
+    engine.mark_dirty();
     return true;
 }
 

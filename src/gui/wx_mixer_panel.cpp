@@ -24,6 +24,7 @@
 #include "wx_detached_frame.h"
 #include "../core/engine.h"
 #include <wx/spinctrl.h>
+#include <wx/app.h>
 #include "../dsp/gain.h"
 #include "../dsp/delay.h"
 #include "../dsp/reverb.h"
@@ -285,7 +286,7 @@ void MixerPanel::update_mastering_panel() {
     st_choice->Bind(wxEVT_CHOICE, [this, &style](wxCommandEvent& ev) {
         if (m_is_updating_ui) return;
         style.load_preset(ev.GetString().ToStdString());
-        update_mastering_panel();
+        CallAfter([this]() { update_mastering_panel(); });
     });
     st_row->Add(st_choice, 1, wxEXPAND | wxALL, 5);
     params_sizer->Add(st_row, 0, wxEXPAND | wxALL, 2);
@@ -583,7 +584,7 @@ void MixerPanel::update_effect_editor() {
         rm_preset_choice->Bind(wxEVT_CHOICE, [this, &matcher](wxCommandEvent& ev) {
             if (m_is_updating_ui) return;
             matcher.load_preset(ev.GetString().ToStdString());
-            update_effect_editor();
+            CallAfter([this]() { update_effect_editor(); });
         });
         rm_preset_row->Add(rm_preset_choice, 1, wxEXPAND | wxALL, 5);
         params_sizer->Add(rm_preset_row, 0, wxEXPAND | wxALL, 2);
@@ -720,7 +721,7 @@ void MixerPanel::update_effect_editor() {
                 p_choice->Bind(wxEVT_CHOICE, [this, dsp](wxCommandEvent& ev) {
                     if (m_is_updating_ui) return;
                     dsp->load_preset(ev.GetString().ToStdString());
-                    update_effect_editor();
+                    CallAfter([this]() { update_effect_editor(); });
                 });
                 p_row->Add(p_choice, 1, wxEXPAND | wxALL, 5);
                 params_sizer->Add(p_row, 0, wxEXPAND | wxALL, 2);

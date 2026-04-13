@@ -391,12 +391,20 @@ void TrackerPanel::update_pattern_list() {
 
 void TrackerPanel::update() {
     if (m_tracker) {
+        bool is_playing = m_engine.transport_state() != TransportState::Stopped;
+
         if (m_follow_playback) {
             size_t engine_order_pos = m_engine.m_order_pos.load();
             if (m_engine.m_edit_order_pos.load() != engine_order_pos) {
                 m_engine.m_edit_order_pos.store(engine_order_pos);
                 m_engine.set_active_pattern(m_engine.m_order[engine_order_pos]);
                 m_tracker->set_pattern(m_engine.pattern());
+            }
+
+            if (is_playing) {
+                int play_row = (int)m_engine.current_row();
+                if (m_tracker->get_cursor_row() != play_row)
+                    m_tracker->set_current_row(play_row);
             }
         }
 
@@ -412,7 +420,7 @@ void TrackerPanel::update() {
             update_pattern_list();
         }
 
-        if (m_engine.transport_state() != TransportState::Stopped) {
+        if (is_playing) {
             m_tracker->ensure_cursor_visible();
         }
         m_tracker->Refresh();

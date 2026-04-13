@@ -143,7 +143,9 @@ namespace disgrace_ns
             } else if (inst.type() == InstrumentType::Voice) {
                 const auto& voice = static_cast<const VoiceInstrument&>(inst);
                 jinst["tts_mode"] = (int)voice.tts_mode();
-                jinst["voice_index"] = voice.get_voice();
+                jinst["voice_language"] = voice.get_language();
+                jinst["voice_gender"]   = voice.get_gender();
+                jinst["voice_variant"]  = voice.get_variant();
                 jinst["voice_speed"] = voice.get_speed();
                 jinst["voice_pitch_accent"] = voice.get_pitch_accent();
                 // Store voice texts for each phrase index (0-255)
@@ -318,7 +320,9 @@ namespace disgrace_ns
                 } else if (type == InstrumentType::Voice) {
                     VoiceInstrument& voice = static_cast<VoiceInstrument&>(inst);
                     voice.set_tts_mode((TTSMode)ji.value("tts_mode", 0));
-                    voice.set_voice(ji.value("voice_index", 0));
+                    voice.set_language(ji.value("voice_language", std::string("en")));
+                    voice.set_gender(ji.value("voice_gender", 0));
+                    voice.set_variant(ji.value("voice_variant", 0));
                     voice.set_speed(ji.value("voice_speed", 1.0f));
                     voice.set_pitch_accent(ji.value("voice_pitch_accent", 0.5f));
                     // Load voice texts

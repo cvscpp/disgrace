@@ -53,9 +53,20 @@ public:
     void set_tts_mode(TTSMode mode) { m_tts_mode = mode; }
     TTSMode tts_mode() const { return m_tts_mode; }
     
-    // TTS enhancements
-    void set_voice(int voice_index) { m_voice_index = voice_index; }  // 0=default, 1=voice2, etc
-    int get_voice() const { return m_voice_index; }
+    // Language / gender selection
+    void set_language(const std::string& lang) { m_language = lang; }
+    const std::string& get_language() const { return m_language; }
+    
+    void set_gender(int gender) { m_gender = std::max(0, std::min(2, gender)); } // 0=default,1=male,2=female
+    int  get_gender() const { return m_gender; }
+    
+    // Variant selects a specific voice variant when multiple match the language+gender.
+    void set_variant(int v) { m_variant = std::max(0, std::min(10, v)); }
+    int  get_variant() const { return m_variant; }
+    
+    // Return a deduplicated list of {language-code, display-name} pairs from
+    // installed espeak-ng voices.  Populated once on first call.
+    static std::vector<std::pair<std::string,std::string>> list_espeak_languages();
     
     void set_speed(float speed) { m_speed = std::max(0.5f, std::min(2.0f, speed)); }  // 0.5x to 2.0x
     float get_speed() const { return m_speed; }
@@ -108,10 +119,12 @@ private:
     float m_volume = 1.0f;
     float m_current_pitch = 1.0f;
     
-    // TTS parameters
-    int m_voice_index = 0;        // 0=default, 1=voice2, etc
-    float m_speed = 1.0f;          // 0.5-2.0 playback speed
-    float m_pitch_accent = 0.5f;   // 0.0-1.0 pitch accent (for Festival)
+    // TTS voice selection
+    std::string m_language = "en";   // espeak-ng language code, e.g. "en", "de", "fr"
+    int m_gender  = 0;               // 0=default, 1=male, 2=female (maps to espeak_VOICE.gender)
+    int m_variant = 0;               // variant index within matching voices (0=first match)
+    float m_speed = 1.0f;            // 0.5–2.0 playback speed
+    float m_pitch_accent = 0.5f;     // 0.0–1.0 pitch accent (for Festival)
     
     // Worker thread (raw pointer, created/destroyed in start/stop)
     VoiceSynthesisWorker* m_worker = nullptr;

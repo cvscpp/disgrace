@@ -140,7 +140,9 @@ private:
 
     wxPanel* m_voice_editor;
     wxChoice* m_voice_tts_mode_ch;
-    wxSlider* m_voice_voice_slider;
+    wxChoice*   m_voice_language_ch;
+    wxChoice*   m_voice_gender_ch;
+    wxChoice*   m_voice_variant_ch;
     wxSlider* m_voice_speed_slider;
     wxSlider* m_voice_accent_slider;
     wxSpinCtrl* m_voice_phrase_idx;

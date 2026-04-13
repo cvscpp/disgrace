@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <cmath>
 #include <samplerate.h>
+#include <set>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <espeak-ng/speak_lib.h>
@@ -401,13 +402,13 @@ bool VoiceInstrument::synthesize_with_espeak(const std::string& text, std::vecto
     if (text.empty()) return false;
     out_rate = g_espeak_sample_rate;
 
-    // Set voice
-    if (m_voice_index > 0) {
-        std::string voice_name = "mb-m" + std::to_string(m_voice_index);
-        espeak_SetVoiceByName(voice_name.c_str());
-    } else {
-        espeak_SetVoiceByName("default");
-    }
+    // Select voice by language and gender using espeak_VOICE properties.
+    // espeak-ng will pick the best matching installed voice.
+    espeak_VOICE voice_spec = {};
+    voice_spec.languages   = m_language.empty() ? "en" : m_language.c_str();
+    voice_spec.gender      = (unsigned char)m_gender;  // 0=any, 1=male, 2=female
+    voice_spec.variant     = (unsigned char)m_variant;
+    espeak_SetVoiceByProperties(&voice_spec);
 
     // Set speed (espeak uses 80-450, default is 175)
     int speed = (int)(m_speed * 175.0f);
@@ -442,12 +443,29 @@ bool VoiceInstrument::synthesize_with_festival(const std::string& text, std::vec
 
     std::lock_guard<std::mutex> lock(g_festival_mutex);
 
-    // Set voice based on m_voice_index
-    if (m_voice_index == 0) {
-        festival_eval_command("(voice_default)");
+    // Map language + gender to a Festival voice command.
+    // Festival primarily ships English diphone voices; fall back to default for other languages.
+    // Known voices: kal_diphone (en, male), rms_diphone (en, male), awb_diphone (en-scot, male),
+    //               slt_diphone (en, female), cmu_us_clb_arctic_multisyn (en, female).
+    const bool is_english = m_language.empty() ||
+                            m_language == "en" ||
+                            m_language.substr(0, 3) == "en-";
+    if (is_english) {
+        if (m_gender == 2) {
+            // Female: try slt first, fall back to default
+            festival_eval_command(
+                "(if (member 'slt_diphone (voice-list)) "
+                "    (voice_slt_diphone) "
+                "    (voice_default))");
+        } else {
+            // Male or default: kal_diphone is universally available
+            festival_eval_command(
+                "(if (member 'kal_diphone (voice-list)) "
+                "    (voice_kal_diphone) "
+                "    (voice_default))");
+        }
     } else {
-        // Voices: 1=kal_diphone, 2=rms_diphone, 3=awb_diphone, etc
-        festival_eval_command("(voice_kal_diphone)"); 
+        festival_eval_command("(voice_default)");
     }
 
     // Set pitch accent/intonation
@@ -527,9 +545,12 @@ bool VoiceInstrument::load_wav_from_file(const std::string& filepath, std::vecto
 }
 
 std::string VoiceInstrument::make_cache_key(const std::string& text, float pitch_factor) const {
-    // Round pitch_factor to 2 decimals to avoid cache misses from float precision
+    // Round pitch_factor to 2 decimals to avoid cache misses from float precision.
+    // Include language and gender so different voice settings produce distinct cache entries.
     int pitch_int = (int)(pitch_factor * 100.0f);
-    return text + "@" + std::to_string(pitch_int);
+    return text + "@" + std::to_string(pitch_int)
+                + "@" + m_language
+                + "@" + std::to_string(m_gender);
 }
 
 std::string VoiceInstrument::get_cache_file_path(const std::string& cache_key) const {
@@ -766,6 +787,46 @@ void VoiceInstrument::stop_synthesis_worker() {
         delete m_worker;
         m_worker = nullptr;
     }
+}
+
+std::vector<std::pair<std::string,std::string>> VoiceInstrument::list_espeak_languages() {
+    // espeak_ListVoices returns the full installed voice list.
+    // Each entry's `languages` field (for ListVoices) is: one byte priority + UTF-8 language string.
+    // We deduplicate by language code and build a human-readable display label.
+    std::vector<std::pair<std::string,std::string>> result;
+
+    const espeak_VOICE** voices = espeak_ListVoices(nullptr);
+    if (!voices) return result;
+
+    std::set<std::string> seen;
+    for (int i = 0; voices[i]; ++i) {
+        const char* raw = voices[i]->languages;
+        if (!raw || !*raw) continue;
+        // Skip the priority byte and extract the first language entry.
+        const char* lang = raw + 1;
+        if (!*lang) continue;
+
+        // Use only the primary language (before any second priority+lang pair).
+        std::string lcode(lang);
+        // Some entries list multiple languages; take up to the first \x00 or next priority byte.
+        // The string is null-terminated, so lcode is already correct.
+
+        if (seen.count(lcode)) continue;
+        seen.insert(lcode);
+
+        // Build a display name: voice name if available, otherwise just the language code.
+        std::string display = lcode;
+        if (voices[i]->name && *voices[i]->name)
+            display = std::string(voices[i]->name) + " (" + lcode + ")";
+
+        result.push_back({lcode, display});
+    }
+
+    // Sort by language code for a predictable order.
+    std::sort(result.begin(), result.end(),
+              [](const auto& a, const auto& b){ return a.first < b.first; });
+
+    return result;
 }
 
 } // namespace disgrace_ns

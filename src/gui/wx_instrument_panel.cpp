@@ -700,21 +700,78 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     voice_tts_sizer->Add(m_voice_tts_mode_ch, 1, wxEXPAND | wxALL, 5);
     voice_sizer->Add(voice_tts_sizer, 0, wxEXPAND | wxALL, 5);
     
-    // Voice selection slider
-    wxBoxSizer* voice_voice_sizer = new wxBoxSizer(wxHORIZONTAL);
-    voice_voice_sizer->Add(new wxStaticText(m_voice_editor, wxID_ANY, "Voice:"), 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
-    m_voice_voice_slider = new wxSlider(m_voice_editor, wxID_ANY, 0, 0, 4, wxDefaultPosition, wxSize(150, -1));
-    m_voice_voice_slider->Bind(wxEVT_SLIDER, [this](wxCommandEvent& ev) {
+    // Language selector (populated from installed espeak-ng voices)
+    wxBoxSizer* voice_lang_sizer = new wxBoxSizer(wxHORIZONTAL);
+    voice_lang_sizer->Add(new wxStaticText(m_voice_editor, wxID_ANY, "Language:"), 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    m_voice_language_ch = new wxChoice(m_voice_editor, wxID_ANY);
+    {
+        auto langs = VoiceInstrument::list_espeak_languages();
+        if (langs.empty()) {
+            m_voice_language_ch->Append("en");
+        } else {
+            for (auto& [code, label] : langs)
+                m_voice_language_ch->Append(wxString::FromUTF8(label), new wxStringClientData(wxString::FromUTF8(code)));
+        }
+        m_voice_language_ch->SetSelection(0);
+    }
+    m_voice_language_ch->Bind(wxEVT_CHOICE, [this](wxCommandEvent& ev) {
         if (m_selected_instrument >= 0) {
             auto& inst = m_engine.instrument(m_selected_instrument);
             if (inst.type() == InstrumentType::Voice) {
                 VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
-                voice->set_voice(ev.GetInt());
+                int sel = ev.GetSelection();
+                if (sel >= 0) {
+                    auto* cd = dynamic_cast<wxStringClientData*>(m_voice_language_ch->GetClientObject(sel));
+                    std::string code = cd ? cd->GetData().ToStdString() : ev.GetString().ToStdString();
+                    voice->set_language(code);
+                    voice->clear_cache();
+                }
             }
         }
     });
-    voice_voice_sizer->Add(m_voice_voice_slider, 1, wxEXPAND | wxALL, 5);
-    voice_sizer->Add(voice_voice_sizer, 0, wxEXPAND | wxALL, 5);
+    voice_lang_sizer->Add(m_voice_language_ch, 1, wxEXPAND | wxALL, 5);
+    voice_sizer->Add(voice_lang_sizer, 0, wxEXPAND | wxALL, 5);
+
+    // Gender selector
+    wxBoxSizer* voice_gender_sizer = new wxBoxSizer(wxHORIZONTAL);
+    voice_gender_sizer->Add(new wxStaticText(m_voice_editor, wxID_ANY, "Gender:"), 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    m_voice_gender_ch = new wxChoice(m_voice_editor, wxID_ANY);
+    m_voice_gender_ch->Append("Default");
+    m_voice_gender_ch->Append("Male");
+    m_voice_gender_ch->Append("Female");
+    m_voice_gender_ch->SetSelection(0);
+    m_voice_gender_ch->Bind(wxEVT_CHOICE, [this](wxCommandEvent& ev) {
+        if (m_selected_instrument >= 0) {
+            auto& inst = m_engine.instrument(m_selected_instrument);
+            if (inst.type() == InstrumentType::Voice) {
+                VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
+                voice->set_gender(ev.GetSelection());
+                voice->clear_cache();
+            }
+        }
+    });
+    voice_gender_sizer->Add(m_voice_gender_ch, 1, wxEXPAND | wxALL, 5);
+    voice_sizer->Add(voice_gender_sizer, 0, wxEXPAND | wxALL, 5);
+
+    // Variant selector (pick among multiple voices matching language+gender)
+    wxBoxSizer* voice_variant_sizer = new wxBoxSizer(wxHORIZONTAL);
+    voice_variant_sizer->Add(new wxStaticText(m_voice_editor, wxID_ANY, "Variant:"), 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    m_voice_variant_ch = new wxChoice(m_voice_editor, wxID_ANY);
+    for (int v = 0; v <= 9; ++v)
+        m_voice_variant_ch->Append(v == 0 ? "Default" : wxString::Format("%d", v));
+    m_voice_variant_ch->SetSelection(0);
+    m_voice_variant_ch->Bind(wxEVT_CHOICE, [this](wxCommandEvent& ev) {
+        if (m_selected_instrument >= 0) {
+            auto& inst = m_engine.instrument(m_selected_instrument);
+            if (inst.type() == InstrumentType::Voice) {
+                VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
+                voice->set_variant(ev.GetSelection());
+                voice->clear_cache();
+            }
+        }
+    });
+    voice_variant_sizer->Add(m_voice_variant_ch, 1, wxEXPAND | wxALL, 5);
+    voice_sizer->Add(voice_variant_sizer, 0, wxEXPAND | wxALL, 5);
     
     // Speed slider (0.5x to 2.0x)
     wxBoxSizer* voice_speed_sizer = new wxBoxSizer(wxHORIZONTAL);
@@ -1264,7 +1321,19 @@ void InstrumentPanel::update_editor() {
             VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
             TTSMode mode = voice->tts_mode();
             m_voice_tts_mode_ch->SetSelection((mode == TTSMode::RealTimeEspeak) ? 0 : 1);
-            m_voice_voice_slider->SetValue(voice->get_voice());
+
+            // Language: find matching entry by language code stored as client data
+            {
+                const std::string& lang = voice->get_language();
+                int found = 0;
+                for (unsigned int i = 0; i < m_voice_language_ch->GetCount(); ++i) {
+                    auto* cd = dynamic_cast<wxStringClientData*>(m_voice_language_ch->GetClientObject(i));
+                    if (cd && cd->GetData().ToStdString() == lang) { found = (int)i; break; }
+                }
+                m_voice_language_ch->SetSelection(found);
+            }
+            m_voice_gender_ch->SetSelection(voice->get_gender());
+            m_voice_variant_ch->SetSelection(voice->get_variant());
             m_voice_speed_slider->SetValue((int)(voice->get_speed() * 50.0f));
             m_voice_accent_slider->SetValue((int)(voice->get_pitch_accent() * 100.0f));
             

@@ -160,7 +160,8 @@ MixerPanel::MixerPanel(wxWindow* parent, Engine& engine)
     master_strip_sizer->Add(master_label, 0, wxALIGN_CENTER | wxALL, 2);
 
     wxBoxSizer* master_vol_meters = new wxBoxSizer(wxHORIZONTAL);
-    m_master_gain = new wxSlider(master_strip, wxID_ANY, 100, 0, 200, wxDefaultPosition, wxSize(-1, 100), wxSL_VERTICAL | wxSL_INVERSE);
+    m_master_gain = new wxSlider(master_strip, wxID_ANY, 100, 0, 200, wxDefaultPosition, wxSize(-1, 100), wxSL_VERTICAL | wxSL_INVERSE | wxSL_TICKS);
+    m_master_gain->SetTickFreq(50);
     m_master_gain->SetValue((int)(m_engine.master_gain() * 100));
     master_vol_meters->Add(m_master_gain, 0, wxEXPAND | wxALL, 2);
 
@@ -173,7 +174,8 @@ MixerPanel::MixerPanel(wxWindow* parent, Engine& engine)
     master_strip_sizer->Add(master_vol_meters, 1, wxEXPAND | wxALL, 2);
 
     // Master Pan (Parity with track strips)
-    wxSlider* master_pan = new wxSlider(master_strip, wxID_ANY, 0, -100, 100, wxDefaultPosition, wxSize(60, -1), wxSL_HORIZONTAL);
+    wxSlider* master_pan = new wxSlider(master_strip, wxID_ANY, 0, -100, 100, wxDefaultPosition, wxSize(60, -1), wxSL_HORIZONTAL | wxSL_TICKS);
+    master_pan->SetTickFreq(50);
     master_pan->SetValue((int)(m_engine.m_master.pan() * 100));
     master_pan->Bind(wxEVT_SLIDER, [this](wxCommandEvent& ev) {
         float val = (float)ev.GetInt() / 100.0f;
@@ -344,7 +346,8 @@ void MixerPanel::update_mixer_ui() {
         wxBoxSizer* track_controls = new wxBoxSizer(wxHORIZONTAL);
 
         // Volume Slider
-        wxSlider* vol = new wxSlider(track_panel, wxID_ANY, 100, 0, 100, wxDefaultPosition, wxSize(-1, 100), wxSL_VERTICAL | wxSL_INVERSE);
+        wxSlider* vol = new wxSlider(track_panel, wxID_ANY, 100, 0, 100, wxDefaultPosition, wxSize(-1, 100), wxSL_VERTICAL | wxSL_INVERSE | wxSL_TICKS);
+        vol->SetTickFreq(25);
         vol->SetValue((int)(m_engine.track(i).volume() * 100));
         vol->Bind(wxEVT_SLIDER, [this, i](wxCommandEvent& ev) {
             float val = (float)ev.GetInt() / 100.0f;
@@ -365,7 +368,8 @@ void MixerPanel::update_mixer_ui() {
         track_sizer->Add(track_controls, 1, wxEXPAND | wxALL, 2);
 
         // Pan Slider
-        wxSlider* pan = new wxSlider(track_panel, wxID_ANY, 0, -100, 100, wxDefaultPosition, wxSize(60, -1), wxSL_HORIZONTAL);
+        wxSlider* pan = new wxSlider(track_panel, wxID_ANY, 0, -100, 100, wxDefaultPosition, wxSize(60, -1), wxSL_HORIZONTAL | wxSL_TICKS);
+        pan->SetTickFreq(50);
         pan->SetValue((int)(m_engine.track(i).get_pan() * 100));
         pan->Bind(wxEVT_SLIDER, [this, i](wxCommandEvent& ev) {
             float val = (float)ev.GetInt() / 100.0f;
@@ -430,7 +434,8 @@ void MixerPanel::update_mixer_ui() {
         wxBoxSizer* bus_controls = new wxBoxSizer(wxHORIZONTAL);
 
         // Volume Slider
-        wxSlider* vol = new wxSlider(bus_panel, wxID_ANY, 100, 0, 100, wxDefaultPosition, wxSize(-1, 100), wxSL_VERTICAL | wxSL_INVERSE);
+        wxSlider* vol = new wxSlider(bus_panel, wxID_ANY, 100, 0, 100, wxDefaultPosition, wxSize(-1, 100), wxSL_VERTICAL | wxSL_INVERSE | wxSL_TICKS);
+        vol->SetTickFreq(25);
         vol->SetValue((int)(m_engine.bus(i).volume() * 100));
         vol->Bind(wxEVT_SLIDER, [this, i](wxCommandEvent& ev) {
             float val = (float)ev.GetInt() / 100.0f;
@@ -450,7 +455,8 @@ void MixerPanel::update_mixer_ui() {
         bus_sizer->Add(bus_controls, 1, wxEXPAND | wxALL, 2);
 
         // Pan Slider
-        wxSlider* pan = new wxSlider(bus_panel, wxID_ANY, 0, -100, 100, wxDefaultPosition, wxSize(60, -1), wxSL_HORIZONTAL);
+        wxSlider* pan = new wxSlider(bus_panel, wxID_ANY, 0, -100, 100, wxDefaultPosition, wxSize(60, -1), wxSL_HORIZONTAL | wxSL_TICKS);
+        pan->SetTickFreq(50);
         pan->SetValue((int)(m_engine.bus(i).pan() * 100));
         pan->Bind(wxEVT_SLIDER, [this, i](wxCommandEvent& ev) {
             float val = (float)ev.GetInt() / 100.0f;
@@ -782,7 +788,8 @@ void MixerPanel::update_effect_editor() {
                 wxBoxSizer* eq_sizer = new wxBoxSizer(wxHORIZONTAL);
                 for (int b = 0; b < 12; ++b) {
                     wxBoxSizer* band_sizer = new wxBoxSizer(wxVERTICAL);
-                    wxSlider* s = new wxSlider(m_fx_params_group, wxID_ANY, (int)(geq->get_band_gain(b) * 10.0f), -120, 120, wxDefaultPosition, wxSize(-1, 100), wxSL_VERTICAL | wxSL_INVERSE);
+                    wxSlider* s = new wxSlider(m_fx_params_group, wxID_ANY, (int)(geq->get_band_gain(b) * 10.0f), -120, 120, wxDefaultPosition, wxSize(-1, 100), wxSL_VERTICAL | wxSL_INVERSE | wxSL_TICKS);
+                    s->SetTickFreq(60);
                     s->Bind(wxEVT_SLIDER, [this, dsp, geq, b, p_choice](wxCommandEvent& ev){
                         if (m_is_updating_ui) return;
                         geq->set_band_gain(b, (float)ev.GetInt() / 10.0f);

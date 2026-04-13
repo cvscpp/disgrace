@@ -454,6 +454,10 @@ void Engine::process_tick()
                 if (end_pos == 0 && !m_order.empty()) end_pos = m_order.size() - 1;
 
                 if (next_order_pos > end_pos) {
+                    if (m_is_exporting.load()) {
+                        transport().stop();
+                        return;
+                    }
                     next_order_pos = m_order_start.load();
                 }
                 
@@ -1061,20 +1065,23 @@ bool Engine::render_to_wav(const std::string& path, const ExportOptions& opts) {
         size_t to_render = std::min(block_size, total_frames - rendered);
         
         if (opts.realtime) {
-            // Realtime export
+            // Realtime export: let JACK drive the audio thread; stop when
+            // transport halts (song-end sets it via tick-advance) or when
+            // we've recorded at least total_frames samples as a safety cap.
             m_master.m_recorded_l.clear();
             m_master.m_recorded_r.clear();
             m_master.m_recorded_l.reserve(total_frames);
             m_master.m_recorded_r.reserve(total_frames);
             m_master.m_is_recording.store(true);
-            
+
             start();
-            while (transport().is_playing() && m_order_pos.load() < m_order.size()) {
+            while (transport().is_playing() &&
+                   m_master.m_recorded_l.size() < total_frames) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
             m_master.m_is_recording.store(false);
             stop();
-            
+
             final_l = std::move(m_master.m_recorded_l);
             final_r = std::move(m_master.m_recorded_r);
             break;

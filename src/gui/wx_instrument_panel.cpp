@@ -707,7 +707,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     {
         auto langs = VoiceInstrument::list_espeak_languages();
         if (langs.empty()) {
-            m_voice_language_ch->Append("en");
+            m_voice_language_ch->Append("en", new wxStringClientData("en"));
         } else {
             for (auto& [code, label] : langs)
                 m_voice_language_ch->Append(wxString::FromUTF8(label), new wxStringClientData(wxString::FromUTF8(code)));

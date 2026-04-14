@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <functional>
@@ -73,9 +74,10 @@ public:
         }
 
         // Wait for all workers to finish.
+        // Use a timeout so a crashed/hung worker doesn't freeze the JACK callback.
         const size_t n_workers = m_workers.size();
         std::unique_lock<std::mutex> lk(m_mu);
-        m_done_cv.wait(lk, [&] {
+        m_done_cv.wait_for(lk, std::chrono::milliseconds(500), [&] {
             return m_done.load(std::memory_order_relaxed) >= n_workers;
         });
     }

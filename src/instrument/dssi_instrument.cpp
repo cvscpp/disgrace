@@ -124,13 +124,29 @@ bool DSSIInstrument::load_plugin(const std::string& path, int index) {
     m_audio_out_l = -1;
     m_audio_out_r = -1;
 
+    // Dummy buffer for all audio ports not used as primary L/R output.
+    // LADSPA requires every port to be connected before run(); unconnected
+    // audio input ports would cause the plugin to read from a dangling pointer.
+    m_dummy_audio_buf.assign(2048, 0.0f);
+
     // Discover ports
     m_port_values.resize(ladspa->PortCount, 0.0f);
     for (unsigned long i = 0; i < ladspa->PortCount; ++i) {
         LADSPA_PortDescriptor d = ladspa->PortDescriptors[i];
-        if (LADSPA_IS_PORT_AUDIO(d) && LADSPA_IS_PORT_OUTPUT(d)) {
-            if (m_audio_out_l == -1) m_audio_out_l = (int)i;
-            else if (m_audio_out_r == -1) m_audio_out_r = (int)i;
+        if (LADSPA_IS_PORT_AUDIO(d)) {
+            if (LADSPA_IS_PORT_OUTPUT(d)) {
+                if (m_audio_out_l == -1) {
+                    m_audio_out_l = (int)i;
+                } else if (m_audio_out_r == -1) {
+                    m_audio_out_r = (int)i;
+                } else {
+                    // Extra audio output — connect to discard buffer.
+                    ladspa->connect_port(m_instance, i, m_dummy_audio_buf.data());
+                }
+            } else {
+                // Audio input port — connect to silent dummy buffer.
+                ladspa->connect_port(m_instance, i, m_dummy_audio_buf.data());
+            }
         } else if (LADSPA_IS_PORT_CONTROL(d) && LADSPA_IS_PORT_INPUT(d)) {
             m_control_indices.push_back((int)i);
             
@@ -140,6 +156,9 @@ bool DSSIInstrument::load_plugin(const std::string& path, int index) {
                 ? default_port_value(hint, m_sample_rate)
                 : 0.0f;
             m_port_values[i] = val;
+            ladspa->connect_port(m_instance, i, &m_port_values[i]);
+        } else if (LADSPA_IS_PORT_CONTROL(d) && LADSPA_IS_PORT_OUTPUT(d)) {
+            // Control output ports also need a valid connection.
             ladspa->connect_port(m_instance, i, &m_port_values[i]);
         }
     }

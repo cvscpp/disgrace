@@ -663,22 +663,33 @@ void Engine::render_block_multi(float** out_bufs, uint32_t num_outs, size_t fram
         if (m_tracks[t].solo()) { any_solo = true; break; }
     }
 
+    // Cap to the number of pre-allocated per-track buffers.
+    const size_t num_tracks = std::min(m_tracks.size(), MAX_TRACKS_INTERNAL);
+
     // Pass 1: fire notes and render all tracks. Track buffers (m_track_l/r[t])
     // are independent — parallelised when a thread pool is available.
+    // Muted (or non-solo) tracks skip audio rendering to save CPU, but still
+    // drain their pending note queue so events don't back up.
     auto process_track = [&](size_t t) {
         m_tracks[t].fire_pending_notes(frames);
-        m_tracks[t].process(m_track_l[t], m_track_r[t], frames, in_bufs);
+        bool audible = any_solo ? m_tracks[t].solo() : !m_tracks[t].muted();
+        if (audible) {
+            m_tracks[t].process(m_track_l[t], m_track_r[t], frames, in_bufs);
+        } else {
+            std::fill(m_track_l[t], m_track_l[t] + frames, 0.f);
+            std::fill(m_track_r[t], m_track_r[t] + frames, 0.f);
+        }
     };
 
     if (m_thread_pool && m_thread_pool->size() > 0) {
-        m_thread_pool->parallel_for(m_tracks.size(), process_track);
+        m_thread_pool->parallel_for(num_tracks, process_track);
     } else {
-        for (size_t t = 0; t < m_tracks.size(); ++t)
+        for (size_t t = 0; t < num_tracks; ++t)
             process_track(t);
     }
 
     // Pass 1b: accumulate rendered track audio into buses (must be serial).
-    for (size_t t = 0; t < m_tracks.size(); ++t) {
+    for (size_t t = 0; t < num_tracks; ++t) {
         bool should_play = true;
         if (any_solo) {
             if (!m_tracks[t].solo()) should_play = false;

@@ -609,23 +609,32 @@ void Engine::render_block_multi(float** out_bufs, uint32_t num_outs, size_t fram
         if (should_record && in_bufs) {
             SampleData* sd = m_recording_sample_ptr.load(std::memory_order_acquire);
             if (sd) {
+                size_t wp = m_recording_write_pos.load(std::memory_order_relaxed);
+                size_t cap = sd->left.size();
                 uint32_t ch = m_recording_input_channel;
+
                 if (m_recording_is_mono) {
-                    if (ch < m_num_ins && in_bufs[ch]) {
-                        for (size_t i = 0; i < frames; ++i)
-                            sd->left.push_back(in_bufs[ch][i]);
+                    if (ch < m_num_ins && in_bufs[ch] && wp < cap) {
+                        size_t to_write = std::min(frames, cap - wp);
+                        for (size_t i = 0; i < to_write; ++i)
+                            sd->left[wp + i] = in_bufs[ch][i];
+                        m_recording_write_pos.fetch_add(to_write, std::memory_order_release);
                     }
                 } else {
-                    if (ch < m_num_ins - 1 && in_bufs[ch] && in_bufs[ch+1]) {
-                        for (size_t i = 0; i < frames; ++i) {
-                            sd->left.push_back(in_bufs[ch][i]);
-                            sd->right.push_back(in_bufs[ch+1][i]);
+                    if (ch < m_num_ins - 1 && in_bufs[ch] && in_bufs[ch+1] && wp < cap) {
+                        size_t to_write = std::min(frames, cap - wp);
+                        for (size_t i = 0; i < to_write; ++i) {
+                            sd->left[wp + i] = in_bufs[ch][i];
+                            sd->right[wp + i] = in_bufs[ch+1][i];
                         }
-                    } else if (ch < m_num_ins && in_bufs[ch]) {
-                        for (size_t i = 0; i < frames; ++i) {
-                            sd->left.push_back(in_bufs[ch][i]);
-                            sd->right.push_back(in_bufs[ch][i]);
+                        m_recording_write_pos.fetch_add(to_write, std::memory_order_release);
+                    } else if (ch < m_num_ins && in_bufs[ch] && wp < cap) {
+                        size_t to_write = std::min(frames, cap - wp);
+                        for (size_t i = 0; i < to_write; ++i) {
+                            sd->left[wp + i] = in_bufs[ch][i];
+                            sd->right[wp + i] = in_bufs[ch][i];
                         }
+                        m_recording_write_pos.fetch_add(to_write, std::memory_order_release);
                     }
                 }
             }
@@ -1079,18 +1088,22 @@ bool Engine::render_to_wav(const std::string& path, const ExportOptions& opts) {
             // we've recorded at least total_frames samples as a safety cap.
             m_master.m_recorded_l.clear();
             m_master.m_recorded_r.clear();
-            m_master.m_recorded_l.reserve(total_frames);
-            m_master.m_recorded_r.reserve(total_frames);
+            m_master.m_recorded_l.resize(total_frames);
+            m_master.m_recorded_r.resize(total_frames);
+            m_master.m_recorded_write_pos.store(0);
             m_master.m_is_recording.store(true);
 
             start();
             while (transport().is_playing() &&
-                   m_master.m_recorded_l.size() < total_frames) {
+                   m_master.m_recorded_write_pos.load() < total_frames) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
             m_master.m_is_recording.store(false);
             stop();
 
+            size_t final_recorded = m_master.m_recorded_write_pos.load();
+            m_master.m_recorded_l.resize(final_recorded);
+            m_master.m_recorded_r.resize(final_recorded);
             final_l = std::move(m_master.m_recorded_l);
             final_r = std::move(m_master.m_recorded_r);
             break;
@@ -1168,14 +1181,16 @@ void Engine::start_recording_sample(SampleRecordMode mode, uint32_t channel, boo
     m_recording_is_mono = mono;
     auto sd = std::make_shared<SampleData>();
     sd->sample_rate = (int)m_sample_rate;
-    // Pre-reserve 30 s of audio to avoid RT-thread reallocations.
-    size_t reserve_frames = (size_t)m_sample_rate * 30;
-    sd->left.reserve(reserve_frames);
-    if (!mono) sd->right.reserve(reserve_frames);
+    // Pre-reserve 10 minutes of audio to avoid RT-thread reallocations.
+    // 48000 * 60 * 10 = 28.8M samples (~115MB per channel)
+    size_t reserve_frames = (size_t)m_sample_rate * 60 * 10;
+    sd->left.resize(reserve_frames);
+    if (!mono) sd->right.resize(reserve_frames);
     m_recording_sample_data = sd;
     m_recording_synced_active.store(false);
     m_recording_synced_row.store(0);
     m_recording_loop_count.store(0);
+    m_recording_write_pos.store(0);
     // Publish raw pointer BEFORE setting the recording flag so the RT thread
     // always sees a valid pointer when m_is_recording_sample is true.
     m_recording_sample_ptr.store(sd.get(), std::memory_order_release);
@@ -1186,6 +1201,16 @@ void Engine::stop_recording_sample() {
     // Clear the flag first so the RT thread stops appending.
     m_is_recording_sample.store(false, std::memory_order_release);
     m_recording_synced_active.store(false);
+    
+    // Resize the vectors to the actual recorded number of samples.
+    size_t recorded = m_recording_write_pos.load(std::memory_order_acquire);
+    if (m_recording_sample_data) {
+        m_recording_sample_data->left.resize(recorded);
+        if (!m_recording_is_mono) {
+            m_recording_sample_data->right.resize(recorded);
+        }
+    }
+    
     // Null the raw pointer after stopping so there's no dangling access.
     m_recording_sample_ptr.store(nullptr, std::memory_order_release);
 }

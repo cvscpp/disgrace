@@ -316,7 +316,7 @@ void SfzInstrument::note_on(uint8_t note, uint8_t velocity,
 {
     // Stop any previous note on the same column (tracker: one note per column)
     for (auto& sv : m_voices) {
-        if (sv.column == (int)column_index) sv.voice->stop();
+        if (sv.column == (int)column_index) sv.voice->panic();
     }
 
     float note_hz     = midi_note_to_hz(note);

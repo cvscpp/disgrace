@@ -28,16 +28,7 @@ namespace disgrace_ns
         // find inactive voice
         for (auto& v : m_voices)
         {
-            if (!v) {
-                v = create_voice();
-                if (v) {
-                    v->set_column(column_index);
-                    return v.get();
-                }
-                continue;
-            }
-
-            if (!v->active()) {
+            if (v && !v->active()) {
                 v->set_column(column_index);
                 return v.get();
             }

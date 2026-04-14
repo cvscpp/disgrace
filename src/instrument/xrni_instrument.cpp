@@ -337,7 +337,7 @@ void XrniInstrument::note_on(uint8_t note, uint8_t velocity,
                               size_t column_index, size_t offset_samples, uint8_t)
 {
     for (auto& sv : m_voices)
-        if (sv.column == (int)column_index) sv.voice->stop();
+        if (sv.column == (int)column_index) sv.voice->panic();
 
     float note_hz = midi_note_to_hz(note);
     float vel_f   = velocity / 127.0f;

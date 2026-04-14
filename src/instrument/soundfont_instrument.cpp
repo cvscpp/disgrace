@@ -37,20 +37,28 @@ namespace disgrace_ns
 
     void SoundFontInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_index, size_t, uint8_t)
     {
-        // Simple tracker behavior: one note at a time per column
-        // We could track last note per column to send noteoff
-        fluid_synth_noteon(m_fluid_synth, (int)column_index % 16, note, velocity);
+        int chan = (int)column_index % 16;
+        if (m_last_note[chan] != -1) {
+            fluid_synth_noteoff(m_fluid_synth, chan, m_last_note[chan]);
+        }
+        fluid_synth_noteon(m_fluid_synth, chan, note, velocity);
+        m_last_note[chan] = note;
     }
 
     void SoundFontInstrument::note_off(size_t column_index)
     {
-        fluid_synth_all_notes_off(m_fluid_synth, (int)column_index % 16);
+        int chan = (int)column_index % 16;
+        if (m_last_note[chan] != -1) {
+            fluid_synth_noteoff(m_fluid_synth, chan, m_last_note[chan]);
+            m_last_note[chan] = -1;
+        }
     }
 
     void SoundFontInstrument::panic()
     {
         for (int i = 0; i < 16; ++i) {
             fluid_synth_all_sounds_off(m_fluid_synth, i);
+            m_last_note[i] = -1;
         }
     }
 

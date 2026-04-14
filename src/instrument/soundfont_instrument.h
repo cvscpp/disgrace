@@ -63,6 +63,7 @@ namespace disgrace_ns
         int m_selected_preset = -1;
         float m_volume = 1.0f;
         std::string m_path;
+        int m_last_note[16]{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
     };
 
 } // namespace disgrace_ns

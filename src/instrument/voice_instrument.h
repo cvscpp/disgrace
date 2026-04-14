@@ -175,6 +175,7 @@ private:
     double m_playback_pos = 0.0;
     double m_playback_increment = 1.0;
     bool m_playing = false;
+    int m_last_note[16]{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
     std::string m_cache_dir;  // Disk cache directory
     
     // Performance metrics

@@ -18,6 +18,7 @@
 
 #pragma once
 #include "dsp.h"
+#include "../util/linear_smoother.h"
 #include <nlohmann/json.hpp>
 
 namespace disgrace_ns
@@ -26,7 +27,7 @@ namespace disgrace_ns
 class GainDSP : public disgrace_ns::DSP
 {
 public:
-    GainDSP() { m_current_preset = "Unity"; }
+    GainDSP() : m_smoother(1.0f) { m_current_preset = "Unity"; }
     float gain = 1.0f;
 
     std::string name() const override { return "Gain"; }
@@ -37,10 +38,12 @@ public:
                  size_t nframes) override
     {
         if (m_bypassed) return;
+        m_smoother.set_target(gain, nframes);
         for (size_t i = 0; i < nframes; ++i)
         {
-            l[i] *= gain;
-            r[i] *= gain;
+            float cur = m_smoother.next();
+            l[i] *= cur;
+            r[i] *= cur;
         }
     }
 
@@ -53,7 +56,10 @@ public:
 
     void set_state(const std::string& state) override {
         auto j = nlohmann::json::parse(state);
-        if (j.contains("gain")) gain = j["gain"];
+        if (j.contains("gain")) {
+            gain = j["gain"];
+            m_smoother = LinearSmoother(gain);
+        }
         if (j.contains("bypassed")) m_bypassed = j["bypassed"];
     }
 
@@ -69,6 +75,9 @@ public:
         else if (name == "Boost (+12dB)") gain = 4.0f;
         else if (name == "Attenuate (-6dB)") gain = 0.5f;
     }
+
+private:
+    LinearSmoother m_smoother;
 };
 
 } // namespace disgrace_ns

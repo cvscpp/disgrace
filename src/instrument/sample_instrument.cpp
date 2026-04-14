@@ -37,10 +37,10 @@ namespace disgrace_ns
         auto& sample = m_samples[s_idx];
         if (!sample.data) return;
 
-        // Cut previous note on SAME column
+        // Cut previous note on SAME column - trackers usually hard-cut here.
         for (auto& v : m_voices) {
             if (v && v->active() && v->column() == column_index) {
-                v->stop();
+                v->panic();
             }
         }
         
@@ -93,6 +93,13 @@ namespace disgrace_ns
     void disgrace_ns::SampleInstrument::add_sample(const std::string& name, std::shared_ptr<disgrace_ns::SampleData> data)
     {
         m_samples.push_back({name, data});
+        
+        // Ensure voices are allocated in the GUI thread during setup, not in the audio thread.
+        for (size_t i = 0; i < MAX_VOICES; ++i) {
+            if (!m_voices[i]) {
+                m_voices[i] = create_voice();
+            }
+        }
     }
 
     void disgrace_ns::SampleInstrument::remove_sample(size_t index)

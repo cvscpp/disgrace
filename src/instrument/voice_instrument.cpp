@@ -136,6 +136,10 @@ void VoiceInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_inde
         return;
     }
     
+    // Stop last note on same column
+    note_off(column_index);
+    m_last_note[column_index % 16] = note;
+
     // Get text for this note from the specified phrase index (sample_index)
     std::string text;
     {

@@ -72,12 +72,11 @@ void Metronome::process(float* out_l,
             ? freq_accent
             : freq_normal;
 
-            m_phase +=
-            2.f * PI_F * freq / // Use PI_F
-            m_sample_rate;
+            float phase_inc = 2.f * PI_F * freq / (float)m_sample_rate;
 
-            sample =
-            ::std::sin(m_phase) * m_volume;
+            sample = ::std::sin(m_phase) * m_volume;
+            m_phase += phase_inc;
+            if (m_phase > 2.f * PI_F) m_phase -= 2.f * PI_F;
 
             m_click_remaining--;
         }

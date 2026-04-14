@@ -54,8 +54,12 @@ bool MasterBus::muted() const
 
 float MasterBus::soft_clip(float x)
 {
-    // simple musical soft limiter
-    return ::std::tanh(x);
+    // Fast rational approximation of tanh(x)
+    // tanh(x) approx x * (27 + x*x) / (27 + 9*x*x) for small x
+    // For larger x, we can use a simpler version: x / (1 + |x|)
+    if (x > 3.0f) return 1.0f;
+    if (x < -3.0f) return -1.0f;
+    return x * (27.0f + x * x) / (27.0f + 9.0f * x * x);
 }
 
 void MasterBus::process(float* l,
@@ -85,9 +89,13 @@ void MasterBus::process(float* l,
         l[i] = sl;
         r[i] = sr;
 
-        if (m_is_recording.load()) {
-            m_recorded_l.push_back(sl);
-            m_recorded_r.push_back(sr);
+        if (m_is_recording.load(std::memory_order_relaxed)) {
+            size_t wp = m_recorded_write_pos.load(std::memory_order_relaxed);
+            if (wp < m_recorded_l.size()) {
+                m_recorded_l[wp] = sl;
+                m_recorded_r[wp] = sr;
+                m_recorded_write_pos.fetch_add(1, std::memory_order_release);
+            }
         }
 
         float pl = ::std::fabs(sl);

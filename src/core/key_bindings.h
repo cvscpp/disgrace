@@ -20,6 +20,7 @@
 
 #include <string>
 #include <map>
+#include <vector>
 
 namespace disgrace_ns {
 

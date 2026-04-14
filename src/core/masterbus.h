@@ -61,6 +61,7 @@ public:
 
     ::std::atomic<bool> m_is_recording{false};
     ::std::atomic<bool> m_export_mute{false};
+    ::std::atomic<size_t> m_recorded_write_pos{0};
     ::std::vector<float> m_recorded_l;
     ::std::vector<float> m_recorded_r;
 

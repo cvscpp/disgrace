@@ -17,8 +17,49 @@
  */
 
 #include "dssi_instrument.h"
+#include <algorithm>
 #include <iostream>
 #include <cmath>
+
+namespace {
+
+float apply_sample_rate_hint(float value, const LADSPA_PortRangeHint& hint, double sample_rate)
+{
+    return LADSPA_IS_HINT_SAMPLE_RATE(hint.HintDescriptor) ? value * (float)sample_rate : value;
+}
+
+float interpolate_default(float lower, float upper, float t, bool logarithmic)
+{
+    if (logarithmic && lower > 0.0f && upper > 0.0f)
+        return std::exp(std::log(lower) * (1.0f - t) + std::log(upper) * t);
+    return lower * (1.0f - t) + upper * t;
+}
+
+float default_port_value(const LADSPA_PortRangeHint& hint, double sample_rate)
+{
+    float lower = apply_sample_rate_hint(hint.LowerBound, hint, sample_rate);
+    float upper = apply_sample_rate_hint(hint.UpperBound, hint, sample_rate);
+    bool logarithmic = LADSPA_IS_HINT_LOGARITHMIC(hint.HintDescriptor);
+
+    float value = 0.0f;
+    if (LADSPA_IS_HINT_DEFAULT_0(hint.HintDescriptor)) value = apply_sample_rate_hint(0.0f, hint, sample_rate);
+    else if (LADSPA_IS_HINT_DEFAULT_1(hint.HintDescriptor)) value = apply_sample_rate_hint(1.0f, hint, sample_rate);
+    else if (LADSPA_IS_HINT_DEFAULT_100(hint.HintDescriptor)) value = apply_sample_rate_hint(100.0f, hint, sample_rate);
+    else if (LADSPA_IS_HINT_DEFAULT_440(hint.HintDescriptor)) value = apply_sample_rate_hint(440.0f, hint, sample_rate);
+    else if (LADSPA_IS_HINT_DEFAULT_MINIMUM(hint.HintDescriptor)) value = lower;
+    else if (LADSPA_IS_HINT_DEFAULT_MAXIMUM(hint.HintDescriptor)) value = upper;
+    else if (LADSPA_IS_HINT_DEFAULT_LOW(hint.HintDescriptor)) value = interpolate_default(lower, upper, 0.25f, logarithmic);
+    else if (LADSPA_IS_HINT_DEFAULT_MIDDLE(hint.HintDescriptor)) value = interpolate_default(lower, upper, 0.50f, logarithmic);
+    else if (LADSPA_IS_HINT_DEFAULT_HIGH(hint.HintDescriptor)) value = interpolate_default(lower, upper, 0.75f, logarithmic);
+
+    if (LADSPA_IS_HINT_BOUNDED_BELOW(hint.HintDescriptor))
+        value = std::max(value, lower);
+    if (LADSPA_IS_HINT_BOUNDED_ABOVE(hint.HintDescriptor))
+        value = std::min(value, upper);
+    return value;
+}
+
+} // namespace
 
 namespace disgrace_ns {
 
@@ -95,18 +136,9 @@ bool DSSIInstrument::load_plugin(const std::string& path, int index) {
             
             // Set default value if hint provided
             LADSPA_PortRangeHint hint = ladspa->PortRangeHints[i];
-            float val = 0.0f;
-            if (LADSPA_IS_HINT_HAS_DEFAULT(hint.HintDescriptor)) {
-                if (LADSPA_IS_HINT_DEFAULT_0(hint.HintDescriptor)) val = 0.0f;
-                else if (LADSPA_IS_HINT_DEFAULT_1(hint.HintDescriptor)) val = 1.0f;
-                else if (LADSPA_IS_HINT_DEFAULT_100(hint.HintDescriptor)) val = 100.0f;
-                else if (LADSPA_IS_HINT_DEFAULT_440(hint.HintDescriptor)) val = 440.0f;
-                else if (LADSPA_IS_HINT_DEFAULT_MINIMUM(hint.HintDescriptor)) val = hint.LowerBound;
-                else if (LADSPA_IS_HINT_DEFAULT_MAXIMUM(hint.HintDescriptor)) val = hint.UpperBound;
-                else if (LADSPA_IS_HINT_DEFAULT_LOW(hint.HintDescriptor)) val = hint.LowerBound * 0.75f + hint.UpperBound * 0.25f;
-                else if (LADSPA_IS_HINT_DEFAULT_MIDDLE(hint.HintDescriptor)) val = hint.LowerBound * 0.5f + hint.UpperBound * 0.5f;
-                else if (LADSPA_IS_HINT_DEFAULT_HIGH(hint.HintDescriptor)) val = hint.LowerBound * 0.25f + hint.UpperBound * 0.75f;
-            }
+            float val = LADSPA_IS_HINT_HAS_DEFAULT(hint.HintDescriptor)
+                ? default_port_value(hint, m_sample_rate)
+                : 0.0f;
             m_port_values[i] = val;
             ladspa->connect_port(m_instance, i, &m_port_values[i]);
         }

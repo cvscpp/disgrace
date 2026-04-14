@@ -500,33 +500,30 @@ void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float*
 
     process_commands();
 
-    if (!transport().is_playing()) {
-        render_block_multi(out_bufs, num_outs, nframes, in_bufs);
-    } else {
-        // We still use process_block which calls render_block internally
-        // for now we'll handle multi-out in render_block_multi
-        // process_block needs to be aware of multi-out or we can just call it with a wrapped buffer
-        size_t processed = 0;
-        while (processed < nframes) {
+    size_t processed = 0;
+    while (processed < nframes) {
+        size_t block = nframes - processed;
+        if (transport().is_playing()) {
             if (m_samples_until_next_tick == 0) {
                 process_tick();
                 m_samples_until_next_tick = m_timing.samples_per_tick();
             }
-            size_t block = std::min(m_samples_until_next_tick, nframes - processed);
-            
-            const float* offset_in_bufs[64];
-            for(uint32_t i = 0; i < m_num_ins && i < 64; ++i) {
-                offset_in_bufs[i] = in_bufs ? in_bufs[i] + processed : nullptr;
-            }
-
-            float* offset_out_bufs[64];
-            for(uint32_t i = 0; i < num_outs && i < 64; ++i) {
-                offset_out_bufs[i] = out_bufs[i] + processed;
-            }
-
-            render_block_multi(offset_out_bufs, num_outs, block, in_bufs ? offset_in_bufs : nullptr);
-            processed += block; m_samples_until_next_tick -= block;
+            block = std::min(block, m_samples_until_next_tick);
         }
+        block = std::min(block, MAX_BLOCK);
+
+        const float* offset_in_bufs[64];
+        for (uint32_t i = 0; i < m_num_ins && i < 64; ++i)
+            offset_in_bufs[i] = in_bufs ? in_bufs[i] + processed : nullptr;
+
+        float* offset_out_bufs[64];
+        for (uint32_t i = 0; i < num_outs && i < 64; ++i)
+            offset_out_bufs[i] = out_bufs[i] + processed;
+
+        render_block_multi(offset_out_bufs, num_outs, block, in_bufs ? offset_in_bufs : nullptr);
+        processed += block;
+        if (transport().is_playing())
+            m_samples_until_next_tick -= block;
     }
 
     // Master bus processing on hardware outputs 1-2 (out_bufs[0] and out_bufs[1])
@@ -571,6 +568,7 @@ void Engine::process_block(float* l, float* r, size_t nframes, const float* cons
             m_samples_until_next_tick = m_timing.samples_per_tick();
         }
         size_t block = std::min(m_samples_until_next_tick, nframes - processed);
+        block = std::min(block, MAX_BLOCK);
         
         const float* offset_in_bufs[64];
         for(uint32_t i = 0; i < m_num_ins && i < 64; ++i) {

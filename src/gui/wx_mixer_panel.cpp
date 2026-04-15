@@ -54,14 +54,6 @@
 
 namespace disgrace_ns {
 
-wxBEGIN_EVENT_TABLE(MixerPanel, wxPanel)
-    EVT_SLIDER(wxID_ANY, MixerPanel::on_master_gain)
-    EVT_CHECKBOX(wxID_ANY, MixerPanel::on_master_mute)
-    EVT_BUTTON(wxID_ANY, MixerPanel::on_add_fx)
-    EVT_BUTTON(wxID_ANY, MixerPanel::on_save_chain)
-    EVT_BUTTON(wxID_ANY, MixerPanel::on_load_chain)
-wxEND_EVENT_TABLE()
-
 MixerPanel::MixerPanel(wxWindow* parent, Engine& engine)
     : wxPanel(parent, wxID_ANY), m_engine(engine)
 {
@@ -124,6 +116,8 @@ MixerPanel::MixerPanel(wxWindow* parent, Engine& engine)
     m_load_chain_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(16, 16)));
     m_save_chain_btn = new wxButton(m_lower_pane, wxID_ANY, "Save", wxDefaultPosition, wxSize(-1, 25));
     m_save_chain_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_SAVE, wxART_BUTTON, wxSize(16, 16)));
+    m_load_chain_btn->Bind(wxEVT_BUTTON, &MixerPanel::on_load_chain, this);
+    m_save_chain_btn->Bind(wxEVT_BUTTON, &MixerPanel::on_save_chain, this);
     chain_btns->Add(m_load_chain_btn, 1, wxALL, 2);
     chain_btns->Add(m_save_chain_btn, 1, wxALL, 2);
     chain_sizer->Add(chain_btns, 0, wxEXPAND | wxALL, 2);
@@ -163,6 +157,7 @@ MixerPanel::MixerPanel(wxWindow* parent, Engine& engine)
     m_master_gain = new wxSlider(master_strip, wxID_ANY, 100, 0, 200, wxDefaultPosition, wxSize(-1, 100), wxSL_VERTICAL | wxSL_INVERSE | wxSL_TICKS);
     m_master_gain->SetTickFreq(50);
     m_master_gain->SetValue((int)(m_engine.master_gain() * 100));
+    m_master_gain->Bind(wxEVT_SLIDER, &MixerPanel::on_master_gain, this);
     master_vol_meters->Add(m_master_gain, 0, wxEXPAND | wxALL, 2);
 
     m_master_meter_l = new VUMeter(master_strip, wxID_ANY, m_engine, false);
@@ -186,6 +181,7 @@ MixerPanel::MixerPanel(wxWindow* parent, Engine& engine)
     // Mute
     m_master_mute = new wxCheckBox(master_strip, wxID_ANY, "M");
     m_master_mute->SetValue(m_engine.m_master.muted());
+    m_master_mute->Bind(wxEVT_CHECKBOX, &MixerPanel::on_master_mute, this);
     master_strip_sizer->Add(m_master_mute, 0, wxALIGN_CENTER | wxALL, 2);
 
     // Select Button

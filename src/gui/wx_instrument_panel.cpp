@@ -31,6 +31,7 @@
 #include "../instrument/voice_instrument.h"
 #include "../instrument/voice_synthesis_worker.h"
 #include "../io/audio_file.h"
+#include "../io/project_archive.h"
 
 #include <wx/sizer.h>
 #include <wx/msgdlg.h>
@@ -43,7 +44,165 @@
 #include <wx/progdlg.h>
 #include <dlfcn.h>
 #include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <set>
+#include <nlohmann/json.hpp>
+
+namespace {
+
+using json = nlohmann::json;
+namespace fs = std::filesystem;
+
+constexpr const char* kInstrumentArchiveFilter = "Disgrace Instruments (*.dgi)|*.dgi";
+constexpr const char* kInstrumentManifestFile = "instrument.json";
+
+struct LoadedSampleInstrument {
+    std::string name;
+    std::vector<disgrace_ns::SampleEntry> samples;
+    size_t selected_sample = 0;
+};
+
+fs::path make_instrument_temp_dir(const char* prefix) {
+    const auto now = std::chrono::system_clock::now().time_since_epoch().count();
+    fs::path dir = fs::temp_directory_path() / (std::string(prefix) + std::to_string(now));
+    if (fs::exists(dir)) {
+        fs::remove_all(dir);
+    }
+    fs::create_directories(dir);
+    return dir;
+}
+
+bool save_sample_instrument_archive(const disgrace_ns::SampleInstrument& sampler,
+                                    const std::string& archive_path) {
+    fs::path tmp_dir;
+    try {
+        tmp_dir = make_instrument_temp_dir("disgrace_inst_save_");
+        fs::path samples_dir = tmp_dir / "samples";
+        fs::create_directories(samples_dir);
+
+        json instrument_json;
+        instrument_json["format_version"] = 1;
+        instrument_json["type"] = "sampler";
+        instrument_json["name"] = sampler.name();
+        instrument_json["selected_sample"] = sampler.sample_count() == 0
+            ? 0
+            : std::min(sampler.selected_sample(), sampler.sample_count() - 1);
+        instrument_json["samples"] = json::array();
+
+        for (size_t i = 0; i < sampler.sample_count(); ++i) {
+            const auto& sample = sampler.get_sample(i);
+            json sample_json;
+            sample_json["name"] = sample.name;
+
+            if (sample.data && (!sample.data->left.empty() || !sample.data->right.empty())) {
+                const std::string filename = "sample_" + std::to_string(i) + ".wav";
+                fs::path wav_path = samples_dir / filename;
+                if (!disgrace_ns::AudioFile::save_wav(wav_path.string(),
+                                                      sample.data->left,
+                                                      sample.data->right,
+                                                      (uint32_t)sample.data->sample_rate)) {
+                    fs::remove_all(tmp_dir);
+                    return false;
+                }
+                sample_json["file"] = (fs::path("samples") / filename).string();
+            }
+
+            instrument_json["samples"].push_back(sample_json);
+        }
+
+        std::ofstream manifest(tmp_dir / kInstrumentManifestFile);
+        if (!manifest) {
+            fs::remove_all(tmp_dir);
+            return false;
+        }
+        manifest << instrument_json.dump(2);
+        manifest.close();
+
+        const bool ok = disgrace_ns::ProjectArchive::save(archive_path, tmp_dir.string());
+        fs::remove_all(tmp_dir);
+        return ok;
+    } catch (const std::exception&) {
+        if (!tmp_dir.empty() && fs::exists(tmp_dir)) {
+            fs::remove_all(tmp_dir);
+        }
+        return false;
+    }
+}
+
+bool load_sample_instrument_archive(const std::string& archive_path,
+                                    LoadedSampleInstrument& loaded) {
+    fs::path tmp_dir;
+    try {
+        tmp_dir = make_instrument_temp_dir("disgrace_inst_load_");
+        if (!disgrace_ns::ProjectArchive::extract(archive_path, tmp_dir.string())) {
+            fs::remove_all(tmp_dir);
+            return false;
+        }
+
+        std::ifstream manifest(tmp_dir / kInstrumentManifestFile);
+        if (!manifest) {
+            fs::remove_all(tmp_dir);
+            return false;
+        }
+
+        json instrument_json;
+        manifest >> instrument_json;
+
+        if (instrument_json.value("type", std::string()) != "sampler") {
+            fs::remove_all(tmp_dir);
+            return false;
+        }
+
+        loaded = {};
+        loaded.name = instrument_json.value("name", std::string("Loaded Sampler"));
+
+        if (instrument_json.contains("samples")) {
+            for (const auto& sample_json : instrument_json["samples"]) {
+                disgrace_ns::SampleEntry entry;
+                entry.name = sample_json.value("name", std::string("Sample"));
+
+                const std::string sample_file = sample_json.value("file", std::string());
+                if (!sample_file.empty()) {
+                    auto data = std::make_shared<disgrace_ns::SampleData>();
+                    uint32_t rate = 0;
+                    fs::path sample_path = tmp_dir / sample_file;
+                    if (!disgrace_ns::AudioFile::load_audio(sample_path.string(),
+                                                            data->left,
+                                                            data->right,
+                                                            rate)) {
+                        fs::remove_all(tmp_dir);
+                        return false;
+                    }
+                    data->sample_rate = (int)rate;
+                    entry.data = data;
+                } else {
+                    entry.data = std::make_shared<disgrace_ns::SampleData>();
+                }
+
+                loaded.samples.push_back(std::move(entry));
+            }
+        }
+
+        if (!loaded.samples.empty()) {
+            loaded.selected_sample = std::min(
+                instrument_json.value("selected_sample", size_t{0}),
+                loaded.samples.size() - 1
+            );
+        }
+
+        fs::remove_all(tmp_dir);
+        return true;
+    } catch (const std::exception&) {
+        if (!tmp_dir.empty() && fs::exists(tmp_dir)) {
+            fs::remove_all(tmp_dir);
+        }
+        return false;
+    }
+}
+
+} // namespace
 
 namespace disgrace_ns {
 
@@ -1443,8 +1602,107 @@ void InstrumentPanel::on_new(wxCommandEvent& event) {
     update_editor();
 }
 
-void InstrumentPanel::on_load(wxCommandEvent& event) {}
-void InstrumentPanel::on_save(wxCommandEvent& event) {}
+void InstrumentPanel::on_load(wxCommandEvent& event) {
+    wxFileDialog dlg(this,
+                     "Load Instrument",
+                     "",
+                     "",
+                     kInstrumentArchiveFilter,
+                     wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (dlg.ShowModal() != wxID_OK) {
+        return;
+    }
+
+    LoadedSampleInstrument loaded;
+    if (!load_sample_instrument_archive(dlg.GetPath().ToStdString(), loaded)) {
+        wxMessageBox("Failed to load sample instrument.", "Error", wxOK | wxICON_ERROR);
+        return;
+    }
+
+    bool replace_selected = false;
+    if (m_selected_instrument >= 0) {
+        const int choice = wxMessageBox(
+            "Replace the selected instrument?\nChoose No to load the sampler as a new instrument.",
+            "Load Instrument",
+            wxYES_NO | wxCANCEL | wxICON_QUESTION,
+            this
+        );
+        if (choice == wxCANCEL) {
+            return;
+        }
+        replace_selected = (choice == wxYES);
+    }
+
+    if (replace_selected) {
+        if (m_engine.instrument(m_selected_instrument).type() == InstrumentType::Sampler) {
+            m_engine.set_instrument_type(m_selected_instrument, InstrumentType::None);
+        }
+    } else {
+        m_engine.add_instrument();
+        m_selected_instrument = (int)m_engine.instrument_count() - 1;
+    }
+
+    m_engine.set_instrument_type(m_selected_instrument, InstrumentType::Sampler);
+    auto& inst = m_engine.instrument(m_selected_instrument);
+    inst.set_name(loaded.name);
+
+    auto* sampler = static_cast<SampleInstrument*>(&inst);
+    for (const auto& sample : loaded.samples) {
+        sampler->add_sample(sample.name, sample.data);
+    }
+
+    if (!loaded.samples.empty()) {
+        m_selected_sample = (int)loaded.selected_sample;
+        sampler->set_selected_sample(loaded.selected_sample);
+    } else {
+        m_selected_sample = -1;
+    }
+
+    m_engine.mark_dirty();
+    update_instrument_list();
+    update_editor();
+}
+
+void InstrumentPanel::on_save(wxCommandEvent& event) {
+    if (m_selected_instrument < 0) {
+        wxMessageBox("Select a sample instrument to save.", "Save Instrument", wxOK | wxICON_INFORMATION);
+        return;
+    }
+
+    auto& inst = m_engine.instrument(m_selected_instrument);
+    if (inst.type() != InstrumentType::Sampler) {
+        wxMessageBox("Only sample instruments can be saved right now.", "Save Instrument", wxOK | wxICON_INFORMATION);
+        return;
+    }
+
+    wxString default_name = wxFileName(inst.name()).GetFullName();
+    if (default_name.empty()) {
+        default_name = "instrument";
+    }
+    if (!default_name.Lower().EndsWith(".dgi")) {
+        default_name += ".dgi";
+    }
+
+    wxFileDialog dlg(this,
+                     "Save Instrument",
+                     "",
+                     default_name,
+                     kInstrumentArchiveFilter,
+                     wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    if (dlg.ShowModal() != wxID_OK) {
+        return;
+    }
+
+    wxFileName out_path(dlg.GetPath());
+    if (out_path.GetExt().CmpNoCase("dgi") != 0) {
+        out_path.SetExt("dgi");
+    }
+
+    if (!save_sample_instrument_archive(static_cast<const SampleInstrument&>(inst),
+                                        out_path.GetFullPath().ToStdString())) {
+        wxMessageBox("Failed to save sample instrument.", "Error", wxOK | wxICON_ERROR);
+    }
+}
 
 void InstrumentPanel::on_delete(wxCommandEvent& event) {
     if (m_selected_instrument >= 0) {
@@ -1818,6 +2076,7 @@ void InstrumentPanel::on_load_sample(wxCommandEvent& event) {
                 s->set_sample_name(m_selected_sample, dlg.GetFilename().ToStdString());
                 s->get_sample(m_selected_sample).data = data;
             }
+            m_engine.mark_dirty();
             update_editor();
         }
     }
@@ -1833,7 +2092,11 @@ void InstrumentPanel::on_save_sample(wxCommandEvent& event) {
 
     wxFileDialog dlg(this, "Save Sample", "", entry.name, "WAV Files|*.wav", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
     if (dlg.ShowModal() == wxID_OK) {
-        if (!AudioFile::save_wav(dlg.GetPath().ToStdString(), entry.data->left, entry.data->right, (uint32_t)entry.data->sample_rate)) {
+        wxFileName out_path(dlg.GetPath());
+        if (out_path.GetExt().CmpNoCase("wav") != 0) {
+            out_path.SetExt("wav");
+        }
+        if (!AudioFile::save_wav(out_path.GetFullPath().ToStdString(), entry.data->left, entry.data->right, (uint32_t)entry.data->sample_rate)) {
             wxMessageBox("Failed to save audio file.", "Error", wxOK | wxICON_ERROR);
         }
     }

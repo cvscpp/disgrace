@@ -106,7 +106,6 @@ private:
 public:
     void set_tab_index(int idx) { m_tab_index = idx; }
 
-    wxDECLARE_EVENT_TABLE();
 };
 
 } // namespace disgrace_ns

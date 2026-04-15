@@ -31,6 +31,8 @@ namespace disgrace_ns
 class MasterBus
 {
 public:
+    void reset(float sample_rate = 44100.0f);
+
     void set_gain(float g);
     float gain() const;
 
@@ -64,9 +66,6 @@ public:
     ::std::atomic<size_t> m_recorded_write_pos{0};
     ::std::vector<float> m_recorded_l;
     ::std::vector<float> m_recorded_r;
-
-private:
-    float soft_clip(float x);
 
     ::std::atomic<float> m_gain{1.f};
     ::std::atomic<float> m_pan{0.f};

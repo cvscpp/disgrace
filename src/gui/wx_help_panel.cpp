@@ -25,7 +25,7 @@ void HelpPanel::load_documentation() {
 <html>
 <body bgcolor="#1e1e1e" text="#d4d4d4" link="#569cd6" vlink="#4ec9b0">
 <h1>Disgrace &mdash; Digital Audio Workstation</h1>
-<p>A minimalist, pattern-based tracker DAW using JACK audio. All tabs are accessible from the top of the main window.</p>
+<p>A minimalist, pattern-based tracker DAW with selectable JACK or OSS audio backends. All tabs are accessible from the top of the main window.</p>
 
 <h2>Interface</h2>
 <table width="100%" border="0" cellpadding="4">
@@ -35,7 +35,7 @@ void HelpPanel::load_documentation() {
 <tr><td valign="top"><b>Notation</b></td><td>Piano roll view of the current pattern.</td></tr>
 <tr><td valign="top"><b>Instrument</b></td><td>Load and manage instruments and samples.</td></tr>
 <tr><td valign="top"><b>Mixer</b></td><td>Per-track and bus gain, panning, DSP effects chain and spectrum analyzer.</td></tr>
-<tr><td valign="top"><b>Settings</b></td><td>JACK audio, MIDI, theme and GUI settings.</td></tr>
+<tr><td valign="top"><b>Settings</b></td><td>Audio backend, MIDI, theme and GUI settings.</td></tr>
 <tr><td valign="top"><b>Help</b></td><td>This documentation.</td></tr>
 </table>
 
@@ -131,7 +131,7 @@ void HelpPanel::load_documentation() {
 <p>Select the instrument type per instrument slot in the <b>Instrument</b> tab. Instruments are shared across the project and assigned to tracks in the <b>Project</b> tab.</p>
 <table width="100%" border="1" cellpadding="5">
 <tr><th>Type</th><th>Description</th></tr>
-<tr><td><b>Sampler</b></td><td>Polyphonic sample player. Supports WAV, FLAC, MP3. Per-sample ADSR, looping, pitch, stereo/mono modes. Record from JACK input.</td></tr>
+<tr><td><b>Sampler</b></td><td>Polyphonic sample player. Supports WAV, FLAC, MP3. Per-sample ADSR, looping, pitch, stereo/mono modes. Recording input is available through JACK.</td></tr>
 <tr><td><b>SoundFont</b></td><td>SF2/SF3 file via FluidSynth. Choose preset from bank browser.</td></tr>
 <tr><td><b>SFZ</b></td><td>SFZ text-format multi-sample instrument. Parsed at load time. Path stored as absolute reference (not copied into project).</td></tr>
 <tr><td><b>XRNI</b></td><td>Renoise instrument format (ZIP archive with Instrument.xml + samples). Loaded directly from file; path stored as absolute reference.</td></tr>
@@ -148,7 +148,7 @@ void HelpPanel::load_documentation() {
 <li><b>Preview (Play button)</b> &mdash; Plays the selected sample (or the current selection if one exists) at original pitch. Press <b>Stop</b> to end playback.</li>
 <li><b>Loop checkbox</b> &mdash; Loops the whole sample or selection during preview.</li>
 <li><b>Use FX Chain checkbox</b> &mdash; Routes preview through the track&rsquo;s effect chain (only when the instrument is assigned to a track).</li>
-<li><b>Record button</b> &mdash; Records from the configured JACK input. Overwrites the selected sample, or adds a new sample if none is selected. Press <b>Stop</b> to finish recording.</li>
+<li><b>Record button</b> &mdash; Records from the configured JACK input. OSS currently provides playback output only. Overwrites the selected sample, or adds a new sample if none is selected. Press <b>Stop</b> to finish recording.</li>
 <li><b>VU meters</b> &mdash; Show the live recording level during recording.</li>
 </ul>
 
@@ -190,9 +190,9 @@ void HelpPanel::load_documentation() {
 </table>
 
 <h2>Audio Engine</h2>
-<p>Disgrace uses <b>JACK</b> for audio and MIDI I/O. Start JACK before launching Disgrace.</p>
+<p>Disgrace supports <b>JACK</b> and <b>OSS</b> audio backends. Use JACK for audio+MIDI ports and live recording inputs; use OSS for simple <code>/dev/dsp</code> playback.</p>
 <ul>
-<li>Sample rate: auto-detected from JACK (typically 44100 or 48000 Hz)</li>
+<li>Sample rate: auto-detected from the active backend</li>
 <li>Up to 32 audio input/output channels</li>
 <li>Up to 32 auxiliary mixer buses</li>
 <li>32 DSP slots per track or bus</li>
@@ -212,7 +212,7 @@ void HelpPanel::load_documentation() {
 <p>When closing a project with unsaved changes, Disgrace will prompt you to save.</p>
 
 <hr>
-<p><i>Disgrace v0.1.0 &mdash; Built with wxWidgets and JACK</i></p>
+<p><i>Disgrace v0.1.0 &mdash; Built with wxWidgets, JACK and OSS support</i></p>
 </body>
 </html>
 )";

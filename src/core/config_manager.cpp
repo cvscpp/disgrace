@@ -27,6 +27,19 @@ using json = nlohmann::json;
 
 namespace disgrace_ns {
 
+namespace {
+
+AudioBackendType parse_audio_backend(const json& audio)
+{
+    const std::string backend = audio.value("backend", "jack");
+    if (backend == "oss") {
+        return AudioBackendType::Oss;
+    }
+    return AudioBackendType::Jack;
+}
+
+} // namespace
+
 ConfigManager& ConfigManager::instance() {
     static ConfigManager inst;
     return inst;
@@ -63,6 +76,7 @@ void ConfigManager::read_from(const std::string& path) {
 
         if (j.contains("audio")) {
             auto& ja = j["audio"];
+            m_config.audio_backend = parse_audio_backend(ja);
             m_config.num_audio_ins = ja.value("ins", 2u);
             m_config.num_audio_outs = ja.value("outs", 2u);
         }
@@ -116,6 +130,7 @@ void ConfigManager::write_to(const std::string& path) {
     try {
         json j;
         
+        j["audio"]["backend"] = audio_backend_type_id(m_config.audio_backend);
         j["audio"]["ins"] = m_config.num_audio_ins;
         j["audio"]["outs"] = m_config.num_audio_outs;
         

@@ -14,6 +14,20 @@
 
 namespace disgrace_ns {
 
+namespace {
+
+int backend_choice_index(AudioBackendType type)
+{
+    return type == AudioBackendType::Oss ? 1 : 0;
+}
+
+AudioBackendType backend_choice_type(int idx)
+{
+    return idx == 1 ? AudioBackendType::Oss : AudioBackendType::Jack;
+}
+
+} // namespace
+
 // Modal dialog that waits for the user to press a single key combination.
 class KeyCaptureDialog : public wxDialog {
 public:
@@ -77,15 +91,6 @@ private:
 };
 
 wxBEGIN_EVENT_TABLE(SettingsPanel, wxPanel)
-    EVT_BUTTON(wxID_ANY, SettingsPanel::on_reinit_audio)
-    EVT_BUTTON(wxID_ANY, SettingsPanel::on_reinit_midi)
-    EVT_CHOICE(wxID_ANY, SettingsPanel::on_gui_theme)
-    EVT_CHOICE(wxID_ANY, SettingsPanel::on_gui_btn_h)
-    EVT_CHOICE(wxID_ANY, SettingsPanel::on_gui_font_size)
-    EVT_CHOICE(wxID_ANY, SettingsPanel::on_kbd_layout)
-    EVT_BUTTON(wxID_ANY, SettingsPanel::on_waveform_color)
-    EVT_BUTTON(wxID_ANY, SettingsPanel::on_bg_color)
-    EVT_BUTTON(wxID_ANY, SettingsPanel::on_fg_color)
 wxEND_EVENT_TABLE()
 
 SettingsPanel::SettingsPanel(wxWindow* parent, Engine& engine)
@@ -104,6 +109,7 @@ SettingsPanel::SettingsPanel(wxWindow* parent, Engine& engine)
 
     main_sizer->Add(m_sub_tabs, 1, wxEXPAND | wxALL, 0);
     SetSizer(main_sizer);
+    sync_audio_controls();
 }
 
 void SettingsPanel::init_audio_grp(int x, int y, int w, int h) {
@@ -111,6 +117,15 @@ void SettingsPanel::init_audio_grp(int x, int y, int w, int h) {
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
     wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
+    row->Add(new wxStaticText(m_audio_grp, wxID_ANY, "Backend:"), 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+    m_audio_backend = new wxChoice(m_audio_grp, wxID_ANY);
+    m_audio_backend->Append("JACK");
+    m_audio_backend->Append("OSS (/dev/dsp)");
+    m_audio_backend->SetSelection(backend_choice_index(m_engine.configured_audio_backend_type()));
+    row->Add(m_audio_backend, 0, wxALL, 2);
+    sizer->Add(row, 0, wxALL, 2);
+
+    row = new wxBoxSizer(wxHORIZONTAL);
     row->Add(new wxStaticText(m_audio_grp, wxID_ANY, "Input Channels:"), 0, wxALL, 2);
     m_audio_ins = new wxSpinCtrl(m_audio_grp, wxID_ANY, "2", wxDefaultPosition, wxSize(60, 25));
     m_audio_ins->SetRange(0, 32);
@@ -166,6 +181,8 @@ void SettingsPanel::init_audio_grp(int x, int y, int w, int h) {
     sizer->Add(row, 0, wxALL, 2);
     sizer->Add(new wxStaticText(m_audio_grp, wxID_ANY,
         "Apply while stopped for best results."), 0, wxLEFT, 6);
+    sizer->Add(new wxStaticText(m_audio_grp, wxID_ANY,
+        "JACK exposes audio+MIDI ports; OSS uses /dev/dsp playback."), 0, wxLEFT | wxTOP, 6);
 
     m_audio_status = new wxStaticText(m_audio_grp, wxID_ANY, "Audio Status: Ready");
     sizer->Add(m_audio_status, 0, wxALL, 2);
@@ -199,6 +216,30 @@ void SettingsPanel::init_midi_grp(int x, int y, int w, int h) {
 
     m_midi_grp->SetSizer(sizer);
     m_sub_tabs->AddPage(m_midi_grp, "MIDI");
+}
+
+void SettingsPanel::refresh_audio_status()
+{
+    const AudioBackendType active = m_engine.active_audio_backend_type();
+    if (active == AudioBackendType::Null) {
+        m_audio_status->SetLabel("Audio Status: fallback active (no hardware backend)");
+        m_audio_status->SetForegroundColour(*wxRED);
+        return;
+    }
+
+    m_audio_status->SetLabel(wxString::Format("Audio Status: %s active",
+        audio_backend_type_label(active)));
+    m_audio_status->SetForegroundColour(wxColour(0, 160, 0));
+}
+
+void SettingsPanel::sync_audio_controls()
+{
+    m_audio_backend->SetSelection(backend_choice_index(m_engine.configured_audio_backend_type()));
+    m_audio_ins->SetValue(static_cast<int>(m_engine.m_num_ins));
+    m_audio_outs->SetValue(static_cast<int>(m_engine.m_num_outs));
+    m_midi_ins->SetValue(static_cast<int>(m_engine.m_num_midi_ins));
+    m_midi_outs->SetValue(static_cast<int>(m_engine.m_num_midi_outs));
+    refresh_audio_status();
 }
 
 void SettingsPanel::init_mixer_grp(int x, int y, int w, int h) {
@@ -436,6 +477,7 @@ void SettingsPanel::on_load_settings(wxCommandEvent&) {
     ConfigManager::instance().load();
     m_engine.load_config();
     ThemeManager::apply_theme_and_settings(m_engine);
+    sync_audio_controls();
     wxWindow* top = wxGetTopLevelParent(this);
     if (top) { top->Refresh(); top->Update(); }
     wxMessageBox("Settings loaded and applied.", "Settings Loaded", wxOK | wxICON_INFORMATION);
@@ -461,18 +503,21 @@ void SettingsPanel::on_import_settings(wxCommandEvent&) {
         ConfigManager::instance().load_from(dlg.GetPath().ToStdString());
         m_engine.load_config();
         ThemeManager::apply_theme_and_settings(m_engine);
+        sync_audio_controls();
         wxWindow* top = wxGetTopLevelParent(this);
         if (top) { top->Refresh(); top->Update(); }
         wxMessageBox("Settings imported from:\n" + dlg.GetPath() +
-            "\n\nAudio/MIDI changes will take effect after restarting audio.",
+            "\n\nAudio/MIDI/backend changes will take effect after restarting audio.",
             "Import Complete", wxOK | wxICON_INFORMATION);
     }
 }
 
 void SettingsPanel::on_reinit_audio(wxCommandEvent& event) {
+    m_engine.set_audio_backend_type(backend_choice_type(m_audio_backend->GetSelection()));
     m_engine.reinitialize_audio(m_audio_ins->GetValue(), m_audio_outs->GetValue(), m_midi_ins->GetValue(), m_midi_outs->GetValue());
     m_engine.save_config();
-    wxMessageBox("Audio and MIDI settings updated. Some changes may require restarting the application or re-connecting to JACK.", "Info", wxOK | wxICON_INFORMATION);
+    refresh_audio_status();
+    wxMessageBox("Audio settings updated. JACK may require reconnecting ports; OSS uses /dev/dsp playback only.", "Info", wxOK | wxICON_INFORMATION);
 }
 
 void SettingsPanel::on_reinit_midi(wxCommandEvent& event) {

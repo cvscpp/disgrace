@@ -28,6 +28,7 @@ private:
     wxPanel* m_kbd_grp;
     wxPanel* m_misc_grp;
 
+    wxChoice*   m_audio_backend;
     wxSpinCtrl* m_audio_ins;
     wxSpinCtrl* m_audio_outs;
     wxChoice*   m_worker_threads;
@@ -58,6 +59,8 @@ private:
     void init_kbd_grp(int x, int y, int w, int h);
     void init_misc_grp(int x, int y, int w, int h);
     void populate_shortcut_list();
+    void refresh_audio_status();
+    void sync_audio_controls();
 
     void on_reinit_audio(wxCommandEvent& event);
     void on_reinit_midi(wxCommandEvent& event);

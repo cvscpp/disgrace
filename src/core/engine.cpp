@@ -21,6 +21,7 @@
 #include "../gui/theme.h"
 #include "../audio/audio_backend.h"
 #include "../audio/jack_backend.h"
+#include "../audio/oss_backend.h"
 #include "../audio/null_backend.h"
 #include "../sequencer/timing.h"
 #include "../sequencer/pattern.h"
@@ -44,6 +45,25 @@ namespace fs = std::filesystem;
 
 namespace disgrace_ns {
 
+namespace {
+
+std::unique_ptr<AudioBackend> make_audio_backend(Engine *engine, AudioBackendType type,
+                                                 uint32_t num_ins, uint32_t num_outs,
+                                                 uint32_t num_midi_ins, uint32_t num_midi_outs)
+{
+    switch (type) {
+        case AudioBackendType::Jack:
+            return std::make_unique<JackBackend>(engine, num_ins, num_outs, num_midi_ins, num_midi_outs);
+        case AudioBackendType::Oss:
+            return std::make_unique<OssBackend>(engine, num_ins, num_outs, num_midi_ins, num_midi_outs);
+        case AudioBackendType::Null:
+            break;
+    }
+    return std::make_unique<NullBackend>();
+}
+
+} // namespace
+
 Engine::Engine() : m_initialized(false), m_timing(44100) {
     m_transport = std::make_unique<Transport>(*this);
     // Backend is created in initialize() once the config is loaded.
@@ -60,6 +80,7 @@ bool Engine::initialize() {
     
     ConfigManager::instance().load();
     const auto& conf = ConfigManager::instance().config();
+    m_audio_backend_type = conf.audio_backend;
     m_num_ins = conf.num_audio_ins;
     m_num_outs = conf.num_audio_outs;
     m_num_midi_ins = conf.num_midi_ins;
@@ -90,10 +111,11 @@ bool Engine::initialize() {
     set_worker_threads(conf.num_worker_threads);
 
     // Create the backend with the configured port counts.
-    m_backend = std::make_unique<JackBackend>(this, m_num_ins, m_num_outs, m_num_midi_ins, m_num_midi_outs);
+    m_backend = make_audio_backend(this, m_audio_backend_type, m_num_ins, m_num_outs, m_num_midi_ins, m_num_midi_outs);
     new_project();
     if (!m_backend->start()) {
-        std::cerr << "Failed to start JACK backend, falling back to null backend." << std::endl;
+        std::cerr << "Failed to start " << audio_backend_type_label(m_audio_backend_type)
+                  << " backend, falling back to null backend." << std::endl;
         m_backend = std::make_unique<NullBackend>();
         m_backend->start();
     }
@@ -104,6 +126,7 @@ bool Engine::initialize() {
 
 void Engine::load_config() {
     const auto& conf = ConfigManager::instance().config();
+    m_audio_backend_type = conf.audio_backend;
     m_num_ins = conf.num_audio_ins;
     m_num_outs = conf.num_audio_outs;
     m_num_midi_ins = conf.num_midi_ins;
@@ -137,6 +160,7 @@ void Engine::load_config() {
 
 void Engine::save_config() {
     auto& conf = ConfigManager::instance().config();
+    conf.audio_backend = m_audio_backend_type;
     conf.num_audio_ins = m_num_ins;
     conf.num_audio_outs = m_num_outs;
     conf.num_midi_ins = m_num_midi_ins;
@@ -181,6 +205,7 @@ void Engine::new_project() {
         try { fs::remove_all(m_project_temp_dir); } catch (...) {}
     }
     m_project_temp_dir = "";
+    m_master.reset((float)m_sample_rate);
 
     m_tracks.clear();
     m_buses.clear();
@@ -223,17 +248,25 @@ void Engine::reinitialize_audio(uint32_t num_ins, uint32_t num_outs, uint32_t nu
     m_num_ins = num_ins; m_num_outs = num_outs;
     m_num_midi_ins = num_midi_ins; m_num_midi_outs = num_midi_outs;
     
-    // Recreate JackBackend if it failed before and we want to retry it
-    m_backend = std::make_unique<JackBackend>(this, num_ins, num_outs, num_midi_ins, num_midi_outs);
+    m_backend = make_audio_backend(this, m_audio_backend_type, num_ins, num_outs, num_midi_ins, num_midi_outs);
     if (!m_backend->start()) {
-        std::cerr << "Failed to restart JACK backend, falling back to null backend." << std::endl;
+        std::cerr << "Failed to restart " << audio_backend_type_label(m_audio_backend_type)
+                  << " backend, falling back to null backend." << std::endl;
         m_backend = std::make_unique<NullBackend>();
         m_backend->start();
     }
     propagate_sample_rate(m_backend->sample_rate());
 }
 
-bool Engine::audio_active() const { return m_initialized; }
+bool Engine::audio_active() const {
+    return m_backend && m_backend->is_active() && m_backend->type() != AudioBackendType::Null;
+}
+
+AudioBackendType Engine::active_audio_backend_type() const
+{
+    return m_backend ? m_backend->type() : AudioBackendType::Null;
+}
+
 bool Engine::is_playing() const { return transport().is_playing(); }
 
 void Engine::set_worker_threads(uint32_t n) {
@@ -513,7 +546,7 @@ void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float*
         block = std::min(block, MAX_BLOCK);
 
         const float* offset_in_bufs[64];
-        for (uint32_t i = 0; i < m_num_ins && i < 64; ++i)
+        for (uint32_t i = 0; i < num_ins && i < 64; ++i)
             offset_in_bufs[i] = in_bufs ? in_bufs[i] + processed : nullptr;
 
         float* offset_out_bufs[64];

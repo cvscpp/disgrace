@@ -93,7 +93,7 @@ public:
         m_current_preset = "Default";
         hpf_freq = 20.0f;
         lpf_freq = 20000.0f;
-        hpf_enabled = true;
+        hpf_enabled = false;
         lpf_enabled = false;
         update_filters();
     }

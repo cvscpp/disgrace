@@ -36,6 +36,7 @@ public:
 
     uint32_t sample_rate() const override { return 44100; }
     uint32_t buffer_size() const override { return 512; }
+    AudioBackendType type() const override { return AudioBackendType::Null; }
 
 private:
     std::atomic<bool> m_active;

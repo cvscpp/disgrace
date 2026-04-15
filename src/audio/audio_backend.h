@@ -23,6 +23,35 @@
 namespace disgrace_ns
 {
 
+enum class AudioBackendType
+{
+    Jack,
+    Oss,
+    Null
+};
+
+inline const char *audio_backend_type_id(AudioBackendType type)
+{
+    switch (type)
+    {
+        case AudioBackendType::Jack: return "jack";
+        case AudioBackendType::Oss:  return "oss";
+        case AudioBackendType::Null: return "null";
+    }
+    return "null";
+}
+
+inline const char *audio_backend_type_label(AudioBackendType type)
+{
+    switch (type)
+    {
+        case AudioBackendType::Jack: return "JACK";
+        case AudioBackendType::Oss:  return "OSS";
+        case AudioBackendType::Null: return "Null";
+    }
+    return "Null";
+}
+
 class AudioBackend
 {
 public:
@@ -34,6 +63,7 @@ public:
 
     virtual uint32_t sample_rate() const = 0;
     virtual uint32_t buffer_size() const = 0;
+    virtual AudioBackendType type() const = 0;
 };
 
 } // namespace disgrace_ns

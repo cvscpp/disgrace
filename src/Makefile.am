@@ -11,6 +11,7 @@ disgrace_SOURCES = \
     core/transport.cpp \
     core/undo_stack.cpp \
     audio/jack_backend.cpp \
+    audio/oss_backend.cpp \
     audio/resampler.cpp \
     audio/sample_buffer.cpp \
     audio/sample_voice.cpp \

@@ -22,12 +22,14 @@
 #include <string>
 #include <vector>
 #include <nlohmann/json.hpp>
+#include "../audio/audio_backend.h"
 #include "../gui/theme.h"
 
 namespace disgrace_ns {
 
 struct Config {
     // Audio/MIDI
+    AudioBackendType audio_backend = AudioBackendType::Jack;
     uint32_t num_audio_ins = 2;
     uint32_t num_audio_outs = 2;
     uint32_t num_midi_ins = 1;

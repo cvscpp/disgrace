@@ -31,6 +31,7 @@
 #include "../mixer/mixer_bus.h"
 #include "../mixer/track_clipboard.h"
 #include "../instrument/instrument.h"
+#include "../audio/audio_backend.h"
 #include "../audio/sample_data.h"
 #include "../audio/sample_voice.h"
 #include "undo_stack.h"
@@ -83,6 +84,9 @@ public:
     void reinitialize_audio(uint32_t num_ins = 2, uint32_t num_outs = 2,
                             uint32_t num_midi_ins = 1, uint32_t num_midi_outs = 1);
     bool audio_active() const;
+    void set_audio_backend_type(AudioBackendType type) { m_audio_backend_type = type; }
+    AudioBackendType configured_audio_backend_type() const { return m_audio_backend_type; }
+    AudioBackendType active_audio_backend_type() const;
 
     // Set the number of worker threads for parallel track processing.
     // 0 = single-threaded (off), 1-N = N workers, 255 = auto (hardware_concurrency - 1).
@@ -344,6 +348,7 @@ private:
     size_t m_saved_generation = 0;
     bool   m_dirty_extra      = false;
     bool m_initialized;
+    AudioBackendType m_audio_backend_type = AudioBackendType::Jack;
     ::std::unique_ptr<disgrace_ns::AudioBackend> m_backend;
     disgrace_ns::BlockClipboard m_clipboard;
     disgrace_ns::SampleClipboard m_sample_clipboard;

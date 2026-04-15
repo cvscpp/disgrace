@@ -22,10 +22,15 @@
 namespace disgrace_ns
 {
 
+    namespace {
+        constexpr int kFluidSynthPolyphony = 512;
+    }
+
     SoundFontInstrument::SoundFontInstrument(double sample_rate)
     {
         m_fluid_settings = new_fluid_settings();
         fluid_settings_setnum(m_fluid_settings, "synth.sample-rate", sample_rate);
+        fluid_settings_setint(m_fluid_settings, "synth.polyphony", kFluidSynthPolyphony);
         // Set gain to 1.0 (unity) and don't change it later, 
         // because the Track mixer already applies volume.
         fluid_settings_setnum(m_fluid_settings, "synth.gain", 1.0);

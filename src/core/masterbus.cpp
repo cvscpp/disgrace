@@ -22,6 +22,25 @@
 namespace disgrace_ns
 {
 
+void MasterBus::reset(float sample_rate)
+{
+    m_gain.store(1.0f);
+    m_pan.store(0.0f);
+    m_meter_l.store(0.0f);
+    m_meter_r.store(0.0f);
+    m_muted.store(false);
+    m_is_recording.store(false, std::memory_order_relaxed);
+    m_export_mute.store(false, std::memory_order_relaxed);
+    m_recorded_write_pos.store(0, std::memory_order_relaxed);
+    m_recorded_l.clear();
+    m_recorded_r.clear();
+
+    m_filter = MasteringFilterDSP();
+    m_styles = MasteringStylesDSP();
+    m_reference_matcher = ReferenceMatcherDSP();
+    m_filter.set_sample_rate(sample_rate);
+}
+
 void MasterBus::set_gain(float g)
 {
     m_gain.store(g);
@@ -52,16 +71,6 @@ bool MasterBus::muted() const
     return m_muted.load();
 }
 
-float MasterBus::soft_clip(float x)
-{
-    // Fast rational approximation of tanh(x)
-    // tanh(x) approx x * (27 + x*x) / (27 + 9*x*x) for small x
-    // For larger x, we can use a simpler version: x / (1 + |x|)
-    if (x > 3.0f) return 1.0f;
-    if (x < -3.0f) return -1.0f;
-    return x * (27.0f + x * x) / (27.0f + 9.0f * x * x);
-}
-
 void MasterBus::process(float* l,
                         float* r,
                         size_t nframes)
@@ -82,9 +91,6 @@ void MasterBus::process(float* l,
     {
         float sl = l[i] * left_gain;
         float sr = r[i] * right_gain;
-
-        sl = soft_clip(sl);
-        sr = soft_clip(sr);
 
         l[i] = sl;
         r[i] = sr;

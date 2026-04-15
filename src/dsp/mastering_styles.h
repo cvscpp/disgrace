@@ -51,9 +51,7 @@ public:
 
             switch (m_style) {
                 case MasteringStyle::TRANSPARENT:
-                    // Just a very gentle soft clip to prevent digital clipping
-                    sl = std::tanh(sl * 1.05f);
-                    sr = std::tanh(sr * 1.05f);
+                    // Transparent should behave like a neutral pass-through.
                     break;
                 case MasteringStyle::WARM:
                     // Saturation + slight low-mid boost (simulated by non-linear gain)

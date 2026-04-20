@@ -31,9 +31,57 @@
 #include <wx/combobox.h>
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
+#include <wx/statbmp.h>
+#include <wx/stdpaths.h>
+#include <filesystem>
 #include <iostream>
+#include <optional>
 
 namespace disgrace_ns {
+
+namespace {
+
+std::optional<wxImage> load_logo_image() {
+    namespace fs = std::filesystem;
+
+    const fs::path exe_path(wxStandardPaths::Get().GetExecutablePath().ToStdString());
+    const fs::path exe_dir = exe_path.parent_path();
+    const fs::path resources_dir(wxStandardPaths::Get().GetResourcesDir().ToStdString());
+    const fs::path cwd = fs::current_path();
+    const fs::path logo_name = fs::path("imgs") / "disgrace.png";
+
+    const fs::path candidates[] = {
+        cwd / logo_name,
+        exe_dir / logo_name,
+        exe_dir / ".." / logo_name,
+        exe_dir / ".." / "share" / "disgrace" / logo_name,
+        resources_dir / logo_name,
+        fs::path("/usr/local/share/disgrace") / logo_name,
+        fs::path("/usr/share/disgrace") / logo_name,
+    };
+
+    for (const fs::path& candidate : candidates) {
+        const fs::path normalized = candidate.lexically_normal();
+        if (!fs::exists(normalized)) {
+            continue;
+        }
+
+        wxImage image;
+        if (image.LoadFile(wxString::FromUTF8(normalized.string()), wxBITMAP_TYPE_PNG)) {
+            return image;
+        }
+    }
+
+    return std::nullopt;
+}
+
+wxBitmap scaled_logo_bitmap(const wxImage& image, int width, int height) {
+    wxImage scaled = image.Copy();
+    scaled.Rescale(width, height, wxIMAGE_QUALITY_HIGH);
+    return wxBitmap(scaled);
+}
+
+} // namespace
 
 BEGIN_EVENT_TABLE(WxMainWindow, wxFrame)
     EVT_TIMER(wxID_ANY, WxMainWindow::OnTimer)
@@ -61,9 +109,22 @@ WxMainWindow::WxMainWindow(int w, int h, const wxString& title, Engine& engine)
     SetBackgroundStyle(wxBG_STYLE_SYSTEM);
 
     wxBoxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
+    wxBoxSizer* header_sizer = new wxBoxSizer(wxHORIZONTAL);
+
+    if (std::optional<wxImage> logo_image = load_logo_image(); logo_image && logo_image->IsOk()) {
+        wxStaticBitmap* logo = new wxStaticBitmap(this, wxID_ANY, scaled_logo_bitmap(*logo_image, 44, 44));
+        header_sizer->Add(logo, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 8);
+
+        wxIcon logo_icon;
+        logo_icon.CopyFromBitmap(wxBitmap(*logo_image));
+        if (logo_icon.IsOk()) {
+            SetIcon(logo_icon);
+        }
+    }
 
     m_transport = new TransportBar(this, wxID_ANY, m_engine);
-    main_sizer->Add(m_transport, 0, wxEXPAND | wxALL, 0);
+    header_sizer->Add(m_transport, 1, wxEXPAND | wxRIGHT, 0);
+    main_sizer->Add(header_sizer, 0, wxEXPAND | wxALL, 0);
 
     m_tabs = new wxNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxNB_TOP);
     main_sizer->Add(m_tabs, 1, wxEXPAND | wxALL, 0);

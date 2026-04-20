@@ -62,6 +62,7 @@ bool DisgraceApp::OnInit() {
         return false;
 
     try {
+        wxInitAllImageHandlers();
         m_engine = new Engine();
 
         if (!m_engine->initialize()) {

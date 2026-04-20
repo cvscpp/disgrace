@@ -48,3 +48,7 @@ m4/lt~obsolete.m4
 
 # Core dumps
 *.core
+
+# Large local song/test assets
+test2.dg
+test7.dg

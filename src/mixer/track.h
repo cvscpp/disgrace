@@ -155,6 +155,8 @@ public:
     float input_delay() const;
 
 private:
+    void cancel_pending_notes(size_t column);
+
     float m_volume = 0.5f;
     bool  m_mute   = false;
     bool  m_solo   = false;

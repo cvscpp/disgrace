@@ -206,6 +206,10 @@ bool load_sample_instrument_archive(const std::string& archive_path,
 
 namespace disgrace_ns {
 
+namespace {
+constexpr int kInputMeterIntervalMs = 16;
+}
+
 InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     : wxPanel(parent, wxID_ANY), m_engine(engine)
 {
@@ -390,7 +394,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     top_sampler_sizer->Add(rec_panel, 1, wxEXPAND | wxLEFT, 10);
     sampler_sizer->Add(top_sampler_sizer, 0, wxEXPAND | wxALL, 2);
 
-    // Start VU meter update timer (fires every 50 ms → ~20 fps)
+    // Keep input meters responsive enough to feel continuous while recording.
     m_vu_timer = new wxTimer(this);
     Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
         if (m_input_vu_l && m_input_vu_r) {
@@ -450,8 +454,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
             }
         }
     }, m_vu_timer->GetId());
-    m_vu_timer->Start(50);
-    m_vu_timer->Start(50);
+    m_vu_timer->Start(kInputMeterIntervalMs);
 
     // Processing Controls - Using a FlexGridSizer for better alignment
     wxFlexGridSizer* proc_sizer = new wxFlexGridSizer(3, 2, 5, 5);

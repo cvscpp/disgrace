@@ -257,7 +257,7 @@ void ProjectPanel::update_track_list() {
         if (current_out == MixerBus::ROUTE_MASTER) {
             out_ch->Select(0);
         } else if (current_out >= 0 && (size_t)current_out < num_buses) {
-            out_ch->Select(current_out + 1);
+            out_ch->Select(current_out);
         }
         
         out_ch->Bind(wxEVT_CHOICE, [this, i, out_ch](wxCommandEvent&) {
@@ -265,8 +265,9 @@ void ProjectPanel::update_track_list() {
             if (sel == 0) {
                 m_engine.track(i).set_output_bus(MixerBus::ROUTE_MASTER);
             } else {
-                m_engine.track(i).set_output_bus(sel - 1);
+                m_engine.track(i).set_output_bus(sel);
             }
+            m_engine.mark_dirty();
         });
         grid_sizer->Add(out_ch, 0, wxEXPAND | wxALL, 2);
 
@@ -388,6 +389,7 @@ void ProjectPanel::update_track_list() {
             int sel = out_ch->GetSelection();
             if (sel >= 0 && sel < (int)bus_outputs.size()) {
                 m_engine.bus(i).set_output_bus(bus_outputs[sel]);
+                m_engine.mark_dirty();
             }
         });
         grid_sizer->Add(out_ch, 0, wxEXPAND | wxALL, 2);

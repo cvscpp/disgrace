@@ -2,6 +2,7 @@
 #include "theme.h"
 #include "../core/engine.h"
 
+#include <wx/dcbuffer.h>
 #include <wx/dcclient.h>
 #include <cmath>
 #include <algorithm>
@@ -16,6 +17,7 @@ AnalogVUMeter::AnalogVUMeter(wxWindow* parent, wxWindowID id, Engine& engine)
     : wxPanel(parent, id), m_engine(engine)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
+    SetDoubleBuffered(true);
 }
 
 void AnalogVUMeter::level(float l) {
@@ -33,7 +35,7 @@ void AnalogVUMeter::level(float l) {
 }
 
 void AnalogVUMeter::OnPaint(wxPaintEvent& event) {
-    wxPaintDC dc(this);
+    wxAutoBufferedPaintDC dc(this);
     wxSize size = GetClientSize();
     int w = size.GetWidth();
     int h = size.GetHeight();

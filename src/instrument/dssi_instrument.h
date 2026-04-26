@@ -71,6 +71,8 @@ private:
     int m_audio_out_l = -1;
     int m_audio_out_r = -1;
     std::vector<snd_seq_event_t> m_pending_events;
+    int m_last_note[16]{-1, -1, -1, -1, -1, -1, -1, -1,
+                        -1, -1, -1, -1, -1, -1, -1, -1};
     // Dummy zero buffer for unconnected LADSPA audio input/output ports.
     std::vector<float> m_dummy_audio_buf;
 };

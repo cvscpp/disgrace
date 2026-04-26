@@ -207,39 +207,53 @@ void DSSIInstrument::load_program(unsigned long bank, unsigned long program) {
     }
 }
 
-    void DSSIInstrument::note_on(uint8_t note, uint8_t velocity, size_t, size_t, uint8_t)
+    void DSSIInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_index, size_t, uint8_t)
     {
         if (!m_descriptor) return;
+        const size_t chan = column_index % 16;
+        if (m_last_note[chan] != -1) {
+            note_off(column_index);
+        }
         snd_seq_event_t ev;
         memset(&ev, 0, sizeof(ev));
         ev.type = SND_SEQ_EVENT_NOTEON;
-        ev.data.note.channel = 0;
+        ev.data.note.channel = (unsigned char)chan;
         ev.data.note.note = note;
         ev.data.note.velocity = velocity;
         m_pending_events.push_back(ev);
+        m_last_note[chan] = note;
     }
 
-    void DSSIInstrument::note_off(size_t)
+    void DSSIInstrument::note_off(size_t column_index)
     {
         if (!m_descriptor) return;
+        const size_t chan = column_index % 16;
+        if (m_last_note[chan] == -1) {
+            return;
+        }
         snd_seq_event_t ev;
         memset(&ev, 0, sizeof(ev));
         ev.type = SND_SEQ_EVENT_NOTEOFF;
-        ev.data.note.channel = 0;
-        ev.data.note.note = 0; // All notes off if needed, but usually specific
+        ev.data.note.channel = (unsigned char)chan;
+        ev.data.note.note = (unsigned char)m_last_note[chan];
+        ev.data.note.velocity = 0;
         m_pending_events.push_back(ev);
+        m_last_note[chan] = -1;
     }
 
     void DSSIInstrument::panic()
     {
         if (!m_descriptor) return;
-        snd_seq_event_t ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.type = SND_SEQ_EVENT_CONTROLLER;
-        ev.data.control.channel = 0;
-        ev.data.control.param = 123; // All notes off
-        ev.data.control.value = 0;
-        m_pending_events.push_back(ev);
+        for (size_t chan = 0; chan < 16; ++chan) {
+            snd_seq_event_t ev;
+            memset(&ev, 0, sizeof(ev));
+            ev.type = SND_SEQ_EVENT_CONTROLLER;
+            ev.data.control.channel = (unsigned char)chan;
+            ev.data.control.param = 123; // All notes off
+            ev.data.control.value = 0;
+            m_pending_events.push_back(ev);
+            m_last_note[chan] = -1;
+        }
     }
 
     void DSSIInstrument::set_volume(float vol) {}

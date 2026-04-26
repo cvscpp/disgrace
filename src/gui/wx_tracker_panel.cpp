@@ -392,6 +392,9 @@ void TrackerPanel::update_pattern_list() {
 void TrackerPanel::update() {
     if (m_tracker) {
         bool is_playing = m_engine.transport_state() != TransportState::Stopped;
+        bool tracker_changed = false;
+        bool order_changed = false;
+        bool row_changed = false;
 
         if (m_follow_playback) {
             size_t engine_order_pos = m_engine.m_order_pos.load();
@@ -399,12 +402,16 @@ void TrackerPanel::update() {
                 m_engine.m_edit_order_pos.store(engine_order_pos);
                 m_engine.set_active_pattern(m_engine.m_order[engine_order_pos]);
                 m_tracker->set_pattern(m_engine.pattern());
+                tracker_changed = true;
             }
 
             if (is_playing) {
                 int play_row = (int)m_engine.current_row();
-                if (m_tracker->get_cursor_row() != play_row)
+                if (m_tracker->get_cursor_row() != play_row) {
                     m_tracker->set_current_row(play_row);
+                    tracker_changed = true;
+                    row_changed = true;
+                }
             }
         }
 
@@ -418,13 +425,19 @@ void TrackerPanel::update() {
 
             m_selected_order_idx = (int)current_edit_pos;
             update_pattern_list();
+            tracker_changed = true;
+            order_changed = true;
         }
 
-        if (is_playing) {
+        if (is_playing && tracker_changed) {
             m_tracker->ensure_cursor_visible();
         }
-        m_tracker->Refresh();
-        update_voice_text_field();  // Update voice text field based on cursor position
+        if (tracker_changed && !order_changed && !row_changed) {
+            m_tracker->Refresh(false);
+        }
+        if (tracker_changed || is_playing) {
+            update_voice_text_field();
+        }
     }
 }
 

@@ -81,6 +81,8 @@ wxBitmap scaled_logo_bitmap(const wxImage& image, int width, int height) {
     return wxBitmap(scaled);
 }
 
+constexpr int kUiTimerIntervalMs = 16;
+
 } // namespace
 
 BEGIN_EVENT_TABLE(WxMainWindow, wxFrame)
@@ -134,7 +136,7 @@ WxMainWindow::WxMainWindow(int w, int h, const wxString& title, Engine& engine)
     SetSizer(main_sizer);
 
     m_timer = new wxTimer(this, wxID_ANY);
-    m_timer->Start(30);
+    m_timer->Start(kUiTimerIntervalMs);
 
     Centre();
 }

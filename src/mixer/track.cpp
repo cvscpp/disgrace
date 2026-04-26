@@ -171,6 +171,8 @@ void disgrace_ns::Track::note_on(uint8_t note, uint8_t velocity, size_t column_i
     if (!m_instrument)
         return;
 
+    cancel_pending_notes(column_index);
+
     float freq = note_to_frequency(note);
 
     if (m_fx_state.porta_active)
@@ -187,6 +189,8 @@ void disgrace_ns::Track::note_on(uint8_t note, uint8_t velocity, size_t column_i
 
 void disgrace_ns::Track::note_off(size_t column_index)
 {
+    cancel_pending_notes(column_index);
+
     if (m_instrument)
         m_instrument->note_off(column_index);
 }
@@ -428,6 +432,8 @@ void disgrace_ns::Track::schedule_note_on(uint8_t note, uint8_t velocity,
                                            size_t column, uint8_t sample_idx,
                                            size_t samples_per_row)
 {
+    cancel_pending_notes(column);
+
     // Apply velocity humanization first (always; independent of timing).
     int vel = velocity;
     if (m_humanize_vel > 0) {
@@ -468,6 +474,15 @@ void disgrace_ns::Track::fire_pending_notes(size_t frames)
         if (m_pending[s].delay_samples <= 0) {
             note_on(m_pending[s].note, m_pending[s].velocity,
                     m_pending[s].column, 0, m_pending[s].sample_idx);
+            m_pending[s].active = false;
+        }
+    }
+}
+
+void disgrace_ns::Track::cancel_pending_notes(size_t column)
+{
+    for (size_t s = 0; s < MAX_PENDING; ++s) {
+        if (m_pending[s].active && m_pending[s].column == column) {
             m_pending[s].active = false;
         }
     }

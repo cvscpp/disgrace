@@ -22,6 +22,7 @@
 #include "../edit/cmd_edit_block.h"
 #include "../instrument/voice_instrument.h"
 
+#include <wx/dcbuffer.h>
 #include <wx/dcclient.h>
 #include <wx/menu.h>
 #include <wx/msgdlg.h>
@@ -65,6 +66,7 @@ TrackerView::TrackerView(wxWindow* parent, wxWindowID id, Pattern& pattern, Engi
     : wxScrolledWindow(parent, id), m_engine(engine), m_pattern(&pattern)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
+    SetDoubleBuffered(true);
     // wxWANTS_CHARS ensures Tab and other special keys reach OnKeyDown
     SetWindowStyle(GetWindowStyle() | wxWANTS_CHARS);
     // Use a fixed-width font for the grid
@@ -151,7 +153,7 @@ int TrackerView::get_field_x(int track, int abs_field, int& width) {
 }
 
 void TrackerView::OnPaint(wxPaintEvent& event) {
-    wxPaintDC dc(this);
+    wxAutoBufferedPaintDC dc(this);
     PrepareDC(dc);
     draw(dc);
 }
@@ -168,7 +170,11 @@ void TrackerView::draw(wxDC& dc) {
     dc.SetBrush(wxBrush(bg_col));
     dc.SetPen(wxPen(bg_col));
     wxSize client_size = GetClientSize();
-    dc.DrawRectangle(0, 0, std::max(20000, client_size.x), std::max(20000, client_size.y));
+    wxRect clip_box;
+    if (!dc.GetClippingBox(clip_box) || clip_box.IsEmpty()) {
+        clip_box = wxRect(0, 0, client_size.x, client_size.y);
+    }
+    dc.DrawRectangle(clip_box.x, clip_box.y, clip_box.width, clip_box.height);
 
     if (m_engine.track_count() == 0) {
         dc.SetTextForeground(*wxWHITE);
@@ -693,6 +699,9 @@ void TrackerView::OnMouseUp(wxMouseEvent& event) {
 }
 
 void TrackerView::set_current_row(int row) {
+    if (row == m_cursor_row) {
+        return;
+    }
     m_cursor_row = row;
     clamp_cursor();
     Refresh();

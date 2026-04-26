@@ -1,6 +1,0 @@
-ASSERT INFO:
-./src/common/ctrlsub.cpp(186): assert ""HasClientObjectData()"" failed in GetClientObject(): this window doesn't have object client data
-
-BACKTRACE:
-[1] disgrace_ns::InstrumentPanel::update_editor() /home/mirsha/msdev/disgrace/src/gui/wx_instrument_panel.cpp:1330
-[2] main /home/mirsha/msdev/disgrace/src/main.cpp:94

@@ -1,9 +1,0 @@
-ASSERT INFO:
-./src/gtk/window.cpp(4947): assert "(m_widget != __null)" failed in DoAddChild(): invalid window
-
-BACKTRACE:
-[1] wxButton::wxButton(wxWindow*, int, wxString const&, wxPoint const&, wxSize const&, long, wxValidator const&, wxString const&) /usr/local/include/wx-3.2/wx/gtk/button.h:27
-[2] disgrace_ns::WxMainWindow::init_panels() /home/mirsha/msdev/disgrace/src/gui/wx_main_window.cpp:104
-[3] disgrace_ns::WxMainWindow::WxMainWindow(int, int, wxString const&, disgrace_ns::Engine&) /home/mirsha/msdev/disgrace/src/gui/wx_main_window.cpp:73
-[4] disgrace_ns::DisgraceApp::OnInit() /home/mirsha/msdev/disgrace/src/main.cpp:71
-[5] main /home/mirsha/msdev/disgrace/src/main.cpp:94

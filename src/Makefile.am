@@ -1,4 +1,4 @@
-bin_PROGRAMS = disgrace
+bin_PROGRAMS = disgrace dssi_sandbox
 
 disgrace_SOURCES = \
     main.cpp \
@@ -68,6 +68,10 @@ disgrace_SOURCES = \
     sequencer/timing.cpp \
     analysis/fft_analyzer.cpp
 
+dssi_sandbox_SOURCES = instrument/dssi_sandbox_main.cpp
+dssi_sandbox_CXXFLAGS = $(ALSA_CFLAGS)
+dssi_sandbox_LDADD = $(ALSA_LIBS) -ldl -lrt
+
 disgrace_CXXFLAGS = \
     $(JACK_CFLAGS) \
     $(WXWIDGETS_CFLAGS) \
@@ -94,5 +98,5 @@ disgrace_LDADD = \
     $(FFTW3_LIBS) \
     $(LIBARCHIVE_LIBS) \
     $(FLUIDSYNTH_LIBS) \
-    $(ALSA_LIBS) \
-    $(LIBXML2_LIBS)
+    $(LIBXML2_LIBS) \
+    -lrt

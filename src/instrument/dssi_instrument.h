@@ -18,12 +18,11 @@
 
 #pragma once
 #include "instrument.h"
-#include <dssi.h>
-#include <dlfcn.h>
+#include "dssi_bridge_shm.h"
 #include <vector>
-// Note: DSSI run_synth explicitly uses snd_seq_event_t from ALSA.
-// On FreeBSD, this is provided by the alsa-lib port.
-#include <alsa/asoundlib.h>
+#include <string>
+#include <atomic>
+#include <unistd.h>
 
 namespace disgrace_ns {
 
@@ -41,40 +40,65 @@ public:
 
     bool load_plugin(const std::string& path, int index = 0);
 
-    size_t parameter_count() const override { return m_control_indices.size(); }
+    // Returns true when a plugin is loaded and the sandbox process is running.
+    bool is_alive() const;
+
+    size_t parameter_count() const override { return m_ctrl_info.size(); }
     Parameter get_parameter(size_t index) const override;
     void set_parameter(size_t index, float value) override;
 
     void load_program(unsigned long bank, unsigned long program);
 
-    const std::string& path() const { return m_path; }
-    int index() const { return m_index; }
-    unsigned long bank() const { return m_bank; }
-    unsigned long program() const { return m_program; }
+    const std::string& path()    const { return m_path; }
+    int                index()   const { return m_index; }
+    unsigned long      bank()    const { return m_bank; }
+    unsigned long      program() const { return m_program; }
+    float              volume()  const { return m_volume; }
 
 protected:
     std::unique_ptr<Voice> create_voice() override { return nullptr; }
 
 private:
-    void* m_lib_handle = nullptr;
-    const DSSI_Descriptor* m_descriptor = nullptr;
-    LADSPA_Handle m_instance = nullptr;
-    double m_sample_rate;
+    // ── subprocess management ────────────────────────────────────────
+    bool spawn_sandbox(const std::string& path, int index);
+    void teardown_sandbox();
+    static std::string find_sandbox_binary();
 
+    pid_t   m_child_pid  = -1;
+    int     m_stdout_rfd = -1;   // read end of child's stdout pipe
+    void*   m_shm_ptr    = nullptr;
+    std::string m_shm_name;
+    DSSIBridgeShm* shm() { return static_cast<DSSIBridgeShm*>(m_shm_ptr); }
+
+    // ── per-parameter info (filled during load_plugin from child stdout) ─
+    struct CtrlInfo {
+        int   port_idx;   // LADSPA port index (informational)
+        float min_v, max_v, def_v;
+        std::string name;
+        float current_value;
+    };
+    std::vector<CtrlInfo> m_ctrl_info;
+
+    // ── audio routing reported by child ─────────────────────────────
+    int  m_audio_out_l = -1;
+    int  m_audio_out_r = -1;
+    bool m_has_run_synth = false;
+
+    // ── runtime state ────────────────────────────────────────────────
+    double        m_sample_rate;
     std::string   m_path;
-    int           m_index = 0;
-    unsigned long m_bank = 0;
+    int           m_index   = 0;
+    unsigned long m_bank    = 0;
     unsigned long m_program = 0;
+    float         m_volume  = 0.25f;
 
-    std::vector<float> m_port_values;
-    std::vector<int>   m_control_indices;
-    int m_audio_out_l = -1;
-    int m_audio_out_r = -1;
-    std::vector<snd_seq_event_t> m_pending_events;
-    int m_last_note[16]{-1, -1, -1, -1, -1, -1, -1, -1,
-                        -1, -1, -1, -1, -1, -1, -1, -1};
-    // Dummy zero buffer for unconnected LADSPA audio input/output ports.
-    std::vector<float> m_dummy_audio_buf;
+    // MIDI event staging (GUI/audio thread writes, flushed in process())
+    struct StagedMidi { uint8_t type, channel, note, value; };
+    std::vector<StagedMidi> m_pending_midi;
+    int m_last_note[16]{-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
+
+    // ── crash state ──────────────────────────────────────────────────
+    mutable std::atomic<bool> m_alive{false};
 };
 
 } // namespace disgrace_ns

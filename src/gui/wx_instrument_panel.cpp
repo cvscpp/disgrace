@@ -27,6 +27,8 @@
 #include "../instrument/sfz_instrument.h"
 #include "../instrument/xrni_instrument.h"
 #include "../instrument/dssi_instrument.h"
+#include <dssi.h>
+#include <dlfcn.h>
 #include "../instrument/midi_instrument.h"
 #include "../instrument/voice_instrument.h"
 #include "../instrument/voice_synthesis_worker.h"
@@ -2158,7 +2160,7 @@ void InstrumentPanel::on_plugin_scan(wxCommandEvent& event) {
                         const DSSI_Descriptor* desc = df(i); if (!desc) break;
                         wxString label = wxString::FromUTF8(desc->LADSPA_Plugin->Name) + " (DSSI)";
                         int item = m_plugin_browser->Append(label);
-                        m_plugin_map[item] = {desc->LADSPA_Plugin->Name, fullpath.ToStdString(), i, false};
+                        m_plugin_map[item] = PluginInfo{desc->LADSPA_Plugin->Name, fullpath.ToStdString(), i, false};
                     }
                 }
                 dlclose(handle);

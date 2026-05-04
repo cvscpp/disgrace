@@ -17,270 +17,372 @@
  */
 
 #include "dssi_instrument.h"
+
 #include <algorithm>
 #include <iostream>
-#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <cerrno>
 
-namespace {
-
-float apply_sample_rate_hint(float value, const LADSPA_PortRangeHint& hint, double sample_rate)
-{
-    return LADSPA_IS_HINT_SAMPLE_RATE(hint.HintDescriptor) ? value * (float)sample_rate : value;
-}
-
-float interpolate_default(float lower, float upper, float t, bool logarithmic)
-{
-    if (logarithmic && lower > 0.0f && upper > 0.0f)
-        return std::exp(std::log(lower) * (1.0f - t) + std::log(upper) * t);
-    return lower * (1.0f - t) + upper * t;
-}
-
-float default_port_value(const LADSPA_PortRangeHint& hint, double sample_rate)
-{
-    float lower = apply_sample_rate_hint(hint.LowerBound, hint, sample_rate);
-    float upper = apply_sample_rate_hint(hint.UpperBound, hint, sample_rate);
-    bool logarithmic = LADSPA_IS_HINT_LOGARITHMIC(hint.HintDescriptor);
-
-    float value = 0.0f;
-    if (LADSPA_IS_HINT_DEFAULT_0(hint.HintDescriptor)) value = apply_sample_rate_hint(0.0f, hint, sample_rate);
-    else if (LADSPA_IS_HINT_DEFAULT_1(hint.HintDescriptor)) value = apply_sample_rate_hint(1.0f, hint, sample_rate);
-    else if (LADSPA_IS_HINT_DEFAULT_100(hint.HintDescriptor)) value = apply_sample_rate_hint(100.0f, hint, sample_rate);
-    else if (LADSPA_IS_HINT_DEFAULT_440(hint.HintDescriptor)) value = apply_sample_rate_hint(440.0f, hint, sample_rate);
-    else if (LADSPA_IS_HINT_DEFAULT_MINIMUM(hint.HintDescriptor)) value = lower;
-    else if (LADSPA_IS_HINT_DEFAULT_MAXIMUM(hint.HintDescriptor)) value = upper;
-    else if (LADSPA_IS_HINT_DEFAULT_LOW(hint.HintDescriptor)) value = interpolate_default(lower, upper, 0.25f, logarithmic);
-    else if (LADSPA_IS_HINT_DEFAULT_MIDDLE(hint.HintDescriptor)) value = interpolate_default(lower, upper, 0.50f, logarithmic);
-    else if (LADSPA_IS_HINT_DEFAULT_HIGH(hint.HintDescriptor)) value = interpolate_default(lower, upper, 0.75f, logarithmic);
-
-    if (LADSPA_IS_HINT_BOUNDED_BELOW(hint.HintDescriptor))
-        value = std::max(value, lower);
-    if (LADSPA_IS_HINT_BOUNDED_ABOVE(hint.HintDescriptor))
-        value = std::min(value, upper);
-    return value;
-}
-
-} // namespace
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <signal.h>
+#include <time.h>
 
 namespace disgrace_ns {
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+std::string DSSIInstrument::find_sandbox_binary()
+{
+    char exe_buf[4096] = {};
+    ssize_t n = readlink("/proc/self/exe", exe_buf, sizeof(exe_buf) - 1);
+    if (n > 0) {
+        std::string exe(exe_buf, (size_t)n);
+        auto slash = exe.rfind('/');
+        if (slash != std::string::npos) {
+            std::string candidate = exe.substr(0, slash + 1) + "dssi_sandbox";
+            if (access(candidate.c_str(), X_OK) == 0)
+                return candidate;
+        }
+    }
+    return "dssi_sandbox";
+}
+
+// ─── Constructor / destructor ─────────────────────────────────────────────────
+
 DSSIInstrument::DSSIInstrument(double sample_rate) : m_sample_rate(sample_rate) {}
 
-DSSIInstrument::~DSSIInstrument() {
-    if (m_instance && m_descriptor) {
-        m_descriptor->LADSPA_Plugin->cleanup(m_instance);
+DSSIInstrument::~DSSIInstrument()
+{
+    teardown_sandbox();
+}
+
+// ─── Sandbox lifecycle ────────────────────────────────────────────────────────
+
+void DSSIInstrument::teardown_sandbox()
+{
+    m_alive.store(false);
+
+    if (m_child_pid > 0 && m_shm_ptr) {
+        shm()->shutdown = 1;
+        sem_post(&shm()->sem_req);
+        for (int i = 0; i < 20; ++i) {
+            usleep(10000);
+            int status;
+            if (waitpid(m_child_pid, &status, WNOHANG) == m_child_pid)
+                goto cleanup;
+        }
+        kill(m_child_pid, SIGKILL);
+        waitpid(m_child_pid, nullptr, 0);
     }
-    if (m_lib_handle) {
-        dlclose(m_lib_handle);
+cleanup:
+    m_child_pid = -1;
+
+    if (m_stdout_rfd >= 0) {
+        close(m_stdout_rfd);
+        m_stdout_rfd = -1;
+    }
+
+    if (m_shm_ptr && m_shm_ptr != MAP_FAILED) {
+        sem_destroy(&shm()->sem_req);
+        sem_destroy(&shm()->sem_done);
+        munmap(m_shm_ptr, DSB_SHM_SIZE);
+        m_shm_ptr = nullptr;
+    }
+    if (!m_shm_name.empty()) {
+        shm_unlink(m_shm_name.c_str());
+        m_shm_name.clear();
     }
 }
 
-bool DSSIInstrument::load_plugin(const std::string& path, int index) {
-    if (m_lib_handle) {
-        if (m_instance) m_descriptor->LADSPA_Plugin->cleanup(m_instance);
-        dlclose(m_lib_handle);
-        m_lib_handle = nullptr;
-        m_instance = nullptr;
-        m_control_indices.clear();
-        m_port_values.clear();
-        m_audio_out_l = -1;
-        m_audio_out_r = -1;
-    }
+bool DSSIInstrument::spawn_sandbox(const std::string& plugin_path, int plugin_idx)
+{
+    teardown_sandbox();
 
-    m_lib_handle = dlopen(path.c_str(), RTLD_NOW);
-    if (!m_lib_handle) {
-        std::cerr << "Failed to load DSSI plugin: " << dlerror() << std::endl;
+    // ── Shared memory ────────────────────────────────────────────────
+    char shm_name_buf[64];
+    static int s_seq = 0;
+    snprintf(shm_name_buf, sizeof(shm_name_buf),
+             "/dgr_dssi_%d_%d", (int)getpid(), s_seq++);
+    m_shm_name = shm_name_buf;
+
+    shm_unlink(m_shm_name.c_str());
+    int shm_fd = shm_open(m_shm_name.c_str(), O_CREAT | O_RDWR, 0600);
+    if (shm_fd == -1) {
+        std::cerr << "[DSSIInstrument] shm_open: " << strerror(errno) << "\n";
+        return false;
+    }
+    if (ftruncate(shm_fd, (off_t)DSB_SHM_SIZE) == -1) {
+        std::cerr << "[DSSIInstrument] ftruncate: " << strerror(errno) << "\n";
+        close(shm_fd);
+        shm_unlink(m_shm_name.c_str());
         return false;
     }
 
-    m_path = path;
-    m_index = index;
+    void* raw = mmap(nullptr, DSB_SHM_SIZE, PROT_READ | PROT_WRITE,
+                     MAP_SHARED, shm_fd, 0);
+    close(shm_fd);
+    if (raw == MAP_FAILED) {
+        std::cerr << "[DSSIInstrument] mmap: " << strerror(errno) << "\n";
+        shm_unlink(m_shm_name.c_str());
+        return false;
+    }
+    m_shm_ptr = raw;
+    memset(raw, 0, DSB_SHM_SIZE);
 
-    DSSI_Descriptor_Function df = (DSSI_Descriptor_Function)dlsym(m_lib_handle, "dssi_descriptor");
-    if (!df) {
-        std::cerr << "Not a valid DSSI plugin (missing dssi_descriptor)" << std::endl;
+    if (sem_init(&shm()->sem_req,  1, 0) == -1 ||
+        sem_init(&shm()->sem_done, 1, 0) == -1) {
+        std::cerr << "[DSSIInstrument] sem_init: " << strerror(errno) << "\n";
+        teardown_sandbox();
         return false;
     }
 
-    m_descriptor = df(index); 
-    if (!m_descriptor) {
-        dlclose(m_lib_handle);
-        m_lib_handle = nullptr;
-        m_audio_out_l = -1;
-        m_audio_out_r = -1;
+    // ── Pipe for child stdout (setup protocol) ────────────────────────
+    int pfd[2];
+    if (pipe(pfd) == -1) {
+        std::cerr << "[DSSIInstrument] pipe: " << strerror(errno) << "\n";
+        teardown_sandbox();
         return false;
     }
 
-    const LADSPA_Descriptor* ladspa = m_descriptor->LADSPA_Plugin;
-    m_instance = ladspa->instantiate(ladspa, (unsigned long)m_sample_rate);
-    if (!m_instance) {
-        dlclose(m_lib_handle);
-        m_lib_handle = nullptr;
-        m_audio_out_l = -1;
-        m_audio_out_r = -1;
+    // ── Fork ──────────────────────────────────────────────────────────
+    std::string sandbox_bin = find_sandbox_binary();
+    char sr_buf[32];
+    snprintf(sr_buf, sizeof(sr_buf), "%.0f", m_sample_rate);
+    char idx_buf[16];
+    snprintf(idx_buf, sizeof(idx_buf), "%d", plugin_idx);
+
+    pid_t pid = fork();
+    if (pid == -1) {
+        std::cerr << "[DSSIInstrument] fork: " << strerror(errno) << "\n";
+        close(pfd[0]); close(pfd[1]);
+        teardown_sandbox();
         return false;
     }
 
-    set_plugin_name(ladspa->Name);
-    m_audio_out_l = -1;
-    m_audio_out_r = -1;
+    if (pid == 0) {
+        // Child: redirect stdout → write end of pipe, then exec
+        close(pfd[0]);
+        dup2(pfd[1], STDOUT_FILENO);
+        close(pfd[1]);
+        int maxfd = (int)sysconf(_SC_OPEN_MAX);
+        for (int i = 3; i < maxfd; ++i) close(i);
 
-    // Dummy buffer for all audio ports not used as primary L/R output.
-    // LADSPA requires every port to be connected before run(); unconnected
-    // audio input ports would cause the plugin to read from a dangling pointer.
-    m_dummy_audio_buf.assign(2048, 0.0f);
+        char* args[] = {
+            const_cast<char*>(sandbox_bin.c_str()),
+            const_cast<char*>(m_shm_name.c_str()),
+            const_cast<char*>(plugin_path.c_str()),
+            idx_buf,
+            sr_buf,
+            nullptr
+        };
+        execvp(sandbox_bin.c_str(), args);
+        dprintf(STDOUT_FILENO, "ERROR execvp(%s): %s\n",
+                sandbox_bin.c_str(), strerror(errno));
+        _exit(127);
+    }
 
-    // Discover ports
-    m_port_values.resize(ladspa->PortCount, 0.0f);
-    for (unsigned long i = 0; i < ladspa->PortCount; ++i) {
-        LADSPA_PortDescriptor d = ladspa->PortDescriptors[i];
-        if (LADSPA_IS_PORT_AUDIO(d)) {
-            if (LADSPA_IS_PORT_OUTPUT(d)) {
-                if (m_audio_out_l == -1) {
-                    m_audio_out_l = (int)i;
-                } else if (m_audio_out_r == -1) {
-                    m_audio_out_r = (int)i;
-                } else {
-                    // Extra audio output — connect to discard buffer.
-                    ladspa->connect_port(m_instance, i, m_dummy_audio_buf.data());
-                }
-            } else {
-                // Audio input port — connect to silent dummy buffer.
-                ladspa->connect_port(m_instance, i, m_dummy_audio_buf.data());
+    // Parent
+    close(pfd[1]);
+    m_child_pid = pid;
+
+    // ── Read setup protocol from child ────────────────────────────────
+    FILE* f = fdopen(pfd[0], "r");
+    if (!f) {
+        std::cerr << "[DSSIInstrument] fdopen failed\n";
+        teardown_sandbox();
+        return false;
+    }
+
+    bool ok = false;
+    char line[1024];
+    while (fgets(line, sizeof(line), f)) {
+        size_t len = strlen(line);
+        while (len > 0 && (line[len-1] == '\n' || line[len-1] == '\r')) line[--len] = '\0';
+
+        if (strncmp(line, "ERROR ", 6) == 0) {
+            std::cerr << "[DSSIInstrument] child: " << line << "\n";
+            break;
+        } else if (strcmp(line, "OK") == 0) {
+            ok = true;
+        } else if (strncmp(line, "NAME ", 5) == 0) {
+            set_plugin_name(line + 5);
+        } else if (strncmp(line, "HAS_SYNTH ", 10) == 0) {
+            m_has_run_synth = (line[10] == '1');
+        } else if (strncmp(line, "CTRL_COUNT ", 11) == 0) {
+            int cnt = atoi(line + 11);
+            m_ctrl_info.clear();
+            m_ctrl_info.reserve((size_t)cnt);
+        } else if (strncmp(line, "CTRL ", 5) == 0) {
+            CtrlInfo ci{};
+            char name_buf[512] = {};
+            int seq_idx = 0;
+            if (sscanf(line + 5, "%d %d %f %f %f %511[^\n]",
+                       &seq_idx, &ci.port_idx,
+                       &ci.min_v, &ci.max_v, &ci.def_v, name_buf) >= 5) {
+                ci.name = name_buf;
+                ci.current_value = ci.def_v;
+                m_ctrl_info.push_back(ci);
             }
-        } else if (LADSPA_IS_PORT_CONTROL(d) && LADSPA_IS_PORT_INPUT(d)) {
-            m_control_indices.push_back((int)i);
-            
-            // Set default value if hint provided
-            LADSPA_PortRangeHint hint = ladspa->PortRangeHints[i];
-            float val = LADSPA_IS_HINT_HAS_DEFAULT(hint.HintDescriptor)
-                ? default_port_value(hint, m_sample_rate)
-                : 0.0f;
-            m_port_values[i] = val;
-            ladspa->connect_port(m_instance, i, &m_port_values[i]);
-        } else if (LADSPA_IS_PORT_CONTROL(d) && LADSPA_IS_PORT_OUTPUT(d)) {
-            // Control output ports also need a valid connection.
-            ladspa->connect_port(m_instance, i, &m_port_values[i]);
+        } else if (strncmp(line, "AUDIO_L ", 8) == 0) {
+            m_audio_out_l = atoi(line + 8);
+        } else if (strncmp(line, "AUDIO_R ", 8) == 0) {
+            m_audio_out_r = atoi(line + 8);
+        } else if (strcmp(line, "READY") == 0) {
+            break;
         }
     }
 
-    if (ladspa->activate) {
-        ladspa->activate(m_instance);
+    // Retain the raw fd; detach the FILE wrapper without closing the underlying fd.
+    int tmp_fd = dup(fileno(f));
+    fclose(f);
+    m_stdout_rfd = tmp_fd;
+
+    if (!ok) {
+        std::cerr << "[DSSIInstrument] plugin failed to start\n";
+        teardown_sandbox();
+        return false;
     }
 
-    // Pre-reserve MIDI event buffer to avoid heap allocation in the RT audio thread.
-    m_pending_events.reserve(64);
+    // Populate shm port values with defaults
+    shm()->port_count = (uint32_t)m_ctrl_info.size();
+    for (size_t i = 0; i < m_ctrl_info.size() && i < DSB_MAX_PORTS; ++i)
+        shm()->port_values[i] = m_ctrl_info[i].current_value;
 
+    m_pending_midi.reserve(DSB_MAX_MIDI);
+    m_alive.store(true);
     return true;
 }
 
-Instrument::Parameter DSSIInstrument::get_parameter(size_t index) const {
-    if (index >= m_control_indices.size()) return {};
-    int port_idx = m_control_indices[index];
-    const LADSPA_Descriptor* ladspa = m_descriptor->LADSPA_Plugin;
-    
-    Instrument::Parameter p;
-    p.index = (int)index;
-    p.name = ladspa->PortNames[port_idx];
-    p.min = ladspa->PortRangeHints[port_idx].LowerBound;
-    p.max = ladspa->PortRangeHints[port_idx].UpperBound;
-    p.value = m_port_values[port_idx];
-    
-    // Sanity check for bounds if not provided
-    if (!LADSPA_IS_HINT_BOUNDED_BELOW(ladspa->PortRangeHints[port_idx].HintDescriptor)) p.min = 0.0f;
-    if (!LADSPA_IS_HINT_BOUNDED_ABOVE(ladspa->PortRangeHints[port_idx].HintDescriptor)) p.max = 1.0f;
-    if (p.max <= p.min) p.max = p.min + 1.0f;
+// ─── Public API ───────────────────────────────────────────────────────────────
 
+bool DSSIInstrument::load_plugin(const std::string& path, int index)
+{
+    m_path  = path;
+    m_index = index;
+    m_ctrl_info.clear();
+    m_bank    = 0;
+    m_program = 0;
+    return spawn_sandbox(path, index);
+}
+
+bool DSSIInstrument::is_alive() const
+{
+    if (!m_alive.load()) return false;
+    if (m_child_pid > 0 && kill(m_child_pid, 0) == -1 && errno == ESRCH) {
+        m_alive.store(false);
+        return false;
+    }
+    return true;
+}
+
+Instrument::Parameter DSSIInstrument::get_parameter(size_t index) const
+{
+    if (index >= m_ctrl_info.size()) return {};
+    const auto& ci = m_ctrl_info[index];
+    Instrument::Parameter p;
+    p.index = ci.port_idx;
+    p.name  = ci.name;
+    p.min   = ci.min_v;
+    p.max   = ci.max_v;
+    p.value = ci.current_value;
     return p;
 }
 
-void DSSIInstrument::set_parameter(size_t index, float value) {
-    if (index >= m_control_indices.size()) return;
-    int port_idx = m_control_indices[index];
-    m_port_values[port_idx] = value;
+void DSSIInstrument::set_parameter(size_t index, float value)
+{
+    if (index >= m_ctrl_info.size()) return;
+    m_ctrl_info[index].current_value = value;
+    if (m_shm_ptr && index < DSB_MAX_PORTS)
+        shm()->port_values[index] = value;
 }
 
-void DSSIInstrument::load_program(unsigned long bank, unsigned long program) {
-    if (m_instance && m_descriptor && m_descriptor->select_program) {
-        m_descriptor->select_program(m_instance, bank, program);
-        m_bank = bank;
-        m_program = program;
-    }
+void DSSIInstrument::load_program(unsigned long bank, unsigned long program)
+{
+    m_bank    = bank;
+    m_program = program;
+    // TODO: tunnel select_program through sandbox protocol
 }
 
-    void DSSIInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_index, size_t, uint8_t)
-    {
-        if (!m_descriptor) return;
-        const size_t chan = column_index % 16;
-        if (m_last_note[chan] != -1) {
-            note_off(column_index);
-        }
-        snd_seq_event_t ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.type = SND_SEQ_EVENT_NOTEON;
-        ev.data.note.channel = (unsigned char)chan;
-        ev.data.note.note = note;
-        ev.data.note.velocity = velocity;
-        m_pending_events.push_back(ev);
-        m_last_note[chan] = note;
-    }
+void DSSIInstrument::set_volume(float vol) { m_volume = std::max(0.0f, vol); }
+void DSSIInstrument::set_pitch(float) {}
 
-    void DSSIInstrument::note_off(size_t column_index)
-    {
-        if (!m_descriptor) return;
-        const size_t chan = column_index % 16;
-        if (m_last_note[chan] == -1) {
-            return;
-        }
-        snd_seq_event_t ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.type = SND_SEQ_EVENT_NOTEOFF;
-        ev.data.note.channel = (unsigned char)chan;
-        ev.data.note.note = (unsigned char)m_last_note[chan];
-        ev.data.note.velocity = 0;
-        m_pending_events.push_back(ev);
+void DSSIInstrument::note_on(uint8_t note, uint8_t velocity,
+                              size_t column_index, size_t, uint8_t)
+{
+    const size_t chan = column_index % 16;
+    if (m_last_note[chan] != -1) note_off(column_index);
+    m_pending_midi.push_back({0x90, (uint8_t)chan, note, velocity});
+    m_last_note[chan] = note;
+}
+
+void DSSIInstrument::note_off(size_t column_index)
+{
+    const size_t chan = column_index % 16;
+    if (m_last_note[chan] == -1) return;
+    m_pending_midi.push_back({0x80, (uint8_t)chan, (uint8_t)m_last_note[chan], 0});
+    m_last_note[chan] = -1;
+}
+
+void DSSIInstrument::panic()
+{
+    for (size_t chan = 0; chan < 16; ++chan) {
+        m_pending_midi.push_back({0xB0, (uint8_t)chan, 123, 0});
         m_last_note[chan] = -1;
     }
+}
 
-    void DSSIInstrument::panic()
-    {
-        if (!m_descriptor) return;
-        for (size_t chan = 0; chan < 16; ++chan) {
-            snd_seq_event_t ev;
-            memset(&ev, 0, sizeof(ev));
-            ev.type = SND_SEQ_EVENT_CONTROLLER;
-            ev.data.control.channel = (unsigned char)chan;
-            ev.data.control.param = 123; // All notes off
-            ev.data.control.value = 0;
-            m_pending_events.push_back(ev);
-            m_last_note[chan] = -1;
-        }
+void DSSIInstrument::process(float* l, float* r, size_t nframes)
+{
+    if (nframes > DSB_MAX_FRAMES) nframes = DSB_MAX_FRAMES;
+    memset(l, 0, nframes * sizeof(float));
+    memset(r, 0, nframes * sizeof(float));
+
+    if (!is_alive()) {
+        m_pending_midi.clear();
+        return;
     }
 
-    void DSSIInstrument::set_volume(float vol) {}
-    void DSSIInstrument::set_pitch(float freq) {}
+    DSSIBridgeShm* s = shm();
 
-    void DSSIInstrument::process(float* l, float* r, size_t nframes) {
-        if (!m_instance || !m_descriptor) {
-            for(size_t i=0; i<nframes; ++i) { l[i]=0; r[i]=0; }
-            return;
-        }
+    s->nframes    = (uint32_t)nframes;
+    s->volume     = m_volume;
+    s->port_count = (uint32_t)m_ctrl_info.size();
+    for (size_t i = 0; i < m_ctrl_info.size() && i < DSB_MAX_PORTS; ++i)
+        s->port_values[i] = m_ctrl_info[i].current_value;
 
-        const LADSPA_Descriptor* ladspa = m_descriptor->LADSPA_Plugin;
-        
-        // Connect audio outputs
-        if (m_audio_out_l != -1) ladspa->connect_port(m_instance, (unsigned long)m_audio_out_l, l);
-        if (m_audio_out_r != -1) ladspa->connect_port(m_instance, (unsigned long)m_audio_out_r, r);
-
-        if (m_descriptor->run_synth) {
-            m_descriptor->run_synth(m_instance, (unsigned long)nframes, m_pending_events.data(), (unsigned long)m_pending_events.size());
-        } else {
-            ladspa->run(m_instance, (unsigned long)nframes);
-        }
-        m_pending_events.clear();
-
-        if (m_audio_out_l != -1 && m_audio_out_r == -1) {
-            for (size_t i = 0; i < nframes; ++i) r[i] = l[i];
-        }
+    uint32_t mc = (uint32_t)std::min(m_pending_midi.size(), (size_t)DSB_MAX_MIDI);
+    s->midi_count = mc;
+    for (uint32_t i = 0; i < mc; ++i) {
+        const auto& me = m_pending_midi[i];
+        s->midi_events[i] = {me.type, me.channel, me.note, me.value};
     }
+    m_pending_midi.clear();
+    s->shutdown = 0;
+
+    sem_post(&s->sem_req);
+
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 10000000L; // 10 ms deadline
+    if (ts.tv_nsec >= 1000000000L) { ts.tv_sec++; ts.tv_nsec -= 1000000000L; }
+
+    if (sem_timedwait(&s->sem_done, &ts) == -1) {
+        if (!is_alive())
+            std::cerr << "[DSSIInstrument] sandbox died — silenced\n";
+        return;
+    }
+
+    memcpy(l, s->audio_l, nframes * sizeof(float));
+    memcpy(r, s->audio_r, nframes * sizeof(float));
+
+    for (size_t i = 0; i < nframes; ++i) {
+        l[i] *= m_volume;
+        r[i] *= m_volume;
+    }
+}
 
 } // namespace disgrace_ns

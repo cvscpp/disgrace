@@ -230,6 +230,14 @@ int main(int argc, char* argv[])
         for (uint32_t i = 0; i < pcnt && i < ctrl_ports.size(); ++i)
             port_values[(size_t)ctrl_ports[i].port_idx] = shm->port_values[i];
 
+        // Handle deferred program change
+        if (shm->select_program_pending && desc->select_program) {
+            desc->select_program(inst,
+                                 shm->select_program_bank,
+                                 shm->select_program_program);
+            shm->select_program_pending = 0;
+        }
+
         // Decode MIDI events
         midi_evs.clear();
         uint32_t mc = shm->midi_count < DSB_MAX_MIDI ? shm->midi_count : DSB_MAX_MIDI;

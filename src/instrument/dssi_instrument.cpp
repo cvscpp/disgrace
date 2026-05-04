@@ -253,6 +253,14 @@ bool DSSIInstrument::spawn_sandbox(const std::string& plugin_path, int plugin_id
         shm()->port_values[i] = m_ctrl_info[i].current_value;
 
     m_pending_midi.reserve(DSB_MAX_MIDI);
+
+    // Apply any saved program selection
+    if (m_bank != 0 || m_program != 0) {
+        shm()->select_program_bank    = (uint32_t)m_bank;
+        shm()->select_program_program = (uint32_t)m_program;
+        shm()->select_program_pending = 1;
+    }
+
     m_alive.store(true);
     return true;
 }
@@ -304,7 +312,11 @@ void DSSIInstrument::load_program(unsigned long bank, unsigned long program)
 {
     m_bank    = bank;
     m_program = program;
-    // TODO: tunnel select_program through sandbox protocol
+    if (m_shm_ptr && is_alive()) {
+        shm()->select_program_bank    = (uint32_t)bank;
+        shm()->select_program_program = (uint32_t)program;
+        shm()->select_program_pending = 1;
+    }
 }
 
 void DSSIInstrument::set_volume(float vol) { m_volume = std::max(0.0f, vol); }

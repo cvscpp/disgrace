@@ -61,6 +61,11 @@ struct alignas(64) DSSIBridgeShm {
     DsbMidiEvent midi_events[DSB_MAX_MIDI];
     uint32_t shutdown;          // set to 1 to ask sandbox to exit cleanly
 
+    // ── program change (host → sandbox, processed before next audio block) ──
+    uint32_t select_program_pending; // set to 1 when bank/program changed
+    uint32_t select_program_bank;
+    uint32_t select_program_program;
+
     // ── audio (written by sandbox before sem_done) ──────────────────────
     float    audio_l[DSB_MAX_FRAMES];
     float    audio_r[DSB_MAX_FRAMES];

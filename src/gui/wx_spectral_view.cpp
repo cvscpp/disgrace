@@ -17,45 +17,43 @@ SpectralView::SpectralView(wxWindow* parent, wxWindowID id, Engine& engine)
     m_fft_size = 2048;
     m_analyzer = std::make_unique<FFTAnalyzer>(m_fft_size);
     m_fft_input.resize(m_fft_size, 0.0f);
+    m_windowed.resize(m_fft_size, 0.0f);
     m_magnitudes.resize(m_fft_size / 2 + 1, 0.0f);
+
+    // Pre-compute Hanning window coefficients once.
+    m_window_coeffs.resize(m_fft_size);
+    for (size_t i = 0; i < m_fft_size; ++i)
+        m_window_coeffs[i] = 0.5f * (1.0f - cosf(2.0f * 3.14159265f * i / (m_fft_size - 1)));
 }
 
 SpectralView::~SpectralView() {}
 
 void SpectralView::update() {
-    // Pull data from engine ringbuffer
+    // Drain ring buffer into circular buffer — O(1) per sample.
     float val;
-    bool has_data = false;
     while (m_engine.m_spectral_rb.pop(val)) {
-        has_data = true;
-        // Shift input and add new value
-        for (size_t i = 0; i < m_fft_size - 1; ++i) {
-            m_fft_input[i] = m_fft_input[i+1];
-        }
-        m_fft_input[m_fft_size-1] = val;
+        m_fft_input[m_write_pos & (m_fft_size - 1)] = val;
+        ++m_write_pos;
+        ++m_new_samples;
     }
-    
-    if (!has_data) return;
 
-    // Apply windowing (Hanning) and process
-    std::vector<float> windowed(m_fft_size);
+    // Only run FFT when at least one hop's worth of new data has arrived.
+    if (m_new_samples < kHopSize) return;
+    m_new_samples = 0;
+
+    // Build windowed snapshot from the circular buffer using pre-computed coefficients.
     for (size_t i = 0; i < m_fft_size; ++i) {
-        float multiplier = 0.5f * (1.0f - cosf(2.0f * 3.14159265f * i / (m_fft_size - 1)));
-        windowed[i] = m_fft_input[i] * multiplier;
+        size_t idx = (m_write_pos + i) & (m_fft_size - 1);
+        m_windowed[i] = m_fft_input[idx] * m_window_coeffs[i];
     }
-    
-    m_analyzer->process(windowed.data());
+
+    m_analyzer->process(m_windowed.data());
     const auto& new_mags = m_analyzer->magnitudes();
 
-    // Normalize by N/2 (Hanning window coherent gain) so 0 dBFS signal → magnitude 1.0,
-    // matching the calibration of the digital VU meters.
     const float norm_factor = 1.0f / (float)(m_fft_size / 2);
-
-    // Dampen sensitivity with smoothing (Exponential moving average)
-    float alpha = 0.25f; // Lower = slower, less sensitive
-    for (size_t i = 0; i < m_magnitudes.size(); ++i) {
+    float alpha = 0.25f;
+    for (size_t i = 0; i < m_magnitudes.size(); ++i)
         m_magnitudes[i] = alpha * (new_mags[i] * norm_factor) + (1.0f - alpha) * m_magnitudes[i];
-    }
 
     Refresh(false);
 }

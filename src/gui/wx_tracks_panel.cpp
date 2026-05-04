@@ -168,14 +168,21 @@ TracksPanel::TracksPanel(wxWindow* parent, Engine& engine)
 void TracksPanel::update() {
     static int last_total_ticks = -1;
     static int last_track_count = -1;
+    static size_t last_play_row = (size_t)-1;
     int current_total = m_tracks_view->get_total_ticks();
     int current_tracks = (int)m_engine.track_count();
-    if (current_total != last_total_ticks || current_tracks != last_track_count) {
+    size_t current_row = m_engine.current_row();
+    bool structural_change = (current_total != last_total_ticks || current_tracks != last_track_count);
+    bool position_change   = (current_row != last_play_row);
+    if (structural_change) {
         m_tracks_view->update_view();
         last_total_ticks = current_total;
         last_track_count = current_tracks;
     }
-    m_tracks_view->Refresh();
+    if (structural_change || position_change) {
+        last_play_row = current_row;
+        m_tracks_view->Refresh();
+    }
 }
 
 void TracksPanel::on_zoom_in(wxCommandEvent& event) { m_tracks_view->zoom_in(); }

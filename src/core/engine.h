@@ -134,7 +134,7 @@ public:
 
     size_t m_samples_until_next_tick = 0;
     int    m_current_tick = 0;
-    size_t m_current_row = 0;
+    ::std::atomic<size_t> m_current_row{0};
     ::std::atomic<size_t> m_order_pos{0};
     ::std::atomic<size_t> m_edit_order_pos{0};
     ::std::atomic<size_t> m_order_start{0};

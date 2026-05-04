@@ -926,7 +926,7 @@ int Engine::get_instrument_index(const Instrument* inst) const {
     return -1;
 }
 
-size_t Engine::current_row() const { return m_current_row; }
+size_t Engine::current_row() const { return m_current_row.load(std::memory_order_relaxed); }
 void Engine::set_active_pattern(size_t index) { if (index < m_patterns.size()) m_active_pattern.store(index); }
 size_t Engine::active_pattern() const { return m_active_pattern.load(); }
 Pattern& Engine::pattern() { return *m_patterns[m_active_pattern.load()]; }

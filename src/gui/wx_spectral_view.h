@@ -22,9 +22,14 @@ public:
 private:
     Engine& m_engine;
     std::unique_ptr<FFTAnalyzer> m_analyzer;
-    std::vector<float> m_fft_input;
+    std::vector<float> m_fft_input;     // circular buffer
+    std::vector<float> m_windowed;      // pre-allocated FFT work buffer
+    std::vector<float> m_window_coeffs; // pre-computed Hanning window
     std::vector<float> m_magnitudes;
-    size_t m_fft_size = 2048;
+    size_t m_fft_size  = 2048;
+    size_t m_write_pos = 0;    // next write slot in circular buffer
+    size_t m_new_samples = 0;  // samples accumulated since last FFT run
+    static constexpr size_t kHopSize = 512; // FFT update interval (samples)
 
     wxDECLARE_EVENT_TABLE();
 };

@@ -40,6 +40,17 @@ enum {
     ID_PREVIEW_BASE = 10200
 };
 
+// ---------------------------------------------------------------------------
+// Notation rendering constants
+// ---------------------------------------------------------------------------
+static constexpr int N_LINE_SP  = 10;   // pixels between staff lines
+static constexpr int N_TRACK_H  = 160;  // per-track height in pixels
+static constexpr int N_HEADER_W = 120;  // left header column width
+static constexpr int N_STAFF_Y  = 35;   // offset from track top to first staff line
+static constexpr int N_CLEF_W   = 62;   // pixels reserved for clef + time sig
+
+// ---------------------------------------------------------------------------
+
 wxBEGIN_EVENT_TABLE(NotationPanel, wxPanel)
     EVT_BUTTON(ID_ZOOM_IN, NotationPanel::on_zoom_in)
     EVT_BUTTON(ID_ZOOM_OUT, NotationPanel::on_zoom_out)
@@ -177,25 +188,22 @@ void NotationView::view_selection() {
 }
 
 void NotationView::update_view() {
-    int total_w = 120 + tick_to_x(get_total_ticks()) + 50;
-    int total_h = 30 + (int)m_engine.track_count() * 120 + 50;
+    int total_w = N_HEADER_W + N_CLEF_W + tick_to_x(get_total_ticks()) + 60;
+    int total_h = 30 + (int)m_engine.track_count() * N_TRACK_H + 50;
     SetVirtualSize(total_w, total_h);
 
-    // Update preview buttons
-    for (auto* btn : m_preview_buttons) {
-        btn->Destroy();
-    }
+    for (auto* btn : m_preview_buttons) btn->Destroy();
     m_preview_buttons.clear();
 
-    int track_h = 120;
     for (int t = 0; t < (int)m_engine.track_count(); ++t) {
         auto& track_obj = m_engine.track(t);
         Instrument* inst = track_obj.instrument();
-        if (inst && (inst->type() == InstrumentType::SoundFont || 
-                     inst->type() == InstrumentType::Plugin || 
+        if (inst && (inst->type() == InstrumentType::SoundFont ||
+                     inst->type() == InstrumentType::Plugin ||
                      inst->type() == InstrumentType::Midi)) {
-            int ty = 30 + t * track_h;
-            wxButton* b = new wxButton(this, ID_PREVIEW_BASE + t, "Preview (LY)", wxPoint(5, ty + 70), wxSize(110, 25));
+            int ty = 30 + t * N_TRACK_H;
+            wxButton* b = new wxButton(this, ID_PREVIEW_BASE + t, "Preview (LY)",
+                                       wxPoint(5, ty + N_TRACK_H - 32), wxSize(110, 25));
             b->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_FORWARD, wxART_BUTTON, wxSize(14, 14)));
             wxFont btn_font(8, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
             b->SetFont(btn_font);
@@ -203,7 +211,6 @@ void NotationView::update_view() {
             m_preview_buttons.push_back(b);
         }
     }
-
     Refresh();
 }
 
@@ -247,226 +254,403 @@ void NotationView::OnPaint(wxPaintEvent& event) {
     draw(dc);
 }
 
-void NotationView::draw_clef_treble(wxDC& dc, int x, int y) {
-    dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_text)));
-    dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_text)));
-    
-    int cx = x + 18;
-    int cy = y + 8;
-    int s = 10;
-    
-    dc.DrawLine(cx, cy, cx, cy + 6*s);
-    dc.DrawLine(cx - s, cy + 2*s, cx, cy + 2*s);
-    dc.DrawLine(cx - s, cy + 2*s, cx - s, cy + 5*s);
-    
-    dc.DrawEllipse(cx - 2, cy + 6*s - 2, 4, 4);
-    
-    wxPoint curve_pts[] = {
-        wxPoint(cx - 4, cy + 6*s),
-        wxPoint(cx - s - 2, cy + 5*s),
-        wxPoint(cx - s - 4, cy + 4*s),
-        wxPoint(cx - s + 2, cy + 4*s)
-    };
-    dc.DrawPolygon(4, curve_pts, 0, 0);
-    
-    for (int i = 0; i < 4; i++) {
-        curve_pts[i] = wxPoint(curve_pts[i].x + 2, curve_pts[i].y - s/2);
+// ---------------------------------------------------------------------------
+// Clef drawing helpers
+// ---------------------------------------------------------------------------
+
+// Draw treble clef glyph (𝄞) centred so the G-line (staff_top + 3×N_LINE_SP)
+// is the "curl" point of the clef.  Falls back to a polygon sketch when the
+// musical font is not available.
+void NotationView::draw_clef_treble(wxDC& dc, int x, int staff_top) {
+    wxColour ink = ThemeManager::toWxColour(m_engine.m_tracker_text);
+    dc.SetTextForeground(ink);
+    dc.SetPen(wxPen(ink));
+    dc.SetBrush(wxBrush(ink));
+
+    // Try Unicode musical symbol via FreeSerif (common on Linux, has U+1D11E)
+    wxFont mf(4 * N_LINE_SP, wxFONTFAMILY_ROMAN, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "FreeSerif");
+    dc.SetFont(mf);
+    wxString clef_ch = wxString::FromUTF8("\xF0\x9D\x84\x9E");  // U+1D11E 𝄞
+    wxSize ext = dc.GetTextExtent(clef_ch);
+    if (ext.GetWidth() > 4) {
+        // G line is staff_top + 3×N_LINE_SP.  Position so ~68% of glyph height
+        // aligns with the G line.
+        int glyph_y = (staff_top + 3 * N_LINE_SP) - (int)(ext.GetHeight() * 0.68);
+        dc.DrawText(clef_ch, x + 2, glyph_y);
+        return;
     }
-    dc.DrawPolygon(4, curve_pts, 0, 0);
+
+    // Fallback polygon sketch
+    int cx = x + 12;
+    int g_line = staff_top + 3 * N_LINE_SP;  // G line — curl of the treble clef
+    int hs = N_LINE_SP;                        // half-space unit
+
+    // Vertical stem from 3 spaces above top line to 3 spaces below bottom line
+    dc.DrawLine(cx, staff_top - 3*hs, cx, staff_top + 4*N_LINE_SP + 3*hs);
+
+    // Oval body around B4 line (space between 3rd and 4th lines from top)
+    int body_cy = staff_top + 3*N_LINE_SP + hs/2;
+    dc.SetBrush(*wxTRANSPARENT_BRUSH);
+    dc.DrawEllipse(cx - hs, body_cy - hs, 2*hs, (int)(1.4*hs));
+
+    // Upper loop centred on G line
+    dc.DrawEllipse(cx - hs - 2, g_line - hs, 2*hs + 2, 2*hs);
+
+    // Small curl at bottom of stem
+    dc.DrawEllipse(cx - hs/2, staff_top + 4*N_LINE_SP + 2*hs, hs, hs);
 }
 
-void NotationView::draw_clef_bass(wxDC& dc, int x, int y) {
-    dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_text)));
-    dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_text)));
-    
-    int cx = x + 16;
-    int cy = y + 16;
-    int s = 10;
-    
-    dc.DrawEllipse(cx - 6, cy + s/2, 14, s);
-    
-    dc.DrawLine(cx + 6, cy, cx + 10, cy - s/2);
-    dc.DrawLine(cx + 10, cy - s/2, cx + 10, cy + 3*s/2);
-    
-    dc.DrawLine(cx + 6, cy, cx + 10, cy + s/2);
-    dc.DrawLine(cx + 10, cy + s/2, cx + 10, cy + 3*s/2);
-    
-    dc.DrawCircle(cx + 12, cy + s, 2);
-    dc.DrawCircle(cx + 12, cy + 2*s, 2);
+// Draw bass clef glyph (𝄢) so the F-line (staff_top + N_LINE_SP) passes
+// through the right notch of the "C" shape.
+void NotationView::draw_clef_bass(wxDC& dc, int x, int staff_top) {
+    wxColour ink = ThemeManager::toWxColour(m_engine.m_tracker_text);
+    dc.SetTextForeground(ink);
+    dc.SetPen(wxPen(ink));
+    dc.SetBrush(wxBrush(ink));
+
+    wxFont mf(3 * N_LINE_SP, wxFONTFAMILY_ROMAN, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "FreeSerif");
+    dc.SetFont(mf);
+    wxString clef_ch = wxString::FromUTF8("\xF0\x9D\x84\xA2");  // U+1D122 𝄢
+    wxSize ext = dc.GetTextExtent(clef_ch);
+    if (ext.GetWidth() > 4) {
+        // F line is staff_top + N_LINE_SP.  Align ~28% of glyph height there.
+        int glyph_y = (staff_top + N_LINE_SP) - (int)(ext.GetHeight() * 0.28);
+        dc.DrawText(clef_ch, x + 2, glyph_y);
+        return;
+    }
+
+    // Fallback sketch
+    int cx = x + 8;
+    int f_line = staff_top + N_LINE_SP;  // F line (2nd from top)
+    int hs = N_LINE_SP;
+
+    dc.SetBrush(*wxTRANSPARENT_BRUSH);
+    // "C" arc body centred between F line and 3rd staff line
+    int body_cy = f_line + hs + hs/2;
+    dc.DrawEllipse(cx - hs, body_cy - (int)(1.5*hs), 2*hs, (int)(3.0*hs));
+    // Cover right half to make "C"
+    dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_bg)));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawRectangle(cx, body_cy - 2*hs, hs + 4, 4*hs);
+    // Two dots to the right of the notch
+    dc.SetBrush(wxBrush(ink));
+    dc.SetPen(wxPen(ink));
+    dc.DrawCircle(cx + hs + 4, f_line,      3);
+    dc.DrawCircle(cx + hs + 4, f_line + hs, 3);
 }
+
+// Draw percussion clef (two vertical bars).
+void NotationView::draw_clef_perc(wxDC& dc, int x, int staff_top) {
+    wxColour ink = ThemeManager::toWxColour(m_engine.m_tracker_text);
+    dc.SetPen(wxPen(ink, 3));
+    dc.SetBrush(wxBrush(ink));
+    int top = staff_top;
+    int bot = staff_top + 4 * N_LINE_SP;
+    dc.DrawLine(x + 6,  top, x + 6,  bot);
+    dc.DrawLine(x + 12, top, x + 12, bot);
+}
+
+// Draw "n/d" time signature stacked numerals.
+void NotationView::draw_time_sig(wxDC& dc, int x, int staff_top, int n, int d) {
+    wxColour ink = ThemeManager::toWxColour(m_engine.m_tracker_text);
+    dc.SetTextForeground(ink);
+    wxFont tsf(2 * N_LINE_SP, wxFONTFAMILY_ROMAN, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
+    dc.SetFont(tsf);
+    wxString top_s = wxString::Format("%d", n);
+    wxString bot_s = wxString::Format("%d", d);
+    wxSize ext = dc.GetTextExtent(top_s);
+    int mid = staff_top + 2 * N_LINE_SP;  // middle staff line
+    dc.DrawText(top_s, x, mid - ext.GetHeight());
+    dc.DrawText(bot_s, x, mid);
+}
+
+// ---------------------------------------------------------------------------
+// Staff drawing
+// ---------------------------------------------------------------------------
 
 void NotationView::draw_staff(wxDC& dc, int tx, int ty, int tw, int type) {
-    dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_text)));
-    int line_spacing = 8;
-    
-    auto draw_5_lines = [&](int start_y) {
-        for (int i = 0; i < 5; ++i) {
-            dc.DrawLine(tx, start_y + i * line_spacing, tx + tw, start_y + i * line_spacing);
-        }
+    wxColour ink = ThemeManager::toWxColour(m_engine.m_tracker_text);
+    dc.SetPen(wxPen(ink));
+
+    auto draw_5_lines = [&](int staff_top) {
+        for (int i = 0; i < 5; ++i)
+            dc.DrawLine(tx, staff_top + i * N_LINE_SP,
+                        tx + tw, staff_top + i * N_LINE_SP);
     };
 
-    if (type == 0 || type == 3) { // Violin or Drums
-        draw_5_lines(ty + 20);
-        if (type == 0) { // Treble Clef
-            draw_clef_treble(dc, tx + 5, ty + 15);
-        } else { // Drum Clef
-            dc.DrawLine(tx + 10, ty + 28, tx + 10, ty + 44);
-            dc.DrawLine(tx + 15, ty + 28, tx + 15, ty + 44);
-        }
-    } else if (type == 1) { // Bass Clef
-        draw_5_lines(ty + 20);
-        draw_clef_bass(dc, tx + 5, ty + 15);
-    } else if (type == 2) { // Grand Staff
-        draw_5_lines(ty + 10);
-        draw_5_lines(ty + 10 + 6 * line_spacing);
-        draw_clef_treble(dc, tx + 5, ty + 5);
-        draw_clef_bass(dc, tx + 5, ty + 5 + 6 * line_spacing);
-        dc.DrawLine(tx, ty + 10, tx, ty + 10 + 10 * line_spacing);
+    // Grand staff has two 5-line staves; others have one.
+    int treble_top = ty + N_STAFF_Y;
+    int bass_top   = ty + N_STAFF_Y + 6 * N_LINE_SP;  // gap of 2×N_LINE_SP between staves
+
+    switch (type) {
+        case 0:  // Treble
+            draw_5_lines(treble_top);
+            draw_clef_treble(dc, tx + 2, treble_top);
+            draw_time_sig(dc, tx + 36, treble_top, 4, 4);
+            break;
+        case 1:  // Bass
+            draw_5_lines(treble_top);
+            draw_clef_bass(dc, tx + 2, treble_top);
+            draw_time_sig(dc, tx + 36, treble_top, 4, 4);
+            break;
+        case 2:  // Grand staff (treble + bass)
+            draw_5_lines(treble_top);
+            draw_5_lines(bass_top);
+            draw_clef_treble(dc, tx + 2, treble_top);
+            draw_clef_bass(dc, tx + 2, bass_top);
+            draw_time_sig(dc, tx + 36, treble_top, 4, 4);
+            // Brace-bar connecting the two staves
+            dc.DrawLine(tx, treble_top, tx, bass_top + 4 * N_LINE_SP);
+            break;
+        case 3:  // Percussion
+            draw_5_lines(treble_top);
+            draw_clef_perc(dc, tx + 4, treble_top);
+            break;
+        default:
+            draw_5_lines(treble_top);
+            break;
     }
 }
 
-void NotationView::draw_note(wxDC& dc, int nx, int ny, int note, int staff_type) {
-    int line_spacing = 8;
-    int base_y = ny + 20; 
-    
-    static const int pitch_to_pos[] = {0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6};
-    static const bool is_sharp[] = {false, true, false, true, false, false, true, false, true, false, true, false};
+// ---------------------------------------------------------------------------
+// Ledger lines
+// ---------------------------------------------------------------------------
 
+void NotationView::draw_ledger_lines(wxDC& dc, int nx, int note_y, int staff_top) {
+    // note_y is the vertical centre of the note head.
+    // Draw short horizontal lines for every N_LINE_SP step above/below staff.
+    int ledger_half = (int)(N_LINE_SP * 0.7);
+    dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_text)));
+
+    // Lines above staff (above staff_top)
+    for (int ly = staff_top - N_LINE_SP; ly >= note_y - N_LINE_SP / 2; ly -= N_LINE_SP)
+        dc.DrawLine(nx - ledger_half, ly, nx + ledger_half, ly);
+
+    // Lines below staff (below bottom line = staff_top + 4×N_LINE_SP)
+    int bot = staff_top + 4 * N_LINE_SP;
+    for (int ly = bot + N_LINE_SP; ly <= note_y + N_LINE_SP / 2; ly += N_LINE_SP)
+        dc.DrawLine(nx - ledger_half, ly, nx + ledger_half, ly);
+}
+
+// ---------------------------------------------------------------------------
+// Note drawing
+// ---------------------------------------------------------------------------
+
+// pitch_to_pos[p]: diatonic step (0=C, 1=D, … 6=B) for semitone p in an octave.
+static const int s_pitch_to_pos[12] = {0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6};
+static const bool s_is_sharp[12]    = {false, true, false, true, false, false,
+                                        true, false, true, false, true, false};
+
+void NotationView::draw_note(wxDC& dc, int nx, int track_y, int note, int staff_type) {
+    // Diatonic position relative to C4 (MIDI note 48 in this app's convention)
     int octave = note / 12;
-    int pitch = note % 12;
-    int pos = pitch_to_pos[pitch] + (octave - 4) * 7;
-    
+    int pitch  = note % 12;
+    int pos    = s_pitch_to_pos[pitch] + (octave - 4) * 7;  // steps above C4
+
+    int staff_top = track_y + N_STAFF_Y;
+
+    // dy: pixel offset from staff_top to the note centre.
+    // Positive dy = downward (lower note).
+    // Treble clef: pos=10 → E5 (top line), pos=0 → E4 (first space below staff).
+    //   dy = (10 - pos) * half_step   → E5 at staff_top, B4 at 2nd line, etc.
+    // Bass clef:   pos=12 → A3 (top line), pos=2 → A2 (first space below staff).
+    //   dy = -(pos + 2) * half_step  (note: bass uses different reference)
+    int hs = N_LINE_SP / 2;  // half-step = one diatonic slot
     int dy = 0;
-    if (staff_type == 0 || staff_type == 2 || staff_type == 3) {
-        dy = (10 - pos) * (line_spacing / 2);
-    } else if (staff_type == 1) {
-        dy = (pos + 2) * (line_spacing / 2);
+    int treble_top = staff_top;
+    int bass_top   = staff_top + 6 * N_LINE_SP;
+
+    int used_staff_top = treble_top;
+
+    if (staff_type == 0 || staff_type == 3) {  // treble / percussion
+        dy = (10 - pos) * hs;
+        used_staff_top = treble_top;
+    } else if (staff_type == 1) {  // bass (fixed sign)
+        dy = -(pos + 2) * hs;
+        used_staff_top = treble_top;
+    } else if (staff_type == 2) {  // grand staff — treble for upper, bass for lower
+        if (pos >= 0) {  // C4 and above → treble
+            dy = (10 - pos) * hs;
+            used_staff_top = treble_top;
+        } else {         // below C4 → bass
+            dy = -(pos + 2) * hs;
+            used_staff_top = bass_top;
+        }
     }
 
-    int final_y = base_y + dy;
-    dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_note)));
-    dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_note)));
-    dc.DrawEllipse(nx - 4, final_y - 3, 8, 6);
-    dc.DrawLine(nx + 3, final_y, nx + 3, final_y - 20);
+    int note_y = used_staff_top + dy;  // vertical centre of note head
 
-    if (is_sharp[pitch]) {
-        wxFont sharp_font(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
-        dc.SetFont(sharp_font);
-        dc.DrawText("#", nx - 12, final_y - 8);
+    // Note head dimensions (scaled with N_LINE_SP)
+    int head_w = (int)(N_LINE_SP * 1.1);
+    int head_h = (int)(N_LINE_SP * 0.75);
+
+    // Ledger lines when outside the staff
+    draw_ledger_lines(dc, nx, note_y, used_staff_top);
+
+    // Note head
+    wxColour note_col = ThemeManager::toWxColour(m_engine.m_tracker_note);
+    dc.SetBrush(wxBrush(note_col));
+    dc.SetPen(wxPen(note_col));
+    dc.DrawEllipse(nx - head_w / 2, note_y - head_h / 2, head_w, head_h);
+
+    // Stem: if note is in the lower half of staff → stem up on right side;
+    //       if in upper half → stem down on left side.
+    int staff_mid = used_staff_top + 2 * N_LINE_SP;
+    int stem_len  = 3 * N_LINE_SP;
+    dc.SetPen(wxPen(note_col));
+    if (note_y >= staff_mid) {
+        // Stem up
+        dc.DrawLine(nx + head_w / 2 - 1, note_y,
+                    nx + head_w / 2 - 1, note_y - stem_len);
+    } else {
+        // Stem down
+        dc.DrawLine(nx - head_w / 2 + 1, note_y,
+                    nx - head_w / 2 + 1, note_y + stem_len);
+    }
+
+    // Accidental (sharp ♯ or flat ♭)
+    if (s_is_sharp[pitch]) {
+        wxFont acc_font(N_LINE_SP, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
+        dc.SetFont(acc_font);
+        dc.SetTextForeground(note_col);
+        // Unicode ♯ U+266F
+        dc.DrawText(wxString::FromUTF8("\xE2\x99\xAF"), nx - head_w - 2, note_y - N_LINE_SP / 2);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Main draw
+// ---------------------------------------------------------------------------
 
 void NotationView::draw(wxDC& dc) {
+    wxSize vsz = GetVirtualSize();
     dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_bg)));
-    dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_bg)));
-    wxSize virtual_size = GetVirtualSize();
-    dc.DrawRectangle(0, 0, virtual_size.GetWidth(), virtual_size.GetHeight());
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawRectangle(0, 0, vsz.GetWidth(), vsz.GetHeight());
 
-    int track_h = 120;
-    int header_w = 120;
     int num_tracks = (int)m_engine.track_count();
-    auto order = m_engine.order_list();
+    auto order     = m_engine.order_list();
     int total_rows = get_total_ticks();
-    int full_tw = tick_to_x(total_rows);
+    int full_tw    = tick_to_x(total_rows);
 
     for (int t = 0; t < num_tracks; ++t) {
         auto& track_obj = m_engine.track(t);
         Instrument* inst = track_obj.instrument();
-        if (!inst || (inst->type() != InstrumentType::SoundFont && 
-                      inst->type() != InstrumentType::Plugin && 
-                      inst->type() != InstrumentType::Midi)) continue;
+        if (!inst) continue;
 
-        int ty = 30 + t * track_h;
-        if (ty > virtual_size.GetHeight()) break;
+        int ty = 30 + t * N_TRACK_H;
+        if (ty > vsz.GetHeight()) break;
 
+        // --- Header column ---
         dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_bg_color)));
         dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_fg_color)));
-        dc.DrawRectangle(0, ty, header_w, track_h - 1);
+        dc.DrawRectangle(0, ty, N_HEADER_W, N_TRACK_H - 1);
 
-        wxFont bold_font(11, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
+        wxFont bold_font(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
         dc.SetFont(bold_font);
         dc.SetTextForeground(ThemeManager::toWxColour(m_engine.m_fg_color));
-        wxString name = track_obj.name().substr(0, 14);
-        dc.DrawText(name, 5, ty + 5);
+        dc.DrawText(track_obj.name().substr(0, 14), 5, ty + 5);
 
-        wxFont normal_font(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
-        dc.SetFont(normal_font);
+        wxFont small_font(8, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
+        dc.SetFont(small_font);
         dc.SetTextForeground(ThemeManager::toWxColour(m_engine.m_tracker_text));
-        wxString inst_name = inst->name().substr(0, 18);
-        dc.DrawText(inst_name, 5, ty + 20);
-        
+        dc.DrawText(inst->name().substr(0, 18), 5, ty + 19);
+
         const char* type_str = "";
-        switch(inst->type()) {
-            case InstrumentType::Sampler: type_str = "[Sampler]"; break;
+        switch (inst->type()) {
+            case InstrumentType::Sampler:   type_str = "[Sampler]";   break;
             case InstrumentType::SoundFont: type_str = "[SoundFont]"; break;
-            case InstrumentType::Plugin: type_str = "[Plugin]"; break;
-            case InstrumentType::Midi: type_str = "[MIDI]"; break;
-            default: type_str = "[None]"; break;
+            case InstrumentType::Plugin:    type_str = "[Plugin]";    break;
+            case InstrumentType::Midi:      type_str = "[MIDI]";      break;
+            case InstrumentType::Voice:     type_str = "[Voice]";     break;
+            default:                        type_str = "[None]";      break;
         }
-        dc.DrawText(type_str, 5, ty + 33);
+        dc.DrawText(type_str, 5, ty + 31);
 
         const char* clef_str = "";
         int notation_type = (int)track_obj.notation();
-        switch(notation_type) {
-            case 0: clef_str = "Treble clef"; break;
-            case 1: clef_str = "Bass clef"; break;
-            case 2: clef_str = "Grand staff"; break;
+        switch (notation_type) {
+            case 0: clef_str = "Treble";     break;
+            case 1: clef_str = "Bass";       break;
+            case 2: clef_str = "Grand";      break;
             case 3: clef_str = "Percussion"; break;
-            default: clef_str = "Unknown"; break;
+            default: clef_str = "?"; break;
         }
-        dc.DrawText(clef_str, 5, ty + 46);
+        dc.DrawText(clef_str, 5, ty + 43);
 
-        int staff_type = (int)track_obj.notation();
-        int staff_x = header_w;
+        // Divider between header and score area
         dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_text)));
-        dc.DrawLine(staff_x, ty + 10, staff_x, ty + track_h - 10); 
-        
-        draw_staff(dc, staff_x, ty, full_tw, staff_type);
+        dc.DrawLine(N_HEADER_W, ty, N_HEADER_W, ty + N_TRACK_H - 1);
 
+        // --- Score area ---
+        int staff_type = notation_type;
+        int staff_x    = N_HEADER_W;   // staff lines span the full score area
+        int notes_x0   = staff_x + N_CLEF_W;  // notes start after clef+time-sig
+
+        // Staff lines and clef (drawn from header edge; clef fits in N_CLEF_W)
+        draw_staff(dc, staff_x, ty, full_tw + N_CLEF_W, staff_type);
+
+        // Notes per pattern, with bar lines between patterns
         int rows_done = 0;
+        bool first_pat = true;
         for (auto pat_idx : order) {
             auto& pat = m_engine.pattern(pat_idx);
             int pat_rows = (int)pat.row_count();
-            int px = staff_x + tick_to_x(rows_done);
+            int pat_px   = notes_x0 + tick_to_x(rows_done);
+
+            // Bar line at pattern boundary (except before the first pattern)
+            if (!first_pat) {
+                dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_text)));
+                int bar_x = pat_px;
+                dc.DrawLine(bar_x, ty + N_STAFF_Y,
+                            bar_x, ty + N_STAFF_Y + 4 * N_LINE_SP);
+            }
+            first_pat = false;
+
             size_t num_cols = pat.column_count(t);
             for (int r = 0; r < pat_rows; ++r) {
                 for (size_t c = 0; c < num_cols; ++c) {
                     const auto& ev = pat.event(t, r, c);
                     if (ev.note < 128) {
-                        draw_note(dc, px + tick_to_x(r), ty, ev.note, staff_type);
+                        int nx = pat_px + tick_to_x(r);
+                        draw_note(dc, nx, ty, ev.note, staff_type);
                     }
                 }
             }
             rows_done += pat_rows;
         }
+
+        // Bottom separator
+        dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_fg_color)));
+        dc.DrawLine(0, ty + N_TRACK_H - 1, vsz.GetWidth(), ty + N_TRACK_H - 1);
     }
 
+    // --- Playhead ---
     if (m_engine.transport_state() != TransportState::Stopped) {
-        int play_x = header_w + tick_to_x((int)m_engine.m_current_row);
+        int play_x = N_HEADER_W + N_CLEF_W + tick_to_x((int)m_engine.m_current_row);
         dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_cursor)));
-        dc.DrawLine(play_x, 0, play_x, virtual_size.GetHeight());
+        dc.DrawLine(play_x, 0, play_x, vsz.GetHeight());
     }
 
+    // --- Selection overlay ---
     if (m_sel_start_tick != -1 && m_sel_end_tick != -1) {
-        int s1 = std::min(m_sel_start_tick, m_sel_end_tick);
-        int s2 = std::max(m_sel_start_tick, m_sel_end_tick);
-        int sx1 = header_w + tick_to_x(s1);
-        int sx2 = header_w + tick_to_x(s2);
-        
+        int s1  = std::min(m_sel_start_tick, m_sel_end_tick);
+        int s2  = std::max(m_sel_start_tick, m_sel_end_tick);
+        int sx1 = N_HEADER_W + N_CLEF_W + tick_to_x(s1);
+        int sx2 = N_HEADER_W + N_CLEF_W + tick_to_x(s2);
         wxColour sel_col = ThemeManager::toWxColour(m_engine.m_selection_color);
         dc.SetBrush(wxBrush(wxColour(sel_col.Red(), sel_col.Green(), sel_col.Blue(), 64)));
         dc.SetPen(*wxTRANSPARENT_PEN);
-        dc.DrawRectangle(sx1, 20, sx2 - sx1, virtual_size.GetHeight() - 20);
+        dc.DrawRectangle(sx1, 20, sx2 - sx1, vsz.GetHeight() - 20);
     }
 }
 
 void NotationView::OnMouseDown(wxMouseEvent& event) {
     int x, y;
     CalcUnscrolledPosition(event.GetX(), event.GetY(), &x, &y);
-    int header_w = 120;
-    if (x > header_w) {
+    if (x > N_HEADER_W + N_CLEF_W) {
         m_is_selecting = true;
-        m_sel_start_tick = x_to_tick(x - header_w);
+        m_sel_start_tick = x_to_tick(x - N_HEADER_W - N_CLEF_W);
         m_sel_end_tick = m_sel_start_tick;
         Refresh();
     }
@@ -476,9 +660,8 @@ void NotationView::OnMouseDrag(wxMouseEvent& event) {
     if (m_is_selecting) {
         int x, y;
         CalcUnscrolledPosition(event.GetX(), event.GetY(), &x, &y);
-        int header_w = 120;
-        if (x > header_w) {
-            m_sel_end_tick = x_to_tick(x - header_w);
+        if (x > N_HEADER_W + N_CLEF_W) {
+            m_sel_end_tick = x_to_tick(x - N_HEADER_W - N_CLEF_W);
             Refresh();
         }
     }

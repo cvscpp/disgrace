@@ -45,9 +45,12 @@ public:
 
 private:
     void draw_staff(wxDC& dc, int tx, int ty, int tw, int type);
-    void draw_note(wxDC& dc, int nx, int ny, int note, int staff_type);
-    void draw_clef_treble(wxDC& dc, int x, int y);
-    void draw_clef_bass(wxDC& dc, int x, int y);
+    void draw_note(wxDC& dc, int nx, int track_y, int note, int staff_type);
+    void draw_ledger_lines(wxDC& dc, int nx, int note_y, int staff_top);
+    void draw_clef_treble(wxDC& dc, int x, int staff_top_y);
+    void draw_clef_bass(wxDC& dc, int x, int staff_top_y);
+    void draw_clef_perc(wxDC& dc, int x, int staff_top_y);
+    void draw_time_sig(wxDC& dc, int x, int staff_top_y, int n, int d);
     void on_preview_track(wxCommandEvent& event);
 
     int get_total_ticks();

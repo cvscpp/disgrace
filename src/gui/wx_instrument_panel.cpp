@@ -849,6 +849,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_voice_tts_mode_ch = new wxChoice(m_voice_editor, wxID_ANY);
     m_voice_tts_mode_ch->Append("Real-time (espeak-ng)");
     m_voice_tts_mode_ch->Append("Offline (Festival)");
+    m_voice_tts_mode_ch->Append("Neural (Piper)");
     m_voice_tts_mode_ch->SetSelection(0);
     m_voice_tts_mode_ch->Bind(wxEVT_CHOICE, [this](wxCommandEvent& ev) {
         if (m_selected_instrument >= 0) {
@@ -856,13 +857,34 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
             if (inst.type() == InstrumentType::Voice) {
                 VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
                 int sel = ev.GetSelection();
-                TTSMode mode = (sel == 0) ? TTSMode::RealTimeEspeak : TTSMode::OfflineFestival;
+                TTSMode mode = (sel == 0) ? TTSMode::RealTimeEspeak
+                             : (sel == 1) ? TTSMode::OfflineFestival
+                             :              TTSMode::OfflinePiper;
                 voice->set_tts_mode(mode);
+                m_voice_piper_row->Show(mode == TTSMode::OfflinePiper);
+                m_voice_editor->Layout();
             }
         }
     });
     voice_tts_sizer->Add(m_voice_tts_mode_ch, 1, wxEXPAND | wxALL, 5);
     voice_sizer->Add(voice_tts_sizer, 0, wxEXPAND | wxALL, 5);
+
+    // Piper model row — shown only when Neural (Piper) mode is active
+    m_voice_piper_row = new wxPanel(m_voice_editor, wxID_ANY);
+    wxBoxSizer* piper_row_sizer = new wxBoxSizer(wxHORIZONTAL);
+    piper_row_sizer->Add(new wxStaticText(m_voice_piper_row, wxID_ANY, "Model (.onnx):"), 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    m_voice_piper_model_tc = new wxTextCtrl(m_voice_piper_row, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_READONLY);
+    m_voice_piper_model_tc->Bind(wxEVT_LEFT_DCLICK, [this](wxMouseEvent&) {
+        // Double-click also opens the file dialog
+        wxCommandEvent dummy; on_piper_browse(dummy);
+    });
+    piper_row_sizer->Add(m_voice_piper_model_tc, 1, wxEXPAND | wxALL, 5);
+    wxButton* piper_browse_btn = new wxButton(m_voice_piper_row, wxID_ANY, "...", wxDefaultPosition, wxSize(30, -1));
+    piper_browse_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent& ev) { on_piper_browse(ev); });
+    piper_row_sizer->Add(piper_browse_btn, 0, wxALL, 5);
+    m_voice_piper_row->SetSizer(piper_row_sizer);
+    m_voice_piper_row->Show(false); // hidden until Piper mode selected
+    voice_sizer->Add(m_voice_piper_row, 0, wxEXPAND | wxALL, 0);
     
     // Language selector (populated from installed espeak-ng voices)
     wxBoxSizer* voice_lang_sizer = new wxBoxSizer(wxHORIZONTAL);
@@ -1484,7 +1506,12 @@ void InstrumentPanel::update_editor() {
             m_voice_editor->Show();
             VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
             TTSMode mode = voice->tts_mode();
-            m_voice_tts_mode_ch->SetSelection((mode == TTSMode::RealTimeEspeak) ? 0 : 1);
+            int mode_sel = (mode == TTSMode::RealTimeEspeak) ? 0
+                         : (mode == TTSMode::OfflineFestival) ? 1
+                         :                                      2;
+            m_voice_tts_mode_ch->SetSelection(mode_sel);
+            m_voice_piper_model_tc->ChangeValue(wxString::FromUTF8(voice->get_piper_model()));
+            m_voice_piper_row->Show(mode == TTSMode::OfflinePiper);
 
             // Language: find matching entry by language code stored as client data
             {
@@ -2143,8 +2170,23 @@ void InstrumentPanel::on_move_sample_down(wxCommandEvent& event) {
     }
 }
 
+void InstrumentPanel::on_piper_browse(wxCommandEvent& /*event*/) {
+    if (m_selected_instrument < 0) return;
+    auto& inst = m_engine.instrument(m_selected_instrument);
+    if (inst.type() != InstrumentType::Voice) return;
+
+    wxFileDialog dlg(this, "Select Piper ONNX model", "", "",
+                     "Piper model files (*.onnx)|*.onnx|All files (*)|*",
+                     wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (dlg.ShowModal() != wxID_OK) return;
+
+    std::string path = dlg.GetPath().ToStdString();
+    VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);
+    voice->set_piper_model(path);
+    m_voice_piper_model_tc->ChangeValue(wxString::FromUTF8(path));
+}
+
 void InstrumentPanel::on_plugin_scan(wxCommandEvent& event) {
-    m_plugin_browser->Clear();
     m_plugin_map.clear();
     std::vector<std::string> paths = {"/usr/lib/dssi", "/usr/local/lib/dssi", "/usr/lib/x86_64-linux-gnu/dssi"};
     for (const auto& path : paths) {

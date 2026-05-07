@@ -79,6 +79,7 @@ disgrace_CXXFLAGS = \
     $(SAMPLERATE_CFLAGS) \
     $(ESPEAK_CFLAGS) \
     $(FESTIVAL_CFLAGS) \
+    $(PIPER_CFLAGS) \
     $(SNDTOUCH_CFLAGS) \
     $(NLOHMANN_JSON_CFLAGS) \
     $(FFTW3_CFLAGS) \
@@ -94,6 +95,7 @@ disgrace_LDADD = \
     $(SAMPLERATE_LIBS) \
     $(ESPEAK_LIBS) \
     $(FESTIVAL_LIBS) \
+    $(PIPER_LIBS) \
     $(SNDTOUCH_LIBS) \
     $(FFTW3_LIBS) \
     $(LIBARCHIVE_LIBS) \

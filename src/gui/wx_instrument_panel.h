@@ -140,6 +140,8 @@ private:
 
     wxPanel* m_voice_editor;
     wxChoice* m_voice_tts_mode_ch;
+    wxPanel*    m_voice_piper_row;      // shown only in Piper mode
+    wxTextCtrl* m_voice_piper_model_tc; // displays/edits the .onnx path
     wxChoice*   m_voice_language_ch;
     wxChoice*   m_voice_gender_ch;
     wxChoice*   m_voice_variant_ch;
@@ -214,6 +216,7 @@ private:
     void on_redo(wxCommandEvent& event);
 
     void on_plugin_scan(wxCommandEvent& event);
+    void on_piper_browse(wxCommandEvent& event);
     void on_plugin_select(wxCommandEvent& event);
     void on_plugin_param(wxScrollEvent& event);
 

@@ -103,6 +103,40 @@ fi
 CPPFLAGS="$saved_CPPFLAGS"
 AC_LANG_POP([C++])
 
+# Piper TTS (neural TTS) — optional, requires libpiper + libonnxruntime.
+# Try pkg-config first, then fall back to manual header + library search.
+AC_LANG_PUSH([C++])
+saved_CPPFLAGS="$CPPFLAGS"
+saved_LIBS="$LIBS"
+PKG_CHECK_MODULES([PIPER], [piper], [
+    AC_DEFINE([HAVE_PIPER], [1], [Define if piper TTS is available])
+], [
+    # pkg-config not available for piper — search common install prefixes
+    PIPER_INCLUDE_DIR=""
+    for dir in /usr/include /usr/local/include /opt/piper/include; do
+        if test -f "$dir/piper/piper.hpp"; then
+            PIPER_INCLUDE_DIR="$dir"
+            break
+        fi
+    done
+    if test -n "$PIPER_INCLUDE_DIR"; then
+        CPPFLAGS="$CPPFLAGS -I$PIPER_INCLUDE_DIR"
+        AC_CHECK_HEADER([piper/piper.hpp], [
+            AC_CHECK_LIB([piper], [main], [
+                PIPER_CFLAGS="-I$PIPER_INCLUDE_DIR"
+                PIPER_LIBS="-lpiper -lonnxruntime"
+                AC_SUBST([PIPER_CFLAGS])
+                AC_SUBST([PIPER_LIBS])
+                AC_DEFINE([HAVE_PIPER], [1], [Define if piper TTS is available])
+            ], [AC_MSG_WARN([piper header found but libpiper not found — Piper TTS disabled])],
+            [-lonnxruntime])
+        ])
+    fi
+])
+CPPFLAGS="$saved_CPPFLAGS"
+LIBS="$saved_LIBS"
+AC_LANG_POP([C++])
+
 # FFTW3
 PKG_CHECK_MODULES([FFTW3], [fftw3])
 

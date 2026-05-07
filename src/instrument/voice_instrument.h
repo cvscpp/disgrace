@@ -23,6 +23,9 @@
 #include <memory>
 #include <list>
 #include <mutex>
+#ifdef HAVE_PIPER
+#include <piper/piper.hpp>
+#endif
 
 namespace disgrace_ns {
 
@@ -31,7 +34,8 @@ class VoiceSynthesisWorker;
 
 enum class TTSMode {
     RealTimeEspeak,  // Fast, ~100-200ms per phrase
-    OfflineFestival  // Better quality, ~500ms-2s per phrase
+    OfflineFestival, // Better quality, ~500ms-2s per phrase
+    OfflinePiper     // Neural TTS via Piper, requires a .onnx model file
 };
 
 class VoiceInstrument : public Instrument {
@@ -67,6 +71,10 @@ public:
     // Return a deduplicated list of {language-code, display-name} pairs from
     // installed espeak-ng voices.  Populated once on first call.
     static std::vector<std::pair<std::string,std::string>> list_espeak_languages();
+
+    // Piper TTS configuration (used when tts_mode == TTSMode::OfflinePiper)
+    void set_piper_model(const std::string& model_path);
+    const std::string& get_piper_model() const { return m_piper_model; }
     
     void set_speed(float speed) { m_speed = std::max(0.5f, std::min(2.0f, speed)); }  // 0.5x to 2.0x
     float get_speed() const { return m_speed; }
@@ -125,6 +133,14 @@ private:
     int m_variant = 0;               // variant index within matching voices (0=first match)
     float m_speed = 1.0f;            // 0.5–2.0 playback speed
     float m_pitch_accent = 0.5f;     // 0.0–1.0 pitch accent (for Festival)
+
+    // Piper TTS settings
+    std::string m_piper_model;  // Path to .onnx model file (required for Piper mode)
+#ifdef HAVE_PIPER
+    std::unique_ptr<piper::Voice> m_piper_voice;  // Loaded ONNX model — expensive, cached
+    std::string m_piper_loaded_model;             // Which model is currently loaded
+    bool load_piper_voice();
+#endif
     
     // Worker thread (raw pointer, created/destroyed in start/stop)
     VoiceSynthesisWorker* m_worker = nullptr;
@@ -184,6 +200,7 @@ private:
     // TTS synthesis helpers
     bool synthesize_with_espeak(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r, int& out_rate);
     bool synthesize_with_festival(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r, int& out_rate);
+    bool synthesize_with_piper(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r, int& out_rate);
     bool load_wav_from_file(const std::string& filepath, std::vector<float>& out_l, std::vector<float>& out_r);
 };
 

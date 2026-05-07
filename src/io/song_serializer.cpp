@@ -150,6 +150,9 @@ namespace disgrace_ns
                 jinst["voice_variant"]  = voice.get_variant();
                 jinst["voice_speed"] = voice.get_speed();
                 jinst["voice_pitch_accent"] = voice.get_pitch_accent();
+                if (!voice.get_piper_model().empty()) {
+                    jinst["piper_model"] = voice.get_piper_model();
+                }
                 // Store voice texts for each phrase index (0-255)
                 json jvoice_texts = json::object();
                 for (size_t i = 0; i < 256; ++i) {
@@ -161,14 +164,15 @@ namespace disgrace_ns
                 if (!jvoice_texts.empty()) {
                     jinst["voice_texts"] = jvoice_texts;
                 }
-            } else if (inst.type() == InstrumentType::Plugin) {
-                try {
-                    const auto& dssi = static_cast<const DSSIInstrument&>(inst);
-                    jinst["plugin_path"] = dssi.path();
-                    jinst["plugin_name"] = dssi.plugin_name();
-                    jinst["plugin_index"] = dssi.index();
-                    jinst["bank"] = dssi.bank();
-                    jinst["program"] = dssi.program();
+                } else if (inst.type() == InstrumentType::Plugin) {
+                    try {
+                        const auto& dssi = static_cast<const DSSIInstrument&>(inst);
+                        jinst["plugin_path"] = dssi.path();
+                        jinst["plugin_name"] = dssi.plugin_name();
+                        jinst["plugin_index"] = dssi.index();
+                        jinst["plugin_volume"] = dssi.volume();
+                        jinst["bank"] = dssi.bank();
+                        jinst["program"] = dssi.program();
                     
                     json jparams = json::array();
                     for (size_t p = 0; p < dssi.parameter_count(); ++p) {
@@ -331,6 +335,7 @@ namespace disgrace_ns
                     voice.set_variant(ji.value("voice_variant", 0));
                     voice.set_speed(ji.value("voice_speed", 1.0f));
                     voice.set_pitch_accent(ji.value("voice_pitch_accent", 0.5f));
+                    voice.set_piper_model(ji.value("piper_model", std::string("")));
                     // Load voice texts
                     if (ji.contains("voice_texts")) {
                         auto& jvoice_texts = ji["voice_texts"];
@@ -346,6 +351,7 @@ namespace disgrace_ns
                     
                     if (!path.empty()) {
                         if (dssi.load_plugin(path, ji.value("plugin_index", 0))) {
+                            dssi.set_volume(ji.value("plugin_volume", 0.25f));
                             dssi.load_program(ji.value("bank", 0), ji.value("program", 0));
                             if (ji.contains("parameters")) {
                                 auto& jparams = ji["parameters"];

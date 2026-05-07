@@ -32,18 +32,48 @@
 #ifdef HAVE_FESTIVAL
 #include <festival/festival.h>
 #endif
+#ifdef HAVE_PIPER
+#include <piper/piper.hpp>
+#endif
 #include <thread>
 
 namespace disgrace_ns {
 
-static std::mutex g_espeak_mutex;
-static int g_espeak_refcount = 0;
+// Forward declaration — defined later in this file
+static int espeak_callback(short* wav, int numsamples, espeak_EVENT* events);
+
+// espeak is initialized lazily — only when a synthesis call actually needs it.
+// This avoids initializing espeak when only Festival or Piper mode is used.
+static std::once_flag g_espeak_init_flag;
 static int g_espeak_sample_rate = 22050; // Default fallback
+
+static void do_espeak_init() {
+    int rate = espeak_Initialize(AUDIO_OUTPUT_RETRIEVAL, 500, nullptr, 0);
+    if (rate > 0) {
+        g_espeak_sample_rate = rate;
+        espeak_SetSynthCallback(espeak_callback);
+    }
+}
+
+static void ensure_espeak() {
+    std::call_once(g_espeak_init_flag, do_espeak_init);
+}
 
 #ifdef HAVE_FESTIVAL
 static std::mutex g_festival_mutex;
 static int g_festival_refcount = 0;
 #endif
+
+#ifdef HAVE_PIPER
+// Shared piper config — useESpeak=false because we manage espeak's lifecycle ourselves.
+// Piper will still use the globally-initialized espeak for phonemization.
+static std::mutex g_piper_mutex;
+static int g_piper_refcount = 0;
+static piper::PiperConfig g_piper_config;
+#endif
+
+// Serializes all TTS synthesis calls that internally use espeak (both espeak and piper).
+static std::mutex g_tts_synth_mutex;
 
 // Context for espeak callback
 struct EspeakContext {
@@ -84,20 +114,8 @@ static int espeak_callback(short* wav, int numsamples, espeak_EVENT* events) {
 VoiceInstrument::VoiceInstrument(Engine* engine)
     : m_engine(engine)
 {
-    set_type(InstrumentType::Voice); // Changed from None to Voice
+    set_type(InstrumentType::Voice);
     set_name("Voice");
-
-    std::lock_guard<std::mutex> lock(g_espeak_mutex);
-    if (g_espeak_refcount == 0) {
-        // Initialize espeak-ng
-        // AUDIO_OUTPUT_RETRIEVAL means it will call our callback instead of playing
-        int rate = espeak_Initialize(AUDIO_OUTPUT_RETRIEVAL, 500, nullptr, 0);
-        if (rate > 0) {
-            g_espeak_sample_rate = rate;
-            espeak_SetSynthCallback(espeak_callback);
-        }
-    }
-    g_espeak_refcount++;
 
 #ifdef HAVE_FESTIVAL
     {
@@ -110,22 +128,37 @@ VoiceInstrument::VoiceInstrument(Engine* engine)
         g_festival_refcount++;
     }
 #endif
+
+#ifdef HAVE_PIPER
+    {
+        std::lock_guard<std::mutex> lock(g_piper_mutex);
+        if (g_piper_refcount == 0) {
+            // useESpeak=false: espeak lifecycle is already managed by our code above.
+            // Piper's phonemization will use the globally-initialized espeak state.
+            g_piper_config.useESpeak = false;
+            piper::initialize(g_piper_config);
+        }
+        g_piper_refcount++;
+    }
+#endif
 }
 
 VoiceInstrument::~VoiceInstrument() {
-    {
-        std::lock_guard<std::mutex> lock(g_espeak_mutex);
-        g_espeak_refcount--;
-        if (g_espeak_refcount == 0) {
-            espeak_Terminate();
-        }
-    }
-
 #ifdef HAVE_FESTIVAL
     {
         std::lock_guard<std::mutex> lock(g_festival_mutex);
         g_festival_refcount--;
         // Festival doesn't have a standard terminate() that works reliably across calls
+    }
+#endif
+
+#ifdef HAVE_PIPER
+    {
+        std::lock_guard<std::mutex> lock(g_piper_mutex);
+        g_piper_refcount--;
+        if (g_piper_refcount == 0) {
+            piper::terminate(g_piper_config);
+        }
     }
 #endif
 }
@@ -323,9 +356,12 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq, 
         }
     }
     
-    fprintf(stderr, "[VoiceInst] Synthesizing: \"%s\" (pitch %.2f, mode %s)\n", 
-            text.c_str(), pitch_factor, m_tts_mode == TTSMode::RealTimeEspeak ? "eSpeak" : "Festival");
-    
+    const char* mode_name = (m_tts_mode == TTSMode::RealTimeEspeak) ? "eSpeak"
+                          : (m_tts_mode == TTSMode::OfflineFestival) ? "Festival"
+                          : "Piper";
+    fprintf(stderr, "[VoiceInst] Synthesizing: \"%s\" (pitch %.2f, mode %s)\n",
+            text.c_str(), pitch_factor, mode_name);
+
     // Synthesize base text (at 440 Hz)
     m_perf_metrics.total_synthesized++;  // Count TTS synthesis
     std::vector<float> out_l, out_r;
@@ -351,6 +387,15 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq, 
                 return false;
             }
 #endif
+            break;
+        case TTSMode::OfflinePiper:
+            if (!synthesize_with_piper(text, out_l, out_r, source_rate)) {
+                fprintf(stderr, "[VoiceInst] Piper synthesis FAILED; falling back to eSpeak\n");
+                if (!synthesize_with_espeak(text, out_l, out_r, source_rate)) {
+                    fprintf(stderr, "[VoiceInst] eSpeak fallback also FAILED\n");
+                    return false;
+                }
+            }
             break;
     }
     
@@ -403,6 +448,8 @@ bool VoiceInstrument::synthesize_text(const std::string& text, float base_freq, 
 
 bool VoiceInstrument::synthesize_with_espeak(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r, int& out_rate) {
     if (text.empty()) return false;
+
+    ensure_espeak(); // lazy-initialize espeak on first actual use
     out_rate = g_espeak_sample_rate;
 
     // Select voice by language and gender using espeak_VOICE properties.
@@ -422,11 +469,8 @@ bool VoiceInstrument::synthesize_with_espeak(const std::string& text, std::vecto
     ctx.right = &out_r;
     ctx.completed = false;
 
-    // Use a lock to ensure only one thread synthesizes at a time
-    // since espeak callback is global and we use user_data to distinguish messages,
-    // but to be safe with shared resources we'll serialize.
-    static std::mutex synth_mutex;
-    std::lock_guard<std::mutex> lock(synth_mutex);
+    // Serialize all espeak/piper synthesis since both touch global espeak state.
+    std::lock_guard<std::mutex> lock(g_tts_synth_mutex);
 
     unsigned int unique_id = 0;
     espeak_ERROR err = espeak_Synth(text.c_str(), text.size() + 1, 0, POS_CHARACTER, 0, 
@@ -507,6 +551,88 @@ bool VoiceInstrument::synthesize_with_festival(const std::string& text, std::vec
     return false;
 #endif
 }
+
+bool VoiceInstrument::synthesize_with_piper(const std::string& text, std::vector<float>& out_l, std::vector<float>& out_r, int& out_rate) {
+#ifdef HAVE_PIPER
+    if (text.empty()) return false;
+
+    if (m_piper_model.empty()) {
+        fprintf(stderr, "[VoiceInst] Piper: no model path set (use set_piper_model())\n");
+        return false;
+    }
+
+    // (Re)load the voice if the model path changed or first call
+    if (!m_piper_voice || m_piper_loaded_model != m_piper_model) {
+        // Piper uses espeak for phonemization — ensure it is initialized first
+        ensure_espeak();
+        if (!load_piper_voice()) return false;
+    }
+
+    // Apply speed via lengthScale (piper: >1 = slower, <1 = faster)
+    m_piper_voice->config.lengthScale = 1.0f / m_speed;
+
+    std::vector<int16_t> audio_buffer;
+    piper::SynthesisResult result;
+
+    try {
+        // Serialize around espeak phonemization used inside piper::textToAudio
+        std::lock_guard<std::mutex> lock(g_tts_synth_mutex);
+        piper::textToAudio(g_piper_config, *m_piper_voice, text, audio_buffer, result, nullptr);
+    } catch (const std::exception& e) {
+        fprintf(stderr, "[VoiceInst] Piper: synthesis exception: %s\n", e.what());
+        return false;
+    }
+
+    if (audio_buffer.empty()) return false;
+
+    out_rate = m_piper_voice->config.sampleRate;
+    out_l.reserve(audio_buffer.size());
+    out_r.reserve(audio_buffer.size());
+    for (int16_t s : audio_buffer) {
+        float f = s / 32768.0f;
+        out_l.push_back(f);
+        out_r.push_back(f);
+    }
+
+    return true;
+#else
+    (void)text; (void)out_l; (void)out_r; (void)out_rate;
+    return false;
+#endif
+}
+
+#ifdef HAVE_PIPER
+bool VoiceInstrument::load_piper_voice() {
+    auto voice = std::make_unique<piper::Voice>();
+    // Piper expects the JSON config at <model>.json
+    std::string config_path = m_piper_model + ".json";
+    try {
+        std::lock_guard<std::mutex> lock(g_piper_mutex);
+        piper::loadVoice(g_piper_config, m_piper_model, config_path, *voice,
+                         std::nullopt, /*useCuda=*/false);
+    } catch (const std::exception& e) {
+        fprintf(stderr, "[VoiceInst] Piper: failed to load model '%s': %s\n",
+                m_piper_model.c_str(), e.what());
+        return false;
+    }
+    m_piper_voice = std::move(voice);
+    m_piper_loaded_model = m_piper_model;
+    fprintf(stderr, "[VoiceInst] Piper: model loaded: %s (rate=%d Hz)\n",
+            m_piper_model.c_str(), m_piper_voice->config.sampleRate);
+    return true;
+}
+
+void VoiceInstrument::set_piper_model(const std::string& model_path) {
+    m_piper_model = model_path;
+    // Unload the old voice — next synthesis call will reload
+    m_piper_voice.reset();
+    m_piper_loaded_model.clear();
+}
+#else
+void VoiceInstrument::set_piper_model(const std::string& model_path) {
+    m_piper_model = model_path;
+}
+#endif
 
 bool VoiceInstrument::load_wav_from_file(const std::string& filepath, std::vector<float>& out_l, std::vector<float>& out_r) {
     out_l.clear();

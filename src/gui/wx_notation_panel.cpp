@@ -536,7 +536,7 @@ void NotationView::draw(wxDC& dc) {
     for (int t = 0; t < num_tracks; ++t) {
         auto& track_obj = m_engine.track(t);
         Instrument* inst = track_obj.instrument();
-        if (!inst) continue;
+        if (!inst || inst->type() == InstrumentType::Sampler) continue;
 
         int ty = 30 + t * N_TRACK_H;
         if (ty > vsz.GetHeight()) break;

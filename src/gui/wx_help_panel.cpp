@@ -31,8 +31,8 @@ void HelpPanel::load_documentation() {
 <table width="100%" border="0" cellpadding="4">
 <tr><td valign="top"><b>Project</b></td><td>Manage tracks and buses. Set instrument, notation type, output bus, velocity humanization and timing humanization per track.</td></tr>
 <tr><td valign="top"><b>Tracker</b></td><td>Pattern editor. Enter notes, volumes, effects. Supports multiple note sub-columns per track.</td></tr>
-<tr><td valign="top"><b>Tracks</b></td><td>Arrange patterns on a song timeline.</td></tr>
-<tr><td valign="top"><b>Notation</b></td><td>Piano roll view of the current pattern.</td></tr>
+<tr><td valign="top"><b>Tracks</b></td><td>Arrange patterns on a song timeline. Select audio regions and apply editing commands (Cut, Silence, <b>Beat Quantize</b>).</td></tr>
+<tr><td valign="top"><b>Notation</b></td><td>Staff notation view of all pitched tracks (SoundFont, Plugin, MIDI, Voice). Shows treble, bass, grand staff or percussion clef per track with ledger lines and bar lines.</td></tr>
 <tr><td valign="top"><b>Instrument</b></td><td>Load and manage instruments and samples.</td></tr>
 <tr><td valign="top"><b>Mixer</b></td><td>Per-track and bus gain, panning, DSP effects chain and spectrum analyzer.</td></tr>
 <tr><td valign="top"><b>Settings</b></td><td>Audio backend, MIDI, theme and GUI settings.</td></tr>
@@ -137,7 +137,7 @@ void HelpPanel::load_documentation() {
 <tr><td><b>XRNI</b></td><td>Renoise instrument format (ZIP archive with Instrument.xml + samples). Loaded directly from file; path stored as absolute reference.</td></tr>
 <tr><td><b>Plugin (DSSI/LV2)</b></td><td>External software synthesizer plugin.</td></tr>
 <tr><td><b>MIDI</b></td><td>External MIDI device output. Set channel, program and optional audio return.</td></tr>
-<tr><td><b>Voice</b></td><td>Text-to-speech synthesis (espeak-ng / Festival).</td></tr>
+<tr><td><b>Voice</b></td><td>Text-to-speech synthesis. Three engines: <b>espeak-ng</b> (fast, many languages), <b>Festival</b> (HMM-based), <b>Piper</b> (neural TTS via ONNX model &mdash; high quality; set the <code>.onnx</code> model file per instrument instance). espeak-ng is only initialised when actually used.</td></tr>
 </table>
 
 <h2>Sampler</h2>
@@ -164,29 +164,69 @@ void HelpPanel::load_documentation() {
 </ul>
 <p>Use the <b>+</b> / <b>&minus;</b> buttons to add or remove tracks and buses.</p>
 
+<h2>Tracks View</h2>
+<p>The Tracks view shows all patterns placed on a song timeline. Each track is a horizontal lane; sampler tracks display the waveform of the loaded sample. Use drag to create a time selection on a track.</p>
+<table width="100%" border="0" cellpadding="4">
+<tr><td valign="top"><b>Cut / Copy / Paste</b></td><td>Operate on the selected time range of the selected track. The clipboard holds raw sample audio.</td></tr>
+<tr><td valign="top"><b>Silence</b></td><td>Zero-fill the selected region in-place.</td></tr>
+<tr><td valign="top"><b>Insert (Gap)</b></td><td>Insert silence at the selection start, pushing content to the right.</td></tr>
+<tr><td valign="top"><b>Beat Quantize&hellip;</b></td><td>Rhythmically align the selected audio region to a beat grid. See below.</td></tr>
+</table>
+
+<h2>Beat Quantize</h2>
+<p>Beat Quantize detects transients in a selected audio region and time-stretches it so those beats land on a target rhythmic grid. Useful for tightening a recorded bass guitar to the metronome, or locking one track to another (e.g. bass to kick drum).</p>
+<h3>Workflow</h3>
+<ol>
+<li>In the <b>Tracks</b> view, left-click and drag on a <b>Sampler</b> track to select a time region.</li>
+<li>Right-click &rarr; <b>Beat Quantize&hellip;</b> (or click the toolbar button).</li>
+<li>Adjust <b>Onset Sensitivity</b> (1&ndash;100). Lower = only loud transients; higher = pick up quiet hits. A value of 30&ndash;50 works well for most material.</li>
+<li>Choose the target grid:
+  <ul>
+    <li><b>Metronome</b> &mdash; snaps to evenly-spaced beats at the current project BPM.</li>
+    <li><b>Track</b> &mdash; uses the detected onset positions of any other sampler track (e.g. choose the kick drum track to lock bass guitar to it).</li>
+  </ul>
+</li>
+<li>Set <b>Strength</b> (0&ndash;100%). 100% = hard snap to grid; lower values nudge beats toward the grid without fully snapping them (useful for a &ldquo;tightened but human&rdquo; feel).</li>
+<li>Click <b>Detect Onsets</b> &mdash; the dialog reports how many transients were found in the region.</li>
+<li>Click <b>Apply</b> &mdash; the region is warped in-place. The operation is undo-able.</li>
+</ol>
+<p><b>Tip:</b> If too few onsets are detected, increase sensitivity. If too many spurious hits appear, lower it or raise the Strength to reduce their effect.</p>
+
+<h2>Notation View</h2>
+<p>Displays pitched tracks as standard staff notation. Sampler tracks are excluded (they play at a fixed base pitch). Clef type is set per-track in the <b>Project</b> tab.</p>
+<table width="100%" border="0" cellpadding="4">
+<tr><td valign="top"><b>Treble clef</b></td><td>Standard violin / guitar / vocal range (G4 on the second line from bottom).</td></tr>
+<tr><td valign="top"><b>Bass clef</b></td><td>Bass / cello / tuba range (F3 on the fourth line from bottom).</td></tr>
+<tr><td valign="top"><b>Grand staff</b></td><td>Treble + Bass staves joined by a brace; notes route automatically by octave.</td></tr>
+<tr><td valign="top"><b>Percussion</b></td><td>Two-bar bracket clef. Notes are displayed at their MIDI pitch position.</td></tr>
+</table>
+<p>Ledger lines are drawn automatically for notes above or below the five-line staff. Accidentals use standard sharp (&#x266F;) and flat (&#x266D;) symbols. Bar lines separate patterns. Right-click a track name &rarr; <b>Preview (LY)</b> to export the notation as LilyPond and open a PDF.</p>
+
+
 <h2>DSP Effects</h2>
-<p>Add effects to any track or bus strip in the <b>Mixer</b> tab. Chains can be saved/loaded as <code>.chain</code> files.</p>
+<p>Add effects to any track or bus strip in the <b>Mixer</b> tab. Chains can be saved/loaded as <code>.chain</code> files. Each effect includes a <b>Presets</b> menu with 3&ndash;7 named starting points.</p>
 <table width="100%" border="1" cellpadding="3">
 <tr><th>Effect</th><th>Description</th></tr>
-<tr><td>Gain</td><td>Volume adjustment with presets</td></tr>
+<tr><td>Gain</td><td>Volume adjustment (Unity, +6 dB, &minus;6 dB, &minus;12 dB, &minus;20 dB&hellip;)</td></tr>
 <tr><td>3-Band EQ</td><td>Low / Mid / High shelving equalizer</td></tr>
 <tr><td>Graphical EQ</td><td>12-band parametric equalizer</td></tr>
 <tr><td>Low-Pass Filter</td><td>Resonant low-pass filter</td></tr>
 <tr><td>High-Pass Filter</td><td>Resonant high-pass filter</td></tr>
-<tr><td>Delay</td><td>Echo with feedback and dry/wet mix</td></tr>
-<tr><td>Reverb</td><td>Schroeder algorithmic reverb</td></tr>
+<tr><td>Delay</td><td>Echo with configurable delay time (seconds), feedback and dry/wet mix</td></tr>
+<tr><td>Reverb</td><td>Schroeder algorithmic reverb (Room, Hall, Plate, Chamber, Spring&hellip;)</td></tr>
 <tr><td>Echo</td><td>Multi-tap echo with damping</td></tr>
-<tr><td>Compressor</td><td>Dynamics compression (threshold, ratio, attack, release)</td></tr>
+<tr><td>Compressor</td><td>Dynamics compression &mdash; threshold, ratio, attack, release, knee</td></tr>
 <tr><td>Limiter</td><td>Peak limiting with ceiling threshold</td></tr>
-<tr><td>Gate</td><td>Noise gate</td></tr>
+<tr><td>Gate</td><td>Noise gate with threshold, attack and release</td></tr>
 <tr><td>Phaser</td><td>All-pass modulation (rate, depth)</td></tr>
 <tr><td>Flanger</td><td>Time modulation with feedback</td></tr>
 <tr><td>Chorus</td><td>Stereo LFO modulation</td></tr>
-<tr><td>Distortion</td><td>Soft-clipping saturation</td></tr>
-<tr><td>Exciter</td><td>HPF + harmonic saturation</td></tr>
-<tr><td>Cabinet</td><td>Guitar cabinet simulation (IR-based)</td></tr>
-<tr><td>Stereo Expander</td><td>M/S width control</td></tr>
-<tr><td>Ring Modulator</td><td>Sine-carrier ring modulation</td></tr>
+<tr><td>Distortion</td><td>Soft-clipping saturation (Light Crunch, Heavy Drive, Fuzz, Overdrive&hellip;)</td></tr>
+<tr><td>Exciter</td><td>HPF + harmonic saturation for presence and air</td></tr>
+<tr><td>Cabinet</td><td>Guitar cabinet simulation; filters recomputed only on parameter change (RT-safe)</td></tr>
+<tr><td>Stereo Expander</td><td>M/S width control (Mono, Narrow, Stereo, Wide, Super Wide)</td></tr>
+<tr><td>Ring Modulator</td><td>Sine-carrier ring modulation; carrier frequency in Hz (1&ndash;5000)</td></tr>
+<tr><td>Mastering Filter</td><td>High-quality mastering EQ / filter for final bus polish</td></tr>
 </table>
 
 <h2>Audio Engine</h2>

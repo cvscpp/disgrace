@@ -546,13 +546,15 @@ void TrackerView::OnKeyDown(wxKeyEvent& event) {
             navigated = true;
             break;
         case WXK_DELETE:
-        case WXK_BACK:
             if (m_engine.m_record_enabled.load()) {
                 delete_current_field();
-                if (key == WXK_BACK) {
-                    m_cursor_row--;
-                    if (m_cursor_row < 0) m_cursor_row = (int)m_pattern->row_count() - 1;
-                }
+            }
+            break;
+        case WXK_BACK:
+            if (m_engine.m_record_enabled.load()) {
+                m_pattern->delete_row_track(m_cursor_row, m_cursor_track);
+                m_cursor_row--;
+                if (m_cursor_row < 0) m_cursor_row = (int)m_pattern->row_count() - 1;
             }
             break;
         case WXK_RETURN: {
@@ -990,13 +992,15 @@ bool TrackerView::handle_action(Action action) {
 
         case Action::InsertRow:
             if (m_engine.m_record_enabled.load()) {
-                m_pattern->insert_row(m_cursor_row);
+                m_pattern->insert_row_track(m_cursor_row, m_cursor_track);
                 Refresh(); return true;
             }
             break;
         case Action::DeleteRow:
             if (m_engine.m_record_enabled.load()) {
-                m_pattern->delete_row(m_cursor_row);
+                m_pattern->delete_row_track(m_cursor_row, m_cursor_track);
+                m_cursor_row--;
+                if (m_cursor_row < 0) m_cursor_row = (int)m_pattern->row_count() - 1;
                 Refresh(); return true;
             }
             break;

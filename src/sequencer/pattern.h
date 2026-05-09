@@ -91,6 +91,8 @@ public:
 
     void insert_row(size_t row);
     void delete_row(size_t row);
+    void insert_row_track(size_t row, size_t track);
+    void delete_row_track(size_t row, size_t track);
 
     uint8_t get_field(size_t track, size_t row, size_t abs_field) const;
     void set_field(size_t track, size_t row, size_t abs_field, uint8_t val);

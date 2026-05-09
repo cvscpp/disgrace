@@ -92,6 +92,32 @@ void Pattern::delete_row(size_t row) {
     }
 }
 
+void Pattern::insert_row_track(size_t row, size_t track) {
+    if (row >= m_row_count || track >= m_tracks.size()) return;
+    auto& td = m_tracks[track];
+    for (size_t r = m_row_count - 1; r > row; --r) {
+        for (size_t c = 0; c < MAX_COLS; ++c) {
+            td.data[r * MAX_COLS + c] = td.data[(r - 1) * MAX_COLS + c];
+        }
+    }
+    for (size_t c = 0; c < MAX_COLS; ++c) {
+        td.data[row * MAX_COLS + c] = TrackEvent();
+    }
+}
+
+void Pattern::delete_row_track(size_t row, size_t track) {
+    if (row >= m_row_count || track >= m_tracks.size()) return;
+    auto& td = m_tracks[track];
+    for (size_t r = row; r < m_row_count - 1; ++r) {
+        for (size_t c = 0; c < MAX_COLS; ++c) {
+            td.data[r * MAX_COLS + c] = td.data[(r + 1) * MAX_COLS + c];
+        }
+    }
+    for (size_t c = 0; c < MAX_COLS; ++c) {
+        td.data[(m_row_count - 1) * MAX_COLS + c] = TrackEvent();
+    }
+}
+
 uint8_t Pattern::get_field(size_t track, size_t row, size_t abs_field) const {
     size_t num_cols = column_count(track);
     if (abs_field < num_cols * 3) {

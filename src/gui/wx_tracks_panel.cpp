@@ -20,6 +20,7 @@
 #include <wx/artprov.h>
 #include <wx/dcclient.h>
 #include <wx/menu.h>
+#include <wx/msgdlg.h>
 #include "wx_tracks_panel.h"
 #include "wx_detached_frame.h"
 #include "../core/engine.h"
@@ -31,6 +32,7 @@
 #include "../edit/cmd_track_paste.h"
 #include "../edit/cmd_track_silence.h"
 #include "../edit/cmd_track_insert_silence.h"
+#include "wx_beat_quantize_dialog.h"
 #include "theme.h"
 
 namespace disgrace_ns {
@@ -97,7 +99,9 @@ enum {
     ID_MENU_SILENCE,
     ID_MENU_INSERT_SILENCE,
     ID_MENU_UNDO,
-    ID_MENU_REDO
+    ID_MENU_REDO,
+    ID_BEAT_QUANTIZE,
+    ID_MENU_BEAT_QUANTIZE
 };
 
 wxBEGIN_EVENT_TABLE(TracksPanel, wxPanel)
@@ -111,6 +115,7 @@ wxBEGIN_EVENT_TABLE(TracksPanel, wxPanel)
     EVT_BUTTON(ID_PASTE, TracksPanel::on_paste)
     EVT_BUTTON(ID_SILENCE, TracksPanel::on_silence)
     EVT_BUTTON(ID_INSERT_SILENCE, TracksPanel::on_insert_silence)
+    EVT_BUTTON(ID_BEAT_QUANTIZE, TracksPanel::on_beat_quantize)
 wxEND_EVENT_TABLE()
 
 TracksPanel::TracksPanel(wxWindow* parent, Engine& engine)
@@ -141,6 +146,10 @@ TracksPanel::TracksPanel(wxWindow* parent, Engine& engine)
     m_insert_btn = new wxButton(this, ID_INSERT_SILENCE, "Insert", wxDefaultPosition, wxSize(-1, btn_h));
     m_insert_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_PLUS, wxART_BUTTON, wxSize(16, 16)));
 
+    m_beat_quantize_btn = new wxButton(this, ID_BEAT_QUANTIZE, "Beat Quantize", wxDefaultPosition, wxSize(-1, btn_h));
+    m_beat_quantize_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_EXECUTABLE_FILE, wxART_BUTTON, wxSize(16, 16)));
+    m_beat_quantize_btn->SetToolTip("Quantize selected audio region to beat grid");
+
     m_detach_btn = new wxButton(this, ID_DETACH, "", wxDefaultPosition, wxSize(btn_h, btn_h));
     m_detach_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FULL_SCREEN, wxART_BUTTON, wxSize(16, 16)));
     m_detach_btn->SetToolTip("Detach / re-attach tracks view");
@@ -155,6 +164,7 @@ TracksPanel::TracksPanel(wxWindow* parent, Engine& engine)
     btn_sizer->Add(m_paste_btn, 0, wxALL, 2);
     btn_sizer->Add(m_silence_btn, 0, wxALL, 2);
     btn_sizer->Add(m_insert_btn, 0, wxALL, 2);
+    btn_sizer->Add(m_beat_quantize_btn, 0, wxALL, 2);
     btn_sizer->Add(m_detach_btn, 0, wxALL, 2);
 
     main_sizer->Add(btn_sizer, 0, wxEXPAND | wxALL, 2);
@@ -194,6 +204,7 @@ void TracksPanel::on_copy(wxCommandEvent& event) { m_tracks_view->do_copy(); }
 void TracksPanel::on_paste(wxCommandEvent& event) { m_tracks_view->do_paste(); }
 void TracksPanel::on_silence(wxCommandEvent& event) { m_tracks_view->do_silence(); }
 void TracksPanel::on_insert_silence(wxCommandEvent& event) { m_tracks_view->do_insert_silence(); }
+void TracksPanel::on_beat_quantize(wxCommandEvent& event) { m_tracks_view->do_beat_quantize(); }
 void TracksPanel::on_detach(wxCommandEvent& event) {
     if (m_detached_frame) {
         return;
@@ -660,6 +671,8 @@ void TracksView::OnContextMenu(wxContextMenuEvent& event) {
     menu.AppendSeparator();
     menu.Append(ID_MENU_UNDO, "Undo\tCtrl+Z", "Undo last operation");
     menu.Append(ID_MENU_REDO, "Redo\tCtrl+Y", "Redo last operation");
+    menu.AppendSeparator();
+    menu.Append(ID_MENU_BEAT_QUANTIZE, "Beat Quantize...", "Quantize audio to beat grid");
     
     // Bind menu events to operation handlers
     Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_cut(); }, ID_MENU_CUT);
@@ -669,6 +682,7 @@ void TracksView::OnContextMenu(wxContextMenuEvent& event) {
     Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_insert_silence(); }, ID_MENU_INSERT_SILENCE);
     Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_undo(); }, ID_MENU_UNDO);
     Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_redo(); }, ID_MENU_REDO);
+    Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_beat_quantize(); }, ID_MENU_BEAT_QUANTIZE);
     
     PopupMenu(&menu, event.GetPosition());
 }
@@ -1135,6 +1149,79 @@ void TracksView::do_undo() {
 void TracksView::do_redo() {
     m_engine.undo_stack().redo();
     Refresh();
+}
+
+void TracksView::do_beat_quantize() {
+    if (m_selected_track < 0 || m_sel_start_tick < 0 || m_sel_end_tick < 0) {
+        wxMessageBox("Please select a region on a sampler track first.",
+                     "Beat Quantize", wxOK | wxICON_INFORMATION);
+        return;
+    }
+
+    auto& track_obj = m_engine.track(m_selected_track);
+    auto* inst = track_obj.instrument();
+    auto* sampler = dynamic_cast<SampleInstrument*>(inst);
+    if (!sampler || sampler->sample_count() == 0) {
+        wxMessageBox("Beat Quantize only works on Sampler tracks with loaded samples.",
+                     "Beat Quantize", wxOK | wxICON_WARNING);
+        return;
+    }
+
+    size_t sample_idx = sampler->selected_sample();
+    auto src_data = sampler->get_sample(sample_idx).data;
+    if (!src_data || src_data->left.empty()) {
+        wxMessageBox("No audio data in the selected sample slot.",
+                     "Beat Quantize", wxOK | wxICON_WARNING);
+        return;
+    }
+
+    double bpm = m_engine.tempo();
+    int lpb    = (int)m_engine.lpb();
+    int sr     = (int)m_engine.sample_rate();
+    double samples_per_row = (sr * 60.0) / (bpm * lpb);
+
+    int t1 = std::min(m_sel_start_tick, m_sel_end_tick);
+    int t2 = std::max(m_sel_start_tick, m_sel_end_tick);
+    size_t s_start = (size_t)(t1 * samples_per_row);
+    size_t s_end   = (size_t)(t2 * samples_per_row);
+    s_start = std::min(s_start, src_data->left.size());
+    s_end   = std::min(s_end,   src_data->left.size());
+    if (s_start >= s_end) {
+        wxMessageBox("Selection is empty or too small.",
+                     "Beat Quantize", wxOK | wxICON_INFORMATION);
+        return;
+    }
+
+    // Extract selected region
+    auto region = std::make_shared<SampleData>();
+    region->sample_rate = src_data->sample_rate;
+    region->left.assign(src_data->left.begin() + s_start, src_data->left.begin() + s_end);
+    if (!src_data->right.empty())
+        region->right.assign(src_data->right.begin() + s_start, src_data->right.begin() + s_end);
+
+    BeatQuantizeDialog dlg(this, m_engine, region, m_selected_track);
+    if (dlg.ShowModal() != wxID_OK) return;
+
+    auto result = dlg.get_result();
+    if (!result || result->left.empty()) return;
+
+    size_t new_len = result->left.size();
+
+    sampler->push_undo(sample_idx);
+
+    src_data->left.erase(src_data->left.begin() + s_start, src_data->left.begin() + s_end);
+    src_data->left.insert(src_data->left.begin() + s_start, result->left.begin(), result->left.end());
+    if (!src_data->right.empty() && !result->right.empty()) {
+        src_data->right.erase(src_data->right.begin() + s_start, src_data->right.begin() + s_end);
+        src_data->right.insert(src_data->right.begin() + s_start, result->right.begin(), result->right.end());
+    }
+
+    update_view();
+    Refresh();
+    wxMessageBox(
+        wxString::Format("Beat quantize applied: %zu → %zu samples.",
+                         s_end - s_start, new_len),
+        "Beat Quantize", wxOK | wxICON_INFORMATION);
 }
 
 std::vector<TracksView::AudioRegion> TracksView::detect_overlaps(const SampleInstrument* sampler) {

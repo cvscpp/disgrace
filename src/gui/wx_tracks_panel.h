@@ -48,6 +48,7 @@ private:
     void on_paste(wxCommandEvent& event);
     void on_silence(wxCommandEvent& event);
     void on_insert_silence(wxCommandEvent& event);
+    void on_beat_quantize(wxCommandEvent& event);
 
     Engine& m_engine;
     int m_tab_index = -1;
@@ -61,6 +62,7 @@ private:
     wxButton* m_paste_btn;
     wxButton* m_silence_btn;
     wxButton* m_insert_btn;
+    wxButton* m_beat_quantize_btn;
     class TracksView* m_tracks_view;
     class DetachedFrame* m_detached_frame = nullptr;
 
@@ -100,6 +102,7 @@ public:
     void do_insert_silence();
     void do_undo();
     void do_redo();
+    void do_beat_quantize();
 
 private:
     int tick_to_x(int tick);

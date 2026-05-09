@@ -27,12 +27,20 @@ namespace disgrace_ns // Add this line
                               ::std::vector<float>& output,
                               float tempo_ratio)
     {
+        return stretch(input, output, tempo_ratio, 44100);
+    }
+
+    bool TimeStretch::stretch(const ::std::vector<float>& input,
+                              ::std::vector<float>& output,
+                              float tempo_ratio,
+                              int sample_rate)
+    {
         if (input.empty() || tempo_ratio <= 0.0f)
             return false;
 
         soundtouch::SoundTouch st;
         st.setChannels(1);
-        st.setSampleRate(44100); // TODO: parameterize
+        st.setSampleRate((uint32_t)sample_rate);
         st.setTempo(tempo_ratio);
 
         st.putSamples(input.data(), input.size());

@@ -66,7 +66,10 @@ disgrace_SOURCES = \
     sequencer/pattern.cpp \
     sequencer/sequencer.cpp \
     sequencer/timing.cpp \
-    analysis/fft_analyzer.cpp
+    analysis/fft_analyzer.cpp \
+    analysis/onset_detector.cpp \
+    audio/beat_quantizer.cpp \
+    gui/wx_beat_quantize_dialog.cpp
 
 dssi_sandbox_SOURCES = instrument/dssi_sandbox_main.cpp
 dssi_sandbox_CXXFLAGS = $(ALSA_CFLAGS)

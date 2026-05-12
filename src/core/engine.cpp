@@ -522,6 +522,14 @@ void Engine::handle_effect_row_start(size_t t, const TrackEvent& ev)
 
 void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float** out_bufs, uint32_t num_outs, size_t nframes)
 {
+    // During offline (non-realtime) export, the export thread owns all engine state
+    // (tick advancement, voice rendering). The JACK callback must not interfere.
+    if (m_is_exporting.load() && !m_master.m_export_mute.load()) {
+        for (uint32_t j = 0; j < num_outs; ++j)
+            if (out_bufs[j]) std::fill(out_bufs[j], out_bufs[j] + nframes, 0.f);
+        return;
+    }
+
     MidiMessage msg;
     while (m_midi_queue.pop(msg)) {
         uint8_t status = msg.status & 0xF0;

@@ -1061,7 +1061,9 @@ bool Engine::render_to_wav(const std::string& path, const ExportOptions& opts) {
 
     m_is_exporting.store(true);
     m_export_progress.store(0.0f);
-    m_master.m_export_mute.store(true);
+    // export_mute is only needed for the realtime path where JACK is active;
+    // for offline rendering JACK is stopped, so muting would only zero our own capture buffers.
+    m_master.m_export_mute.store(opts.realtime);
 
     // Prepare for rendering
     stop();

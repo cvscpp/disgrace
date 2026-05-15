@@ -1077,6 +1077,8 @@ bool Engine::render_to_wav(const std::string& path, const ExportOptions& opts) {
     stop();
     m_sample_rate = opts.sample_rate;
     m_timing.set_sample_rate(opts.sample_rate);
+    for (auto& inst : m_instruments)
+        inst->set_sample_rate((double)opts.sample_rate);
 
     // Export always covers the full song, ignoring any loop range
     m_order_start.store(0);
@@ -1096,6 +1098,8 @@ bool Engine::render_to_wav(const std::string& path, const ExportOptions& opts) {
         m_order_end.store(old_order_end);
         m_sample_rate = old_sr;
         m_timing.set_sample_rate(old_sr);
+        for (auto& inst : m_instruments)
+            inst->set_sample_rate((double)old_sr);
         m_order_pos.store(old_order_pos);
         if (old_order_pos < m_order.size()) set_active_pattern(m_order[old_order_pos]);
         m_current_row = old_row;
@@ -1199,6 +1203,8 @@ bool Engine::render_to_wav(const std::string& path, const ExportOptions& opts) {
     stop();
     m_sample_rate = old_sr;
     m_timing.set_sample_rate(old_sr);
+    for (auto& inst : m_instruments)
+        inst->set_sample_rate((double)old_sr);
     m_order_start.store(old_order_start);
     m_order_end.store(old_order_end);
     m_order_pos.store(old_order_pos);

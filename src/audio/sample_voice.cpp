@@ -27,7 +27,8 @@ namespace disgrace_ns
     : m_sample(data),
     m_engine_rate(engine_rate)
     {
-        m_env.set(0.005f, 0.05f, 0.9f, 0.2f); // Moved to constructor body
+        m_env.set_sample_rate(engine_rate);
+        m_env.set(0.005f, 0.05f, 0.9f, 0.2f);
     }
 
     void disgrace_ns::SampleVoice::start(uint8_t note,
@@ -79,6 +80,7 @@ namespace disgrace_ns
     void disgrace_ns::SampleVoice::set_engine_rate(double sr)
     {
         m_engine_rate = sr;
+        m_env.set_sample_rate(sr);
         if (m_active && m_sample) {
             double base_freq = 440.0;
             double freq = base_freq * m_increment * (m_engine_rate / double(m_sample->sample_rate));

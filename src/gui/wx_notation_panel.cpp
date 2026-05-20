@@ -199,6 +199,7 @@ void NotationView::update_view() {
         auto& track_obj = m_engine.track(t);
         Instrument* inst = track_obj.instrument();
         if (inst && (inst->type() == InstrumentType::SoundFont ||
+                     inst->type() == InstrumentType::SFZ ||
                      inst->type() == InstrumentType::Plugin ||
                      inst->type() == InstrumentType::Midi)) {
             int ty = 30 + t * N_TRACK_H;
@@ -560,6 +561,7 @@ void NotationView::draw(wxDC& dc) {
         switch (inst->type()) {
             case InstrumentType::Sampler:   type_str = "[Sampler]";   break;
             case InstrumentType::SoundFont: type_str = "[SoundFont]"; break;
+            case InstrumentType::SFZ:       type_str = "[SFZ]";       break;
             case InstrumentType::Plugin:    type_str = "[Plugin]";    break;
             case InstrumentType::Midi:      type_str = "[MIDI]";      break;
             case InstrumentType::Voice:     type_str = "[Voice]";     break;

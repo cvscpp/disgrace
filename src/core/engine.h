@@ -73,6 +73,13 @@ class AudioBackend;
 class Engine
 {
 public:
+    struct TrackConversionOptions {
+        float onset_threshold = 0.35f;
+        float min_note_ms = 80.0f;
+        float min_note_rms = 0.015f;
+        NotationType notation = NotationType::Violin;
+    };
+
     Engine();
     ~Engine();
 
@@ -164,8 +171,13 @@ public:
     int get_instrument_index(const disgrace_ns::Instrument* inst) const;
     void add_instrument();
     void add_instrument(::std::unique_ptr<disgrace_ns::Instrument> inst);
+    size_t add_track_with_instrument(InstrumentType type, const std::string& base_name = "");
     void remove_instrument(size_t index);
     void set_instrument_type(size_t index, InstrumentType type);
+    bool convert_sampler_track_to_notation_track(size_t source_track, InstrumentType dest_type,
+                                                 const TrackConversionOptions& options,
+                                                 size_t* new_track_index = nullptr,
+                                                 std::string* error = nullptr);
     ::std::vector<size_t> m_order;
 
     void add_order(size_t pattern);
@@ -387,6 +399,7 @@ private:
     bool write_wav(const ::std::string& path, const ::std::vector<float>& l, const ::std::vector<float>& r, size_t frames, uint32_t sample_rate);
 
     size_t total_song_samples() const;
+    bool render_track_audio_to_sample(size_t track_index, SampleData& out, std::string* error);
     void reset_transport_to_start();
     size_t max_track_latency() const;
     void process_tick();

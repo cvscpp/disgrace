@@ -34,12 +34,15 @@
 #include "../instrument/lv2_instrument.h"
 #include "../instrument/midi_instrument.h"
 #include "../instrument/voice_instrument.h"
+#include "../analysis/onset_detector.h"
+#include "../analysis/pitch_detector.h"
 #include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <thread>
 #include <chrono>
 #include <filesystem>
+#include <cmath>
 
 namespace fs = std::filesystem;
 
@@ -60,6 +63,27 @@ std::unique_ptr<AudioBackend> make_audio_backend(Engine *engine, AudioBackendTyp
             break;
     }
     return std::make_unique<NullBackend>();
+}
+
+std::unique_ptr<Instrument> make_instrument_for_type(Engine* engine, InstrumentType type, uint32_t sample_rate)
+{
+    switch (type) {
+        case InstrumentType::Sampler:   return std::make_unique<SampleInstrument>((double)sample_rate);
+        case InstrumentType::SoundFont: return std::make_unique<SoundFontInstrument>((double)sample_rate);
+        case InstrumentType::SFZ:       return std::make_unique<SfzInstrument>((double)sample_rate);
+        case InstrumentType::XRNI:      return std::make_unique<XrniInstrument>((double)sample_rate);
+        case InstrumentType::Plugin:    return std::make_unique<DSSIInstrument>((double)sample_rate);
+        case InstrumentType::Midi:      return std::make_unique<MidiInstrument>(engine);
+        case InstrumentType::Voice:     return std::make_unique<VoiceInstrument>(engine);
+        default:                        return std::make_unique<NoneInstrument>();
+    }
+}
+
+bool is_notation_instrument_type(InstrumentType type)
+{
+    return type == InstrumentType::SoundFont ||
+           type == InstrumentType::SFZ ||
+           type == InstrumentType::Plugin;
 }
 
 } // namespace
@@ -874,20 +898,342 @@ void Engine::set_instrument_type(size_t index, InstrumentType type) {
     if (index >= m_instruments.size()) return;
     if (m_instruments[index]->type() == type) return;
     std::string name = m_instruments[index]->name();
-    std::unique_ptr<Instrument> new_inst;
-    switch (type) {
-        case InstrumentType::Sampler: new_inst = std::make_unique<SampleInstrument>((double)m_sample_rate); break;
-        case InstrumentType::SoundFont: new_inst = std::make_unique<SoundFontInstrument>((double)m_sample_rate); break;
-        case InstrumentType::SFZ:       new_inst = std::make_unique<SfzInstrument>((double)m_sample_rate); break;
-        case InstrumentType::XRNI:      new_inst = std::make_unique<XrniInstrument>((double)m_sample_rate); break;
-        case InstrumentType::Plugin: new_inst = std::make_unique<DSSIInstrument>((double)m_sample_rate); break;
-        case InstrumentType::Midi: new_inst = std::make_unique<MidiInstrument>(this); break;
-        case InstrumentType::Voice: new_inst = std::make_unique<VoiceInstrument>(this); break;
-        default: new_inst = std::make_unique<NoneInstrument>(); break;
-    }
+    std::unique_ptr<Instrument> new_inst = make_instrument_for_type(this, type, m_sample_rate);
     new_inst->set_name(name); new_inst->set_type(type);
     for (auto& track : m_tracks) if (track.instrument() == m_instruments[index].get()) track.set_instrument(new_inst.get());
     m_instruments[index] = std::move(new_inst);
+}
+
+size_t Engine::add_track_with_instrument(InstrumentType type, const std::string& base_name) {
+    std::string name = base_name.empty() ? "New Track" : base_name;
+    auto inst = make_instrument_for_type(this, type, m_sample_rate);
+    inst->set_type(type);
+    inst->set_name(name);
+
+    add_instrument(std::move(inst));
+    size_t inst_index = m_instruments.size() - 1;
+    add_track();
+    size_t track_index = m_tracks.size() - 1;
+    m_tracks[track_index].set_instrument(m_instruments[inst_index].get());
+    m_tracks[track_index].set_name(name);
+    mark_dirty();
+    return track_index;
+}
+
+bool Engine::render_track_audio_to_sample(size_t track_index, SampleData& out, std::string* error) {
+    if (track_index >= m_tracks.size()) {
+        if (error) *error = "Invalid source track.";
+        return false;
+    }
+    if (m_order.empty()) {
+        if (error) *error = "The song has no order list to convert.";
+        return false;
+    }
+
+    bool was_playing = transport().is_playing();
+    size_t old_order_pos = m_order_pos.load();
+    size_t old_row = m_current_row;
+    size_t old_tick = m_current_tick;
+    bool old_loop = transport().m_loop_pattern.load();
+    size_t old_order_start = m_order_start.load();
+    size_t old_order_end = m_order_end.load();
+
+    std::vector<bool> old_mute(m_tracks.size(), false);
+    std::vector<bool> old_solo(m_tracks.size(), false);
+    for (size_t t = 0; t < m_tracks.size(); ++t) {
+        old_mute[t] = m_tracks[t].muted();
+        old_solo[t] = m_tracks[t].solo();
+        m_tracks[t].set_solo(false);
+    }
+    m_tracks[track_index].set_mute(false);
+
+    auto restore_state = [&]() {
+        stop();
+        m_order_start.store(old_order_start);
+        m_order_end.store(old_order_end);
+        m_order_pos.store(old_order_pos);
+        if (!m_order.empty() && old_order_pos < m_order.size()) set_active_pattern(m_order[old_order_pos]);
+        m_current_row = old_row;
+        m_current_tick = (int)old_tick;
+        transport().set_loop(old_loop);
+        for (size_t t = 0; t < m_tracks.size() && t < old_mute.size(); ++t) {
+            m_tracks[t].set_mute(old_mute[t]);
+            m_tracks[t].set_solo(old_solo[t]);
+        }
+        if (was_playing) start();
+    };
+
+    stop();
+    m_order_start.store(0);
+    m_order_end.store(0);
+    m_order_pos.store(0);
+    set_active_pattern(m_order[0]);
+    m_current_row = 0;
+    m_current_tick = 0;
+    m_samples_until_next_tick = 0;
+    transport().set_loop(false);
+
+    const size_t total_frames = total_song_samples();
+    out.left.clear();
+    out.right.clear();
+    out.sample_rate = (int)m_sample_rate;
+
+    if (total_frames == 0) {
+        restore_state();
+        if (error) *error = "The song is empty.";
+        return false;
+    }
+
+    const size_t block_size = 512;
+    float bl[block_size], br[block_size];
+    size_t rendered = 0;
+    transport().play();
+
+    while (rendered < total_frames && transport().is_playing()) {
+        size_t to_render = std::min(block_size, total_frames - rendered);
+        process_block(bl, br, to_render, nullptr);
+        for (size_t i = 0; i < to_render; ++i) {
+            out.left.push_back(m_track_l[track_index][i]);
+            out.right.push_back(m_track_r[track_index][i]);
+        }
+        rendered += to_render;
+        if (m_order_pos.load() >= m_order.size() ||
+            (m_order_pos.load() == m_order.size() - 1 && m_current_row >= pattern().row_count())) {
+            break;
+        }
+    }
+
+    restore_state();
+
+    if (out.left.empty()) {
+        if (error) *error = "The source track rendered no audio.";
+        return false;
+    }
+    return true;
+}
+
+bool Engine::convert_sampler_track_to_notation_track(size_t source_track, InstrumentType dest_type,
+                                                     const TrackConversionOptions& options,
+                                                     size_t* new_track_index,
+                                                     std::string* error) {
+    if (source_track >= m_tracks.size()) {
+        if (error) *error = "Invalid source track.";
+        return false;
+    }
+    if (!is_notation_instrument_type(dest_type)) {
+        if (error) *error = "Destination type must be SoundFont, SFZ, or Plugin.";
+        return false;
+    }
+
+    auto& src_track = m_tracks[source_track];
+    auto* sampler = dynamic_cast<SampleInstrument*>(src_track.instrument());
+    if (!sampler || sampler->sample_count() == 0) {
+        if (error) *error = "Source track must use a Sampler instrument with audio loaded.";
+        return false;
+    }
+
+    bool has_audio = false;
+    for (size_t i = 0; i < sampler->sample_count(); ++i) {
+        const auto& sample = sampler->get_sample(i);
+        if (sample.data && !sample.data->left.empty()) {
+            has_audio = true;
+            break;
+        }
+    }
+    if (!has_audio) {
+        if (error) *error = "The sampler instrument has no audio to convert.";
+        return false;
+    }
+
+    SampleData rendered;
+    if (!render_track_audio_to_sample(source_track, rendered, error))
+        return false;
+
+    std::vector<float> mono(rendered.left.size(), 0.0f);
+    float global_peak = 0.0f;
+    for (size_t i = 0; i < rendered.left.size(); ++i) {
+        float s = rendered.left[i];
+        if (!rendered.right.empty() && i < rendered.right.size())
+            s = 0.5f * (s + rendered.right[i]);
+        mono[i] = s;
+        global_peak = std::max(global_peak, std::fabs(s));
+    }
+
+    if (global_peak < 1e-4f) {
+        if (error) *error = "The source track is effectively silent.";
+        return false;
+    }
+
+    OnsetDetector onset_detector(options.onset_threshold, std::max(30.0f, options.min_note_ms * 0.5f));
+    auto onsets = onset_detector.detect(rendered);
+
+    std::vector<size_t> boundaries;
+    boundaries.reserve(onsets.size() + 2);
+    boundaries.push_back(0);
+    for (const auto& onset : onsets) {
+        if (onset.sample_pos > 0 && (size_t)onset.sample_pos < mono.size())
+            boundaries.push_back((size_t)onset.sample_pos);
+    }
+    if (boundaries.back() != mono.size())
+        boundaries.push_back(mono.size());
+    std::sort(boundaries.begin(), boundaries.end());
+    boundaries.erase(std::unique(boundaries.begin(), boundaries.end()), boundaries.end());
+
+    const float silence_threshold = std::max(0.005f, global_peak * 0.04f);
+    const size_t min_note_samples = std::max<size_t>(1, (size_t)((options.min_note_ms / 1000.0f) * rendered.sample_rate));
+    PitchDetector pitch_detector;
+
+    struct DetectedNote {
+        size_t start_sample = 0;
+        size_t end_sample = 0;
+        uint8_t note = 0;
+        uint8_t velocity = 100;
+    };
+    std::vector<DetectedNote> detected_notes;
+
+    for (size_t i = 0; i + 1 < boundaries.size(); ++i) {
+        size_t seg_start = boundaries[i];
+        size_t seg_end = boundaries[i + 1];
+        if (seg_end <= seg_start)
+            continue;
+
+        while (seg_start < seg_end && std::fabs(mono[seg_start]) < silence_threshold) ++seg_start;
+        while (seg_end > seg_start && std::fabs(mono[seg_end - 1]) < silence_threshold) --seg_end;
+        if (seg_end <= seg_start || seg_end - seg_start < min_note_samples)
+            continue;
+
+        float sum_sq = 0.0f;
+        float peak = 0.0f;
+        for (size_t s = seg_start; s < seg_end; ++s) {
+            float v = mono[s];
+            sum_sq += v * v;
+            peak = std::max(peak, std::fabs(v));
+        }
+        float rms = std::sqrt(sum_sq / (float)(seg_end - seg_start));
+        if (rms < options.min_note_rms || peak < silence_threshold)
+            continue;
+
+        auto pitch = pitch_detector.estimate_midi_note(mono, rendered.sample_rate, seg_start, seg_end);
+        if (!pitch.valid)
+            continue;
+
+        uint8_t velocity = (uint8_t)std::max(20, std::min(127, (int)std::lround(std::max(rms, peak * 0.7f) * 160.0f)));
+        detected_notes.push_back({seg_start, seg_end, pitch.midi_note, velocity});
+    }
+
+    if (detected_notes.empty()) {
+        if (error) *error = "No confident pitched notes were detected on the source track.";
+        return false;
+    }
+
+    const double samples_per_row = m_timing.samples_per_row();
+    if (samples_per_row <= 0.0) {
+        if (error) *error = "Invalid timing state for note conversion.";
+        return false;
+    }
+
+    size_t total_rows = 0;
+    for (size_t pat_idx : m_order) {
+        if (pat_idx < m_patterns.size())
+            total_rows += m_patterns[pat_idx]->row_count();
+    }
+    if (total_rows == 0) {
+        if (error) *error = "The song has no pattern rows to write notes into.";
+        return false;
+    }
+
+    struct NotePlacement {
+        size_t start_row = 0;
+        size_t end_row = 0;
+        size_t column = 0;
+        uint8_t note = 0;
+        uint8_t velocity = 100;
+    };
+    std::vector<NotePlacement> placements;
+    std::vector<size_t> column_busy_until;
+
+    for (const auto& note : detected_notes) {
+        size_t start_row = (size_t)std::llround((double)note.start_sample / samples_per_row);
+        size_t end_row = (size_t)std::ceil((double)note.end_sample / samples_per_row);
+        if (end_row <= start_row) end_row = start_row + 1;
+        if (start_row >= total_rows)
+            continue;
+        end_row = std::min(end_row, total_rows);
+
+        size_t column = 0;
+        while (column < column_busy_until.size() && start_row < column_busy_until[column]) ++column;
+        if (column == column_busy_until.size())
+            column_busy_until.push_back(0);
+        if (column >= MAX_COLS)
+            continue;
+
+        column_busy_until[column] = end_row;
+        placements.push_back({start_row, end_row, column, note.note, note.velocity});
+    }
+
+    if (placements.empty()) {
+        if (error) *error = "Detected notes could not be placed into tracker rows.";
+        return false;
+    }
+
+    std::string base_name = src_track.name().empty() ? "Notation Track" : (src_track.name() + " Notation");
+    std::string inst_name = src_track.name().empty() ? "Notes" : (src_track.name() + " Notes");
+    size_t dest_track = add_track_with_instrument(dest_type, base_name);
+    Track& dst_track = m_tracks[dest_track];
+    dst_track.set_name(base_name);
+    dst_track.instrument()->set_name(inst_name);
+    dst_track.set_notation(options.notation);
+    dst_track.set_output_bus(src_track.output_bus());
+
+    size_t max_columns = 1;
+    for (const auto& placement : placements)
+        max_columns = std::max(max_columns, placement.column + 1);
+    for (auto& pat : m_patterns)
+        pat->set_column_count(dest_track, max_columns);
+
+    auto set_event_at_row = [&](size_t global_row, size_t column, uint8_t note_value, uint8_t velocity_value) -> bool {
+        size_t row_cursor = global_row;
+        for (size_t order_idx = 0; order_idx < m_order.size(); ++order_idx) {
+            size_t pat_idx = m_order[order_idx];
+            if (pat_idx >= m_patterns.size())
+                continue;
+            Pattern& pat = *m_patterns[pat_idx];
+            if (row_cursor < pat.row_count()) {
+                auto& ev = pat.event(dest_track, row_cursor, column);
+                ev.note = note_value;
+                if (note_value != 254) {
+                    ev.volume = velocity_value;
+                    ev.sample_idx = 0;
+                }
+                return true;
+            }
+            row_cursor -= pat.row_count();
+        }
+        return false;
+    };
+
+    std::sort(placements.begin(), placements.end(), [](const NotePlacement& a, const NotePlacement& b) {
+        if (a.column != b.column) return a.column < b.column;
+        return a.start_row < b.start_row;
+    });
+
+    for (size_t i = 0; i < placements.size(); ++i) {
+        const auto& placement = placements[i];
+        set_event_at_row(placement.start_row, placement.column, placement.note, placement.velocity);
+
+        bool has_next_same_column = false;
+        if (i + 1 < placements.size() && placements[i + 1].column == placement.column &&
+            placements[i + 1].start_row == placement.end_row) {
+            has_next_same_column = true;
+        }
+        if (!has_next_same_column && placement.end_row < total_rows) {
+            set_event_at_row(placement.end_row, placement.column, 254, 255);
+        }
+    }
+
+    mark_dirty();
+    if (new_track_index) *new_track_index = dest_track;
+    return true;
 }
 
 void Engine::add_track() { 

@@ -163,7 +163,7 @@ std::string LilyPondExporter::generate_ly_source(const Engine& engine, int track
     if (track_index == -1) { // Exporting the whole project
         for (size_t t = 0; t < num_tracks; ++t) {
             const auto& track_obj = engine.track(t);
-            if (track_obj.instrument() && (track_obj.instrument()->type() == InstrumentType::SoundFont || track_obj.instrument()->type() == InstrumentType::Plugin || track_obj.instrument()->type() == InstrumentType::Midi)) {
+            if (track_obj.instrument() && (track_obj.instrument()->type() == InstrumentType::SoundFont || track_obj.instrument()->type() == InstrumentType::SFZ || track_obj.instrument()->type() == InstrumentType::Plugin || track_obj.instrument()->type() == InstrumentType::Midi)) {
                  process_track(t);
             }
         }
@@ -171,7 +171,7 @@ std::string LilyPondExporter::generate_ly_source(const Engine& engine, int track
         ss << "\\score {\n  <<\n";
         for (size_t t = 0; t < num_tracks; ++t) {
             const auto& track_obj = engine.track(t);
-             if (track_obj.instrument() && (track_obj.instrument()->type() == InstrumentType::SoundFont || track_obj.instrument()->type() == InstrumentType::Plugin || track_obj.instrument()->type() == InstrumentType::Midi)) {
+             if (track_obj.instrument() && (track_obj.instrument()->type() == InstrumentType::SoundFont || track_obj.instrument()->type() == InstrumentType::SFZ || track_obj.instrument()->type() == InstrumentType::Plugin || track_obj.instrument()->type() == InstrumentType::Midi)) {
                 NotationType ntype = track_obj.notation();
                 std::string tid = "\\" + get_track_id((int)t);
                 

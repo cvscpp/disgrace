@@ -23,6 +23,7 @@
 #include <wx/button.h>
 #include <wx/sizer.h>
 #include <wx/dc.h>
+#include "../instrument/instrument.h"
 
 namespace disgrace_ns {
 
@@ -103,12 +104,15 @@ public:
     void do_undo();
     void do_redo();
     void do_beat_quantize();
+    void do_convert_to_notation_track(InstrumentType dest_type);
 
 private:
     int tick_to_x(int tick);
     int x_to_tick(int x);
     int get_track_height(int track_idx) const;
     void toggle_track_minimize(int track_idx);
+    int hit_test_track(int client_y) const;
+    bool can_convert_selected_track() const;
     std::vector<AudioRegion> detect_overlaps(const SampleInstrument* sampler);
 
     Engine& m_engine;

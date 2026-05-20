@@ -171,6 +171,7 @@ void HelpPanel::load_documentation() {
 <tr><td valign="top"><b>Silence</b></td><td>Zero-fill the selected region in-place.</td></tr>
 <tr><td valign="top"><b>Insert (Gap)</b></td><td>Insert silence at the selection start, pushing content to the right.</td></tr>
 <tr><td valign="top"><b>Beat Quantize&hellip;</b></td><td>Rhythmically align the selected audio region to a beat grid. See below.</td></tr>
+<tr><td valign="top"><b>Convert to Notation Track</b></td><td>Right-click a sampler track to render the whole track offline, detect pitched notes, and create a new SoundFont, SFZ, or Plugin track with tracker notes for notation editing/export.</td></tr>
 </table>
 
 <h2>Beat Quantize</h2>

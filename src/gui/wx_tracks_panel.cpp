@@ -23,6 +23,7 @@
 #include <wx/msgdlg.h>
 #include "wx_tracks_panel.h"
 #include "wx_detached_frame.h"
+#include "wx_main_window.h"
 #include "../core/engine.h"
 #include "../instrument/sample_instrument.h"
 #include "../instrument/soundfont_instrument.h"
@@ -101,7 +102,10 @@ enum {
     ID_MENU_UNDO,
     ID_MENU_REDO,
     ID_BEAT_QUANTIZE,
-    ID_MENU_BEAT_QUANTIZE
+    ID_MENU_BEAT_QUANTIZE,
+    ID_MENU_CONVERT_SOUNDFONT,
+    ID_MENU_CONVERT_SFZ,
+    ID_MENU_CONVERT_PLUGIN
 };
 
 wxBEGIN_EVENT_TABLE(TracksPanel, wxPanel)
@@ -270,6 +274,33 @@ void TracksView::toggle_track_minimize(int track_idx) {
     track.set_minimized(!track.is_minimized());
     update_view();
     Refresh();
+}
+
+int TracksView::hit_test_track(int client_y) const {
+    int cur_y = 30;
+    for (int t = 0; t < (int)m_engine.track_count(); ++t) {
+        int track_h = get_track_height(t);
+        if (client_y >= cur_y && client_y < cur_y + track_h)
+            return t;
+        cur_y += track_h;
+    }
+    return -1;
+}
+
+bool TracksView::can_convert_selected_track() const {
+    if (m_selected_track < 0 || (size_t)m_selected_track >= m_engine.track_count())
+        return false;
+
+    auto* sampler = dynamic_cast<SampleInstrument*>(m_engine.track(m_selected_track).instrument());
+    if (!sampler || sampler->sample_count() == 0)
+        return false;
+
+    for (size_t i = 0; i < sampler->sample_count(); ++i) {
+        const auto& sample = sampler->get_sample(i);
+        if (sample.data && !sample.data->left.empty())
+            return true;
+    }
+    return false;
 }
 
 void TracksView::OnPaint(wxPaintEvent& event) {
@@ -655,12 +686,31 @@ void TracksView::update_view() {
 }
 
 void TracksView::OnMouseRightClick(wxMouseEvent& event) {
-    // Store position for potential operations
-    // The actual context menu is shown via wxContextMenuEvent
+    int x, y;
+    CalcUnscrolledPosition(event.GetX(), event.GetY(), &x, &y);
+    int header_w = 120;
+    if (x > header_w) {
+        int clicked_track = hit_test_track(y);
+        if (clicked_track >= 0) {
+            m_selected_track = clicked_track;
+            Refresh();
+        }
+    }
     event.Skip();
 }
 
 void TracksView::OnContextMenu(wxContextMenuEvent& event) {
+    if (event.GetPosition() != wxDefaultPosition) {
+        wxPoint client_pos = ScreenToClient(event.GetPosition());
+        int x, y;
+        CalcUnscrolledPosition(client_pos.x, client_pos.y, &x, &y);
+        if (x > 120) {
+            int clicked_track = hit_test_track(y);
+            if (clicked_track >= 0)
+                m_selected_track = clicked_track;
+        }
+    }
+
     wxMenu menu;
     menu.Append(ID_MENU_CUT, "Cut\tX", "Cut selection to clipboard");
     menu.Append(ID_MENU_COPY, "Copy\tC", "Copy selection to clipboard");
@@ -673,6 +723,16 @@ void TracksView::OnContextMenu(wxContextMenuEvent& event) {
     menu.Append(ID_MENU_REDO, "Redo\tCtrl+Y", "Redo last operation");
     menu.AppendSeparator();
     menu.Append(ID_MENU_BEAT_QUANTIZE, "Beat Quantize...", "Quantize audio to beat grid");
+    wxMenu* convert_menu = new wxMenu;
+    convert_menu->Append(ID_MENU_CONVERT_SOUNDFONT, "SoundFont");
+    convert_menu->Append(ID_MENU_CONVERT_SFZ, "SFZ");
+    convert_menu->Append(ID_MENU_CONVERT_PLUGIN, "Plugin");
+    menu.AppendSubMenu(convert_menu, "Convert to Notation Track");
+
+    bool can_convert = can_convert_selected_track();
+    menu.Enable(ID_MENU_CONVERT_SOUNDFONT, can_convert);
+    menu.Enable(ID_MENU_CONVERT_SFZ, can_convert);
+    menu.Enable(ID_MENU_CONVERT_PLUGIN, can_convert);
     
     // Bind menu events to operation handlers
     Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_cut(); }, ID_MENU_CUT);
@@ -683,8 +743,15 @@ void TracksView::OnContextMenu(wxContextMenuEvent& event) {
     Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_undo(); }, ID_MENU_UNDO);
     Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_redo(); }, ID_MENU_REDO);
     Bind(wxEVT_MENU, [this](wxCommandEvent& e) { do_beat_quantize(); }, ID_MENU_BEAT_QUANTIZE);
+    menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { do_convert_to_notation_track(InstrumentType::SoundFont); }, ID_MENU_CONVERT_SOUNDFONT);
+    menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { do_convert_to_notation_track(InstrumentType::SFZ); }, ID_MENU_CONVERT_SFZ);
+    menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { do_convert_to_notation_track(InstrumentType::Plugin); }, ID_MENU_CONVERT_PLUGIN);
     
-    PopupMenu(&menu, event.GetPosition());
+    if (event.GetPosition() == wxDefaultPosition) {
+        PopupMenu(&menu);
+    } else {
+        PopupMenu(&menu, ScreenToClient(event.GetPosition()));
+    }
 }
 
 void TracksView::OnKeyDown(wxKeyEvent& event) {
@@ -1222,6 +1289,38 @@ void TracksView::do_beat_quantize() {
         wxString::Format("Beat quantize applied: %zu → %zu samples.",
                          s_end - s_start, new_len),
         "Beat Quantize", wxOK | wxICON_INFORMATION);
+}
+
+void TracksView::do_convert_to_notation_track(InstrumentType dest_type) {
+    if (!can_convert_selected_track()) {
+        wxMessageBox("Choose a sampler track with audio before converting.",
+                     "Convert to Notation Track", wxOK | wxICON_INFORMATION);
+        return;
+    }
+
+    Engine::TrackConversionOptions opts;
+    opts.notation = NotationType::Violin;
+
+    size_t new_track = 0;
+    std::string error;
+    if (!m_engine.convert_sampler_track_to_notation_track((size_t)m_selected_track, dest_type, opts, &new_track, &error)) {
+        wxMessageBox(error.empty() ? "Track conversion failed." : wxString::FromUTF8(error),
+                     "Convert to Notation Track", wxOK | wxICON_WARNING);
+        return;
+    }
+
+    m_selected_track = (int)new_track;
+    update_view();
+    Refresh();
+
+    if (auto* main_window = dynamic_cast<WxMainWindow*>(wxGetTopLevelParent(this))) {
+        main_window->update_all_uis();
+    }
+
+    const char* type_name = (dest_type == InstrumentType::SoundFont) ? "SoundFont" :
+                            (dest_type == InstrumentType::SFZ) ? "SFZ" : "Plugin";
+    wxMessageBox(wxString::Format("Created a new %s notation track from the full sampler track.", type_name),
+                 "Convert to Notation Track", wxOK | wxICON_INFORMATION);
 }
 
 std::vector<TracksView::AudioRegion> TracksView::detect_overlaps(const SampleInstrument* sampler) {

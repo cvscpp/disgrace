@@ -24,7 +24,9 @@
 #include <locale.h>
 
 #include "gui/wx_main_window.h"
+#include "gui/wx_startup_dialog.h"
 #include "core/engine.h"
+#include "core/app_info.h"
 
 namespace disgrace_ns {
 class DisgraceApp : public wxApp {
@@ -69,7 +71,15 @@ bool DisgraceApp::OnInit() {
             delete m_engine;
             return false;
         }
-        m_window = new WxMainWindow(1280, 800, "Disgrace", *m_engine);
+
+        StartupDialog startup_dialog(nullptr);
+        if (startup_dialog.ShowModal() != wxID_OK) {
+            delete m_engine;
+            m_engine = nullptr;
+            return false;
+        }
+
+        m_window = new WxMainWindow(1280, 800, wxString::FromUTF8(app_display_name_with_version()), *m_engine);
         m_window->Show(true);
 
         return true;

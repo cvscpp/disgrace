@@ -73,6 +73,8 @@ After building, launch the application with:
 ./src/disgrace
 ```
 
+At startup, Disgrace now shows an intro window with the logo, current version, license summary, warranty disclaimer, and a **Continue** button before the main application opens.
+
 Because Disgrace is designed around JACK, running it in a JACK-enabled audio environment is the expected setup.
 
 ## Design and authorship note

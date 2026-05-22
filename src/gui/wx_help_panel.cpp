@@ -1,5 +1,6 @@
 #include "wx_help_panel.h"
 #include "../core/engine.h"
+#include "../core/app_info.h"
 
 #include <wx/sizer.h>
 
@@ -24,15 +25,17 @@ void HelpPanel::load_documentation() {
     wxString html = R"(
 <html>
 <body bgcolor="#1e1e1e" text="#d4d4d4" link="#569cd6" vlink="#4ec9b0">
-<h1>Disgrace &mdash; Digital Audio Workstation</h1>
+<h1>)" + wxString::FromUTF8(app_display_name()) + R"( &mdash; Digital Audio Workstation</h1>
+<p><b>Version:</b> )" + wxString::FromUTF8(app_version()) + R"(</p>
 <p>A minimalist, pattern-based tracker DAW with selectable JACK or OSS audio backends. All tabs are accessible from the top of the main window.</p>
+<p>On startup, the application shows an intro window with the logo, version, license summary, disclaimer, and a <b>Continue</b> button before the main interface opens.</p>
 
 <h2>Interface</h2>
 <table width="100%" border="0" cellpadding="4">
 <tr><td valign="top"><b>Project</b></td><td>Manage tracks and buses. Set instrument, notation type, output bus, velocity humanization and timing humanization per track.</td></tr>
 <tr><td valign="top"><b>Tracker</b></td><td>Pattern editor. Enter notes, volumes, effects. Supports multiple note sub-columns per track.</td></tr>
 <tr><td valign="top"><b>Tracks</b></td><td>Arrange patterns on a song timeline. Select audio regions and apply editing commands (Cut, Silence, <b>Beat Quantize</b>).</td></tr>
-<tr><td valign="top"><b>Notation</b></td><td>Staff notation view of all pitched tracks (SoundFont, Plugin, MIDI, Voice). Shows treble, bass, grand staff or percussion clef per track with ledger lines and bar lines.</td></tr>
+<tr><td valign="top"><b>Notation</b></td><td>Staff notation view of all pitched tracks (SoundFont, SFZ, Plugin, MIDI, Voice). Shows treble, bass, grand staff or percussion clef per track with ledger lines and bar lines.</td></tr>
 <tr><td valign="top"><b>Instrument</b></td><td>Load and manage instruments and samples.</td></tr>
 <tr><td valign="top"><b>Mixer</b></td><td>Per-track and bus gain, panning, DSP effects chain and spectrum analyzer.</td></tr>
 <tr><td valign="top"><b>Settings</b></td><td>Audio backend, MIDI, theme and GUI settings.</td></tr>

@@ -98,7 +98,8 @@ const std::string& disgrace_ns::Track::name() const
 void disgrace_ns::Track::process(float* out_l,
                     float* out_r,
                     size_t nframes,
-                    const float* const* in_bufs)
+                    const float* const* in_bufs,
+                    uint32_t num_ins)
 {
     std::fill(out_l, out_l + nframes, 0.f);
     std::fill(out_r, out_r + nframes, 0.f);
@@ -106,10 +107,25 @@ void disgrace_ns::Track::process(float* out_l,
     if (m_instrument)
         m_instrument->process(out_l, out_r, nframes);
 
-    if (in_bufs && m_audio_input_l >= 0) {
-        const float* in_l = in_bufs[m_audio_input_l];
-        // If m_audio_input_r is valid, use it; otherwise, use in_l for mono.
-        const float* in_r = (m_audio_input_r >= 0) ? in_bufs[m_audio_input_r] : in_l;
+    int input_l = m_audio_input_l;
+    int input_r = m_audio_input_r;
+    if (m_instrument) {
+        int inst_l = -1;
+        int inst_r = -1;
+        m_instrument->get_audio_input(inst_l, inst_r);
+
+        if (input_l < 0) input_l = inst_l;
+        if (input_r < 0) input_r = inst_r;
+        if (input_l < 0 && input_r >= 0) input_l = input_r;
+        if (input_r < 0 && input_l >= 0) input_r = input_l;
+    }
+
+    if (in_bufs && num_ins > 0 && input_l >= 0 && (uint32_t)input_l < num_ins) {
+        const float* in_l = in_bufs[input_l];
+        // If the right channel is missing, use the left channel for mono return paths.
+        const float* in_r = (input_r >= 0 && (uint32_t)input_r < num_ins)
+            ? in_bufs[input_r]
+            : in_l;
 
         if (m_input_delay_samples > 0 && !m_delay_buf_l.empty()) {
             size_t max_delay = m_delay_buf_l.size();
@@ -185,6 +201,11 @@ void disgrace_ns::Track::note_on(uint8_t note, uint8_t velocity, size_t column_i
         m_instrument->note_on(note, velocity, column_index, offset_samples, sample_index);
         m_current_freq = freq; // Update m_current_freq on note_on
     }
+
+    m_last_note = note;
+    m_last_velocity = velocity;
+    m_last_column = column_index;
+    m_last_sample_index = sample_index;
 }
 
 void disgrace_ns::Track::note_off(size_t column_index)
@@ -311,12 +332,10 @@ void disgrace_ns::Track::process_tick(uint32_t engine_current_tick) // Added nam
 
 void disgrace_ns::Track::retrigger_note()
 {
-    if (m_instrument)
-    {
-        // Re-trigger the current note, assuming velocity of 100
-        // A more robust solution might store the last note/velocity
-        m_instrument->note_on(0, 100); // Placeholder, ideally should re-trigger last note
+    if (m_instrument && m_last_note != 255) {
+        m_instrument->note_off(m_last_column);
         m_instrument->set_pitch(m_current_freq);
+        m_instrument->note_on(m_last_note, m_last_velocity, m_last_column, 0, m_last_sample_index);
     }
 }
 

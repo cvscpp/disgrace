@@ -38,6 +38,7 @@ public:
     void draw(wxDC& dc);
     void OnPaint(wxPaintEvent& event);
     void OnKeyDown(wxKeyEvent& event);
+    void OnKeyUp(wxKeyEvent& event);
     void OnMouseDown(wxMouseEvent& event);
     void OnMouseDrag(wxMouseEvent& event);
     void OnMouseUp(wxMouseEvent& event);
@@ -87,6 +88,10 @@ private:
 
     wxTextCtrl* m_text_editor = nullptr;
     bool m_is_editing_text = false;
+    bool m_preview_active = false;
+    int m_preview_track = -1;
+    int m_preview_col = -1;
+    uint8_t m_preview_note = 255;
 
     struct TrackerPos {
         int track;

@@ -18,7 +18,7 @@ The core vision is to create a stable, focused, and musically useful tool, prior
 The application will be built on a clear, multi-threaded architecture:
 
 *   **Audio Backend:** [JACK](https://jackaudio.org/) for audio and MIDI I/O.
-*   **GUI:** [FLTK](https://www.fltk.org/) for a lightweight, cross-platform interface. The UI will be detachable (tracker, mixer, editor).
+*   **GUI:** [wxWidgets](https://www.wxwidgets.org/) for a lightweight, cross-platform interface. The UI is detachable (tracker, mixer, editor).
 *   **Core Engine:** Manages application state, transport, and communication between threads.
 *   **Threading Model:**
     *   **Audio Thread:** Real-time, lock-free audio processing.

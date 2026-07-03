@@ -69,7 +69,8 @@ public:
     void process(float* out_l,
                  float* out_r,
                  size_t nframes,
-                 const float* const* in_bufs = nullptr);
+                 const float* const* in_bufs = nullptr,
+                 uint32_t num_ins = 0);
 
     void set_instrument(disgrace_ns::Instrument* inst);
     disgrace_ns::Instrument* instrument();
@@ -204,6 +205,10 @@ private:
     ::std::atomic<float> m_meter_l {0.0f};
     ::std::atomic<float> m_meter_r {0.0f};
     float m_current_freq = 0.0f;
+    uint8_t m_last_note = 255;
+    uint8_t m_last_velocity = 0;
+    size_t m_last_column = 0;
+    uint8_t m_last_sample_index = 0;
     void retrigger_note(); // Added
 };
 

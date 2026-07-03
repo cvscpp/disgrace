@@ -17,9 +17,11 @@
  */
 
 #include "config_manager.h"
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
@@ -38,6 +40,47 @@ AudioBackendType parse_audio_backend(const json& audio)
     return AudioBackendType::Jack;
 }
 
+std::vector<std::string> default_plugin_paths()
+{
+    std::vector<std::string> paths;
+    const char* env_vars[] = {
+        "DSSI_PATH",
+        "LADSPA_PATH",
+        "LV2_PATH"
+    };
+
+    for (const char* env_name : env_vars) {
+        if (const char* value = getenv(env_name)) {
+            std::string current;
+            for (const char* p = value; ; ++p) {
+                if (*p == ':' || *p == '\0') {
+                    if (!current.empty()) {
+                        paths.push_back(current);
+                        current.clear();
+                    }
+                    if (*p == '\0') break;
+                } else {
+                    current.push_back(*p);
+                }
+            }
+        }
+    }
+
+    const char* system_paths[] = {
+        "/usr/lib/dssi",
+        "/usr/local/lib/dssi",
+        "/usr/lib/x86_64-linux-gnu/dssi",
+        "/usr/lib/ladspa",
+        "/usr/local/lib/ladspa",
+        "/usr/lib/lv2",
+        "/usr/local/lib/lv2"
+    };
+    for (const char* path : system_paths) {
+        paths.push_back(path);
+    }
+    return paths;
+}
+
 } // namespace
 
 ConfigManager& ConfigManager::instance() {
@@ -46,6 +89,7 @@ ConfigManager& ConfigManager::instance() {
 }
 
 ConfigManager::ConfigManager() {
+    m_config.plugin_paths = default_plugin_paths();
 }
 
 std::string ConfigManager::get_config_path() {
@@ -121,6 +165,22 @@ void ConfigManager::read_from(const std::string& path) {
         if (j.contains("threading")) {
             m_config.num_worker_threads = j["threading"].value("worker_threads", 0u);
         }
+
+        if (j.contains("plugins")) {
+            auto& jp = j["plugins"];
+            if (jp.contains("paths")) {
+                m_config.plugin_paths.clear();
+                for (const auto& path : jp["paths"]) {
+                    if (path.is_string()) {
+                        m_config.plugin_paths.push_back(path.get<std::string>());
+                    }
+                }
+            }
+        }
+
+        if (m_config.plugin_paths.empty()) {
+            m_config.plugin_paths = default_plugin_paths();
+        }
     } catch (const std::exception& e) {
         std::cerr << "Error loading config from " << path << ": " << e.what() << std::endl;
     }
@@ -161,6 +221,7 @@ void ConfigManager::write_to(const std::string& path) {
         j["keyboard"]["layout"] = m_config.keyboard_layout;
 
         j["threading"]["worker_threads"] = m_config.num_worker_threads;
+        j["plugins"]["paths"] = m_config.plugin_paths;
 
         std::ofstream f(path);
         f << j.dump(4);

@@ -217,6 +217,7 @@ public:
     void enable_record(bool e);
     void set_record_track(size_t t);
     void record_note(uint8_t note, size_t column = 0);
+    void record_note_off(size_t column = 0);
     void set_current_instrument(size_t index);
     void toggle_metronome();
     void set_metronome_enabled(bool enabled);
@@ -403,7 +404,8 @@ private:
     void reset_transport_to_start();
     size_t max_track_latency() const;
     void process_tick();
-    void render_block_multi(float** out_bufs, uint32_t num_outs, size_t frames, const float* const* in_bufs = nullptr);
+    void render_block_multi(float** out_bufs, uint32_t num_outs, size_t frames,
+                            const float* const* in_bufs = nullptr, uint32_t num_ins = 0);
     void render_block(float* out_l, float* out_r, size_t frames, const float* const* in_bufs = nullptr);
     inline float soft_clip(float x);
     void handle_effect(const disgrace_ns::TrackEvent& ev);

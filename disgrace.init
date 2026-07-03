@@ -34,7 +34,7 @@ disgrace - simple digital audio workstation with tracker interface, description 
   * tracker, audio editor, mixer, file io and settings in tabs
   * tracker, audio edirot and mixer should be detachable
   * key bindings schemas fast tracker 2, impuls tracker, renoise with the ability to change individual keys
-  * simple themes based on fltk themes
+  * simple themes based on wxWidgets-native theming
   * for the tracks highlighting based on bpm and tempo
   * spectral view per channel / track or main output
   * pattern list with add, remove, copy pattern

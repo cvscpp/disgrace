@@ -58,6 +58,13 @@ public:
                          float* r,
                          size_t nframes) = 0;
 
+    virtual void set_audio_input(int, int) {}
+    virtual void get_audio_input(int& channel_l, int& channel_r) const
+    {
+        channel_l = -1;
+        channel_r = -1;
+    }
+
     void set_name(const std::string& name) { m_name = name.substr(0, 64); }
     const std::string& name() const { return m_name; }
 

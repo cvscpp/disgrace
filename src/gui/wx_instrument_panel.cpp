@@ -34,6 +34,7 @@
 #include "../instrument/voice_synthesis_worker.h"
 #include "../io/audio_file.h"
 #include "../io/project_archive.h"
+#include "../core/config_manager.h"
 
 #include <wx/sizer.h>
 #include <wx/msgdlg.h>
@@ -202,6 +203,23 @@ bool load_sample_instrument_archive(const std::string& archive_path,
         }
         return false;
     }
+}
+
+std::vector<std::string> plugin_scan_paths()
+{
+    const auto& configured = disgrace_ns::ConfigManager::instance().config().plugin_paths;
+    if (!configured.empty()) {
+        return configured;
+    }
+    return {
+        "/usr/lib/dssi",
+        "/usr/local/lib/dssi",
+        "/usr/lib/x86_64-linux-gnu/dssi",
+        "/usr/lib/ladspa",
+        "/usr/local/lib/ladspa",
+        "/usr/lib/lv2",
+        "/usr/local/lib/lv2"
+    };
 }
 
 } // namespace
@@ -738,6 +756,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     
     // ZynAddSubFX Editor
     m_zyn_editor = new wxPanel(m_plugin_editor, wxID_ANY);
+    m_zyn_editor->SetMinSize(wxSize(-1, 260));
     wxBoxSizer* zyn_sizer = new wxBoxSizer(wxVERTICAL);
     wxBoxSizer* zyn_top = new wxBoxSizer(wxHORIZONTAL);
     m_zyn_bank_ch = new wxChoice(m_zyn_editor, wxID_ANY);
@@ -758,6 +777,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     zyn_sizer->Add(zyn_btns, 0, wxALL, 2);
     
     m_zyn_preset_browser = new wxListBox(m_zyn_editor, wxID_ANY);
+    m_zyn_preset_browser->SetMinSize(wxSize(-1, 220));
     m_zyn_preset_browser->Bind(wxEVT_LISTBOX, &InstrumentPanel::on_zyn_preset, this);
     zyn_sizer->Add(m_zyn_preset_browser, 1, wxEXPAND | wxALL, 2);
     m_zyn_editor->SetSizer(zyn_sizer);
@@ -809,8 +829,9 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
 
     // Audio Input Selection
     wxBoxSizer* m_input_sizer = new wxBoxSizer(wxHORIZONTAL);
-    m_input_sizer->Add(new wxStaticText(m_midi_editor, wxID_ANY, "Audio Input:"), 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    m_input_sizer->Add(new wxStaticText(m_midi_editor, wxID_ANY, "Return Audio:"), 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
     m_midi_input_choice = new wxChoice(m_midi_editor, wxID_ANY);
+    m_midi_input_choice->SetToolTip("Route the external synth's audio back into this MIDI instrument track.");
     m_midi_input_choice->Bind(wxEVT_CHOICE, [this](wxCommandEvent& ev) {
         if (m_selected_instrument >= 0) {
             auto& inst = m_engine.instrument(m_selected_instrument);
@@ -1560,10 +1581,43 @@ void InstrumentPanel::update_editor() {
                 }
             }
 
-            std::string p_name = inst.plugin_name();
-            bool is_zyn = (!p_name.empty() && p_name.find("ZynAddSubFX") != std::string::npos);
-            if (is_zyn) {
+            auto* dssi = dynamic_cast<DSSIInstrument*>(&inst);
+            m_dssi_program_mode = false;
+            m_dssi_programs.clear();
+            if (dssi && dssi->program_count() > 0) {
+                m_dssi_program_mode = true;
                 m_zyn_editor->Show();
+                m_zyn_bank_ch->Hide();
+                m_zyn_prev_btn->Hide();
+                m_zyn_next_btn->Hide();
+                m_zyn_preset_browser->Clear();
+                for (size_t i = 0; i < dssi->program_count(); ++i) {
+                    const auto& prog = dssi->program_info(i);
+                    m_dssi_programs.push_back({prog.bank, prog.program, prog.name});
+                    wxString label = wxString::Format("[%lu:%lu] ", prog.bank, prog.program);
+                    label += wxString::FromUTF8(prog.name);
+                    m_zyn_preset_browser->Append(label);
+                }
+                int current = -1;
+                for (size_t i = 0; i < m_dssi_programs.size(); ++i) {
+                    if (dssi->bank() == m_dssi_programs[i].bank &&
+                        dssi->program() == m_dssi_programs[i].program) {
+                        current = (int)i;
+                        break;
+                    }
+                }
+                if (current >= 0) {
+                    m_zyn_preset_browser->SetSelection(current);
+                    m_zyn_preset_browser->EnsureVisible(current);
+                } else if (m_zyn_preset_browser->GetCount() > 0) {
+                    m_zyn_preset_browser->SetSelection(0);
+                }
+            } else if (!inst.plugin_name().empty() &&
+                       inst.plugin_name().find("ZynAddSubFX") != std::string::npos) {
+                m_zyn_editor->Show();
+                m_zyn_bank_ch->Show();
+                m_zyn_prev_btn->Show();
+                m_zyn_next_btn->Show();
                 auto* dssi_zyn = dynamic_cast<DSSIInstrument*>(&inst);
                 unsigned long saved_bank = dssi_zyn ? dssi_zyn->bank() : 0;
                 unsigned long saved_prog = dssi_zyn ? dssi_zyn->program() : 0;
@@ -1582,7 +1636,6 @@ void InstrumentPanel::update_editor() {
                     }
                 }
 
-                // Restore saved bank/program selection
                 if (m_zyn_bank_ch->GetCount() > 0) {
                     int bidx = (saved_bank < (unsigned long)m_zyn_bank_ch->GetCount()) ? (int)saved_bank : 0;
                     m_zyn_bank_ch->SetSelection(bidx);
@@ -2188,7 +2241,7 @@ void InstrumentPanel::on_piper_browse(wxCommandEvent& /*event*/) {
 
 void InstrumentPanel::on_plugin_scan(wxCommandEvent& event) {
     m_plugin_map.clear();
-    std::vector<std::string> paths = {"/usr/lib/dssi", "/usr/local/lib/dssi", "/usr/lib/x86_64-linux-gnu/dssi"};
+    std::vector<std::string> paths = plugin_scan_paths();
     for (const auto& path : paths) {
         wxDir dir(path); if (!dir.IsOpened()) continue;
         wxString filename; bool cont = dir.GetFirst(&filename, "*.so", wxDIR_FILES);
@@ -2228,6 +2281,7 @@ void InstrumentPanel::on_plugin_select(wxCommandEvent& event) {
 void InstrumentPanel::on_plugin_param(wxScrollEvent& event) {}
 
 void InstrumentPanel::on_zyn_bank(wxCommandEvent& event) {
+    if (m_dssi_program_mode) return;
     m_zyn_preset_browser->Clear();
     int bidx = m_zyn_bank_ch->GetSelection(); if (bidx == wxNOT_FOUND) return;
     wxString bank_name = m_zyn_bank_ch->GetString(bidx);
@@ -2244,17 +2298,32 @@ void InstrumentPanel::on_zyn_bank(wxCommandEvent& event) {
 }
 
 void InstrumentPanel::on_zyn_preset(wxCommandEvent& event) {
-    int bidx = m_zyn_bank_ch->GetSelection();
     int pidx = m_zyn_preset_browser->GetSelection();
-    if (bidx != wxNOT_FOUND && pidx != wxNOT_FOUND && m_selected_instrument >= 0) {
+    if (m_selected_instrument >= 0) {
         auto& inst = m_engine.instrument(m_selected_instrument);
         if (inst.type() == InstrumentType::Plugin) {
-            static_cast<DSSIInstrument*>(&inst)->load_program((unsigned long)bidx, (unsigned long)pidx);
+            auto* dssi = static_cast<DSSIInstrument*>(&inst);
+            if (m_dssi_program_mode) {
+                if (pidx >= 0 && pidx < (int)m_dssi_programs.size()) {
+                    const auto& prog = m_dssi_programs[(size_t)pidx];
+                    dssi->load_program(prog.bank, prog.program);
+                }
+            } else if (m_zyn_bank_ch->GetSelection() != wxNOT_FOUND && pidx != wxNOT_FOUND) {
+                dssi->load_program((unsigned long)m_zyn_bank_ch->GetSelection(), (unsigned long)pidx);
+            }
         }
     }
 }
 
 void InstrumentPanel::on_zyn_prev(wxCommandEvent& event) {
+    if (m_dssi_program_mode) {
+        int sel = m_zyn_preset_browser->GetSelection();
+        if (sel > 0) {
+            m_zyn_preset_browser->SetSelection(sel - 1);
+            wxCommandEvent dummy; on_zyn_preset(dummy);
+        }
+        return;
+    }
     int sel = m_zyn_preset_browser->GetSelection();
     if (sel > 0) {
         m_zyn_preset_browser->SetSelection(sel - 1);
@@ -2263,6 +2332,14 @@ void InstrumentPanel::on_zyn_prev(wxCommandEvent& event) {
 }
 
 void InstrumentPanel::on_zyn_next(wxCommandEvent& event) {
+    if (m_dssi_program_mode) {
+        int sel = m_zyn_preset_browser->GetSelection();
+        if (sel != wxNOT_FOUND && sel < (int)m_zyn_preset_browser->GetCount() - 1) {
+            m_zyn_preset_browser->SetSelection(sel + 1);
+            wxCommandEvent dummy; on_zyn_preset(dummy);
+        }
+        return;
+    }
     int sel = m_zyn_preset_browser->GetSelection();
     if (sel != wxNOT_FOUND && sel < (int)m_zyn_preset_browser->GetCount() - 1) {
         m_zyn_preset_browser->SetSelection(sel + 1);

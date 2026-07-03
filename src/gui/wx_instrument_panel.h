@@ -35,6 +35,7 @@
 #include <wx/splitter.h>
 #include <wx/timer.h>
 #include <map>
+#include <vector>
 
 namespace disgrace_ns {
 
@@ -132,6 +133,13 @@ private:
     wxListBox* m_zyn_preset_browser;
     wxButton* m_zyn_prev_btn;
     wxButton* m_zyn_next_btn;
+    struct DssiProgramInfo {
+        unsigned long bank = 0;
+        unsigned long program = 0;
+        std::string name;
+    };
+    std::vector<DssiProgramInfo> m_dssi_programs;
+    bool m_dssi_program_mode = false;
 
     wxPanel* m_midi_editor;
     wxSpinCtrl* m_midi_channel;

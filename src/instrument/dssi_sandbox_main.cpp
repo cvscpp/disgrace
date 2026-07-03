@@ -18,6 +18,8 @@
  *     HAS_SYNTH <0|1>\n
  *     CTRL_COUNT <n>\n
  *     CTRL <seq_idx> <port_idx> <min> <max> <default> <name>\n  (×n)
+ *     PROGRAM_COUNT <n>\n
+ *     PROGRAM <seq_idx> <bank> <program> <name>\n  (×n)
  *     AUDIO_L <port_idx|-1>\n
  *     AUDIO_R <port_idx|-1>\n
  *     READY\n
@@ -42,6 +44,7 @@
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -50,6 +53,7 @@
 #include <signal.h>
 
 using namespace disgrace_ns;
+namespace fs = std::filesystem;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -85,6 +89,36 @@ static float default_port_value(const LADSPA_PortRangeHint& h, double sr)
     return v;
 }
 
+static bool chdir_to_degenerat_preset_root(const char* plugin_path)
+{
+    if (!plugin_path || std::string(plugin_path).find("degenerat") == std::string::npos) {
+        return false;
+    }
+
+    fs::path probe = fs::current_path();
+    for (int depth = 0; depth < 4 && !probe.empty(); ++depth, probe = probe.parent_path()) {
+        std::error_code ec;
+        for (fs::directory_iterator it(probe, ec), end; !ec && it != end; it.increment(ec)) {
+            const auto entry_name = it->path().filename().string();
+            if (entry_name != "degenerat") {
+                continue;
+            }
+
+            fs::path preset_root = it->path() / "data" / "presets";
+            if (!fs::is_directory(preset_root, ec)) {
+                continue;
+            }
+
+            fs::current_path(it->path(), ec);
+            if (!ec) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 int main(int argc, char* argv[])
@@ -99,6 +133,8 @@ int main(int argc, char* argv[])
     const char* plugin_path = argv[2];
     int         plugin_idx  = atoi(argv[3]);
     double      sample_rate = atof(argv[4]);
+
+    (void)chdir_to_degenerat_preset_root(plugin_path);
 
     // ── 1. Attach to shared memory (created by parent) ─────────────────
     int shm_fd = shm_open(shm_name, O_RDWR, 0600);
@@ -191,6 +227,24 @@ int main(int argc, char* argv[])
     std::vector<snd_seq_event_t> midi_evs;
     midi_evs.reserve(DSB_MAX_MIDI);
 
+    struct ProgramInfo {
+        unsigned long bank = 0;
+        unsigned long program = 0;
+        std::string name;
+    };
+    std::vector<ProgramInfo> programs;
+    if (desc->get_program) {
+        for (unsigned long i = 0; ; ++i) {
+            const DSSI_Program_Descriptor* prog = desc->get_program(inst, i);
+            if (!prog) break;
+            programs.push_back({
+                prog->Bank,
+                prog->Program,
+                prog->Name ? prog->Name : ""
+            });
+        }
+    }
+
     // ── 4. Report setup to parent ──────────────────────────────────────
     fprintf(stdout, "OK\n");
     fprintf(stdout, "NAME %s\n", ladspa->Name ? ladspa->Name : "");
@@ -203,6 +257,11 @@ int main(int argc, char* argv[])
         for (char& ch : safe_name) if (ch == '\n') ch = ' ';
         fprintf(stdout, "CTRL %zu %d %.8g %.8g %.8g %s\n",
                 i, c.port_idx, c.min_v, c.max_v, c.def_v, safe_name.c_str());
+    }
+    fprintf(stdout, "PROGRAM_COUNT %zu\n", programs.size());
+    for (size_t i = 0; i < programs.size(); ++i) {
+        fprintf(stdout, "PROGRAM %zu %lu %lu %s\n",
+                i, programs[i].bank, programs[i].program, programs[i].name.c_str());
     }
     fprintf(stdout, "AUDIO_L %d\n", audio_out_l);
     fprintf(stdout, "AUDIO_R %d\n", audio_out_r);

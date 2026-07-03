@@ -48,6 +48,13 @@ public:
     void set_parameter(size_t index, float value) override;
 
     void load_program(unsigned long bank, unsigned long program);
+    struct ProgramInfo {
+        unsigned long bank = 0;
+        unsigned long program = 0;
+        std::string name;
+    };
+    size_t program_count() const { return m_programs.size(); }
+    const ProgramInfo& program_info(size_t index) const { return m_programs[index]; }
 
     const std::string& path()    const { return m_path; }
     int                index()   const { return m_index; }
@@ -78,6 +85,7 @@ private:
         float current_value;
     };
     std::vector<CtrlInfo> m_ctrl_info;
+    std::vector<ProgramInfo> m_programs;
 
     // ── audio routing reported by child ─────────────────────────────
     int  m_audio_out_l = -1;

@@ -8,6 +8,7 @@
 #include <wx/spinctrl.h>
 #include <wx/stattext.h>
 #include <wx/listctrl.h>
+#include <wx/textctrl.h>
 
 namespace disgrace_ns {
 
@@ -38,6 +39,9 @@ private:
     wxSpinCtrl* m_midi_ins;
     wxSpinCtrl* m_midi_outs;
     wxButton* m_reinit_midi_btn;
+    wxTextCtrl* m_plugin_paths;
+    wxButton* m_plugin_paths_apply_btn;
+    wxButton* m_plugin_paths_reset_btn;
 
     wxChoice* m_gui_theme;
     wxChoice* m_gui_btn_h;
@@ -61,6 +65,8 @@ private:
     void populate_shortcut_list();
     void refresh_audio_status();
     void sync_audio_controls();
+    void sync_plugin_paths();
+    void apply_plugin_paths();
 
     void on_reinit_audio(wxCommandEvent& event);
     void on_reinit_midi(wxCommandEvent& event);

@@ -71,7 +71,7 @@ Thread Model
 
 JACK Audio Thread (real-time)
 
-GUI Thread (FLTK main loop)
+GUI Thread (wxWidgets main loop)
 
 Worker Thread(s)
 
@@ -415,7 +415,7 @@ Human readability
 
 Debugging ease
 
-11. GUI Subsystem (FLTK)
+11. GUI Subsystem (wxWidgets)
 Layout
 
 Main window tabs:
@@ -432,7 +432,7 @@ Tracker, Mixer, and Editor detachable as independent windows.
 
 Tracker UI
 
-Custom FLTK widget:
+Custom wxWidgets widget:
 
 Manual grid drawing
 

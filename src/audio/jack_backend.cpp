@@ -21,6 +21,7 @@
 #include <jack/midiport.h>
 #include <cstring>
 #include <cstdio>
+#include <iostream>
 
 namespace disgrace_ns
 {
@@ -50,28 +51,57 @@ bool JackBackend::start()
 
     jack_set_process_callback(m_client, JackBackend::process_callback, this);
 
+    // JACK MIDI ports are expected to be available whenever the JACK backend is active.
+    // Some configuration paths can leave these counts at 0, so promote them to 1 here.
+    m_num_midi_ins = std::max(1u, m_num_midi_ins);
+    m_num_midi_outs = std::max(1u, m_num_midi_outs);
+
     for (uint32_t i = 0; i < m_num_ins; ++i) {
         char name[32];
         snprintf(name, sizeof(name), "in_%u", i + 1);
-        m_input_ports.push_back(jack_port_register(m_client, name, JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0));
+        auto* port = jack_port_register(m_client, name, JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+        if (!port) {
+            std::cerr << "[JACK] Failed to register audio input port " << name << std::endl;
+            stop();
+            return false;
+        }
+        m_input_ports.push_back(port);
     }
 
     for (uint32_t i = 0; i < m_num_outs; ++i) {
         char name[32];
         snprintf(name, sizeof(name), "out_%u", i + 1);
-        m_output_ports.push_back(jack_port_register(m_client, name, JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0));
+        auto* port = jack_port_register(m_client, name, JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+        if (!port) {
+            std::cerr << "[JACK] Failed to register audio output port " << name << std::endl;
+            stop();
+            return false;
+        }
+        m_output_ports.push_back(port);
     }
 
     for (uint32_t i = 0; i < m_num_midi_ins; ++i) {
         char name[32];
         snprintf(name, sizeof(name), "midi_in_%u", i + 1);
-        m_midi_input_ports.push_back(jack_port_register(m_client, name, JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0));
+        auto* port = jack_port_register(m_client, name, JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+        if (!port) {
+            std::cerr << "[JACK] Failed to register MIDI input port " << name << std::endl;
+            stop();
+            return false;
+        }
+        m_midi_input_ports.push_back(port);
     }
 
     for (uint32_t i = 0; i < m_num_midi_outs; ++i) {
         char name[32];
         snprintf(name, sizeof(name), "midi_out_%u", i + 1);
-        m_midi_output_ports.push_back(jack_port_register(m_client, name, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0));
+        auto* port = jack_port_register(m_client, name, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+        if (!port) {
+            std::cerr << "[JACK] Failed to register MIDI output port " << name << std::endl;
+            stop();
+            return false;
+        }
+        m_midi_output_ports.push_back(port);
     }
 
     if (jack_activate(m_client))
@@ -165,18 +195,25 @@ int JackBackend::process(jack_nframes_t nframes)
     }
 
     // Process MIDI outputs
+    MidiMessage midi_messages[1024];
+    size_t midi_message_count = 0;
+    while (midi_message_count < (sizeof(midi_messages) / sizeof(midi_messages[0])) &&
+           m_engine->m_midi_out_queue.pop(midi_messages[midi_message_count])) {
+        ++midi_message_count;
+    }
+
     for (auto* port : m_midi_output_ports) {
         void* midi_buf = jack_port_get_buffer(port, nframes);
         if (!midi_buf) continue;
         jack_midi_clear_buffer(midi_buf);
 
-        MidiMessage msg;
-        while (m_engine->m_midi_out_queue.pop(msg)) {
+        for (size_t i = 0; i < midi_message_count; ++i) {
+            const MidiMessage& out_msg = midi_messages[i];
             unsigned char* buf = jack_midi_event_reserve(midi_buf, 0, 3);
             if (buf) {
-                buf[0] = msg.status;
-                buf[1] = msg.data1;
-                buf[2] = msg.data2;
+                buf[0] = out_msg.status;
+                buf[1] = out_msg.data1;
+                buf[2] = out_msg.data2;
             }
         }
     }

@@ -471,6 +471,15 @@ void Engine::record_note(uint8_t note, size_t column)
     }
 }
 
+void Engine::record_note_off(size_t column)
+{
+    size_t row = current_row();
+    Pattern& current_pattern = pattern();
+    if (m_record_track < current_pattern.track_count()) {
+        current_pattern.event(m_record_track, row, column).note = 254;
+    }
+}
+
 void Engine::process_tick() 
 { 
     size_t pat_idx = m_active_pattern.load();
@@ -480,6 +489,11 @@ void Engine::process_tick()
     if (m_current_tick == 0) {
         size_t row = m_current_row;
         for (size_t t = 0; t < m_tracks.size() && t < pat.track_count(); ++t) {
+            // Row-scoped tracker effects should not leak into later rows.
+            m_tracks[t].m_fx_state.retrig_ticks = 0;
+            m_tracks[t].m_fx_state.retrig_counter = 0;
+            m_tracks[t].m_fx_state.note_cut_tick = -1;
+
             size_t num_cols = pat.column_count(t);
             for (size_t c = 0; c < num_cols; ++c) {
                 TrackEvent& ev = pat.event(t, row, c);
@@ -511,11 +525,9 @@ void Engine::process_tick()
                 if (end_pos == 0 && !m_order.empty()) end_pos = m_order.size() - 1;
 
                 if (next_order_pos > end_pos) {
-                    if (m_is_exporting.load()) {
-                        transport().stop();
-                        return;
-                    }
-                    next_order_pos = m_order_start.load();
+                    transport().stop();
+                    panic();
+                    return;
                 }
                 
                 if (next_order_pos < m_order.size()) {
@@ -557,9 +569,12 @@ void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float*
     MidiMessage msg;
     while (m_midi_queue.pop(msg)) {
         uint8_t status = msg.status & 0xF0;
-        if (status == 0x90 || status == 0x80) {
+        if (status == 0x90 && msg.data2 != 0) {
             m_tracks[m_record_track].note_on(msg.data1, msg.data2);
             if (m_record_enabled && transport().is_playing()) record_note(msg.data1);
+        } else if (status == 0x80 || (status == 0x90 && msg.data2 == 0)) {
+            m_tracks[m_record_track].note_off();
+            if (m_record_enabled && transport().is_playing()) record_note_off();
         }
     }
 
@@ -585,7 +600,7 @@ void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float*
         for (uint32_t i = 0; i < num_outs && i < 64; ++i)
             offset_out_bufs[i] = out_bufs[i] + processed;
 
-        render_block_multi(offset_out_bufs, num_outs, block, in_bufs ? offset_in_bufs : nullptr);
+        render_block_multi(offset_out_bufs, num_outs, block, in_bufs ? offset_in_bufs : nullptr, num_ins);
         processed += block;
         if (transport().is_playing())
             m_samples_until_next_tick -= block;
@@ -646,7 +661,8 @@ void Engine::process_block(float* l, float* r, size_t nframes, const float* cons
     m_master.process(l, r, nframes);
 }
 
-void Engine::render_block_multi(float** out_bufs, uint32_t num_outs, size_t frames, const float* const* in_bufs) {
+void Engine::render_block_multi(float** out_bufs, uint32_t num_outs, size_t frames,
+                                const float* const* in_bufs, uint32_t num_ins) {
     if (m_is_recording_sample.load()) {
         bool should_record = false;
         if (m_recording_sample_mode.load() == SampleRecordMode::Free) {
@@ -748,7 +764,7 @@ void Engine::render_block_multi(float** out_bufs, uint32_t num_outs, size_t fram
         m_tracks[t].fire_pending_notes(frames);
         bool audible = any_solo ? m_tracks[t].solo() : !m_tracks[t].muted();
         if (audible) {
-            m_tracks[t].process(m_track_l[t], m_track_r[t], frames, in_bufs);
+            m_tracks[t].process(m_track_l[t], m_track_r[t], frames, in_bufs, num_ins);
         } else {
             std::fill(m_track_l[t], m_track_l[t] + frames, 0.f);
             std::fill(m_track_r[t], m_track_r[t] + frames, 0.f);

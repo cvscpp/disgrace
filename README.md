@@ -77,6 +77,13 @@ At startup, Disgrace now shows an intro window with the logo, current version, l
 
 Because Disgrace is designed around JACK, running it in a JACK-enabled audio environment is the expected setup.
 
+### External MIDI synth workflow
+
+1. Create a track with a **MIDI** instrument and set its channel/program.
+2. Connect the track's JACK MIDI output to the external synth.
+3. Set the MIDI instrument's **Return Audio** input to the external synth's JACK audio outputs.
+4. Route that track to the master bus or a mixer bus as needed.
+
 ## Design and authorship note
 
 Disgrace is **human-designed** in its concept, product direction, architecture, and feature decisions.

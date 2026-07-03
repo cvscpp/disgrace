@@ -41,8 +41,8 @@ public:
     int program() const { return m_program; }
 
     // Audio Input support (for routing external audio through MIDI instrument bus)
-    void set_audio_input(int channel_l, int channel_r);
-    void get_audio_input(int& channel_l, int& channel_r) const;
+    void set_audio_input(int channel_l, int channel_r) override;
+    void get_audio_input(int& channel_l, int& channel_r) const override;
 
 protected:
     std::unique_ptr<Voice> create_voice() override { return nullptr; }

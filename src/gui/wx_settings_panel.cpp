@@ -26,6 +26,39 @@ AudioBackendType backend_choice_type(int idx)
     return idx == 1 ? AudioBackendType::Oss : AudioBackendType::Jack;
 }
 
+std::string join_lines(const std::vector<std::string>& values)
+{
+    std::string out;
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i > 0) out.push_back('\n');
+        out += values[i];
+    }
+    return out;
+}
+
+std::vector<std::string> split_lines(const std::string& text)
+{
+    std::vector<std::string> out;
+    std::string current;
+    for (char ch : text) {
+        if (ch == '\r') {
+            continue;
+        }
+        if (ch == '\n') {
+            if (!current.empty()) {
+                out.push_back(current);
+                current.clear();
+            }
+        } else {
+            current.push_back(ch);
+        }
+    }
+    if (!current.empty()) {
+        out.push_back(current);
+    }
+    return out;
+}
+
 } // namespace
 
 // Modal dialog that waits for the user to press a single key combination.
@@ -197,15 +230,17 @@ void SettingsPanel::init_midi_grp(int x, int y, int w, int h) {
 
     wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
     row->Add(new wxStaticText(m_midi_grp, wxID_ANY, "Input Devices:"), 0, wxALL, 2);
-    m_midi_ins = new wxSpinCtrl(m_midi_grp, wxID_ANY, "0", wxDefaultPosition, wxSize(60, 25));
+    m_midi_ins = new wxSpinCtrl(m_midi_grp, wxID_ANY, "1", wxDefaultPosition, wxSize(60, 25));
     m_midi_ins->SetRange(0, 16);
+    m_midi_ins->SetValue(std::max(1, (int)m_engine.m_num_midi_ins));
     row->Add(m_midi_ins, 0, wxALL, 2);
     sizer->Add(row, 0, wxALL, 2);
 
     row = new wxBoxSizer(wxHORIZONTAL);
     row->Add(new wxStaticText(m_midi_grp, wxID_ANY, "Output Devices:"), 0, wxALL, 2);
-    m_midi_outs = new wxSpinCtrl(m_midi_grp, wxID_ANY, "0", wxDefaultPosition, wxSize(60, 25));
+    m_midi_outs = new wxSpinCtrl(m_midi_grp, wxID_ANY, "1", wxDefaultPosition, wxSize(60, 25));
     m_midi_outs->SetRange(0, 16);
+    m_midi_outs->SetValue(std::max(1, (int)m_engine.m_num_midi_outs));
     row->Add(m_midi_outs, 0, wxALL, 2);
     sizer->Add(row, 0, wxALL, 2);
 
@@ -240,6 +275,32 @@ void SettingsPanel::sync_audio_controls()
     m_midi_ins->SetValue(static_cast<int>(m_engine.m_num_midi_ins));
     m_midi_outs->SetValue(static_cast<int>(m_engine.m_num_midi_outs));
     refresh_audio_status();
+}
+
+void SettingsPanel::sync_plugin_paths()
+{
+    if (!m_plugin_paths) return;
+    m_plugin_paths->ChangeValue(wxString::FromUTF8(
+        join_lines(ConfigManager::instance().config().plugin_paths)));
+}
+
+void SettingsPanel::apply_plugin_paths()
+{
+    auto& cfg = ConfigManager::instance().config();
+    cfg.plugin_paths = split_lines(m_plugin_paths ? m_plugin_paths->GetValue().ToStdString() : std::string());
+    if (cfg.plugin_paths.empty()) {
+        cfg.plugin_paths = {
+            "/usr/lib/dssi",
+            "/usr/local/lib/dssi",
+            "/usr/lib/x86_64-linux-gnu/dssi",
+            "/usr/lib/ladspa",
+            "/usr/local/lib/ladspa",
+            "/usr/lib/lv2",
+            "/usr/local/lib/lv2"
+        };
+        sync_plugin_paths();
+    }
+    ConfigManager::instance().save();
 }
 
 void SettingsPanel::init_mixer_grp(int x, int y, int w, int h) {
@@ -418,6 +479,40 @@ void SettingsPanel::init_misc_grp(int x, int y, int w, int h) {
 
     sizer->Add(new wxStaticLine(m_misc_grp), 0, wxEXPAND | wxALL, 4);
 
+    sizer->Add(new wxStaticText(m_misc_grp, wxID_ANY, "Plugin search paths (one per line):"), 0, wxALL, 4);
+    m_plugin_paths = new wxTextCtrl(m_misc_grp, wxID_ANY, wxEmptyString,
+                                    wxDefaultPosition, wxSize(-1, 120),
+                                    wxTE_MULTILINE | wxTE_DONTWRAP);
+    sizer->Add(m_plugin_paths, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
+
+    wxBoxSizer* plugin_row = new wxBoxSizer(wxHORIZONTAL);
+    m_plugin_paths_apply_btn = new wxButton(m_misc_grp, wxID_ANY, "Apply Plugin Paths",
+                                            wxDefaultPosition, wxSize(-1, 28));
+    m_plugin_paths_apply_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_TICK_MARK, wxART_BUTTON, wxSize(16, 16)));
+    m_plugin_paths_apply_btn->SetToolTip("Save the plugin path list used by the plugin scanner");
+    m_plugin_paths_apply_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { apply_plugin_paths(); });
+    plugin_row->Add(m_plugin_paths_apply_btn, 0, wxALL, 4);
+
+    m_plugin_paths_reset_btn = new wxButton(m_misc_grp, wxID_ANY, "Restore Defaults",
+                                             wxDefaultPosition, wxSize(-1, 28));
+    m_plugin_paths_reset_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_UNDO, wxART_BUTTON, wxSize(16, 16)));
+    m_plugin_paths_reset_btn->SetToolTip("Restore the standard JACK plugin search paths");
+    m_plugin_paths_reset_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        ConfigManager::instance().config().plugin_paths = {
+            "/usr/lib/dssi",
+            "/usr/local/lib/dssi",
+            "/usr/lib/x86_64-linux-gnu/dssi",
+            "/usr/lib/ladspa",
+            "/usr/local/lib/ladspa",
+            "/usr/lib/lv2",
+            "/usr/local/lib/lv2"
+        };
+        sync_plugin_paths();
+        ConfigManager::instance().save();
+    });
+    plugin_row->Add(m_plugin_paths_reset_btn, 0, wxALL, 4);
+    sizer->Add(plugin_row, 0, wxALL, 0);
+
     // --- Save / Load defaults ---
     wxBoxSizer* row1 = new wxBoxSizer(wxHORIZONTAL);
 
@@ -464,9 +559,11 @@ void SettingsPanel::init_misc_grp(int x, int y, int w, int h) {
 
     m_misc_grp->SetSizer(sizer);
     m_sub_tabs->AddPage(m_misc_grp, "Misc");
+    sync_plugin_paths();
 }
 
 void SettingsPanel::on_save_settings(wxCommandEvent&) {
+    apply_plugin_paths();
     m_engine.save_config();
     wxMessageBox("Settings saved to:\n" +
         wxString::FromUTF8(ConfigManager::instance().config_path().c_str()),
@@ -478,6 +575,7 @@ void SettingsPanel::on_load_settings(wxCommandEvent&) {
     m_engine.load_config();
     ThemeManager::apply_theme_and_settings(m_engine);
     sync_audio_controls();
+    sync_plugin_paths();
     wxWindow* top = wxGetTopLevelParent(this);
     if (top) { top->Refresh(); top->Update(); }
     wxMessageBox("Settings loaded and applied.", "Settings Loaded", wxOK | wxICON_INFORMATION);
@@ -488,6 +586,7 @@ void SettingsPanel::on_export_settings(wxCommandEvent&) {
         "JSON files (*.json)|*.json|All files (*.*)|*.*",
         wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
     if (dlg.ShowModal() == wxID_OK) {
+        apply_plugin_paths();
         m_engine.save_config(); // Update config from engine first
         ConfigManager::instance().save_to(dlg.GetPath().ToStdString());
         wxMessageBox("Settings exported to:\n" + dlg.GetPath(),
@@ -504,6 +603,7 @@ void SettingsPanel::on_import_settings(wxCommandEvent&) {
         m_engine.load_config();
         ThemeManager::apply_theme_and_settings(m_engine);
         sync_audio_controls();
+        sync_plugin_paths();
         wxWindow* top = wxGetTopLevelParent(this);
         if (top) { top->Refresh(); top->Update(); }
         wxMessageBox("Settings imported from:\n" + dlg.GetPath() +

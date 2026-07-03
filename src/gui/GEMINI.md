@@ -1,6 +1,6 @@
 # GUI Subsystem
 
-This directory contains the graphical user interface components for `disgrace`, implemented using the **wxWidgets** toolkit. The original FLTK implementation has been fully ported.
+This directory contains the graphical user interface components for `disgrace`, implemented using the **wxWidgets** toolkit.
 
 ## Purpose
 The primary responsibilities of this subsystem include:

@@ -33,6 +33,7 @@ namespace disgrace_ns {
 wxBEGIN_EVENT_TABLE(TrackerView, wxScrolledWindow)
     EVT_PAINT(TrackerView::OnPaint)
     EVT_KEY_DOWN(TrackerView::OnKeyDown)
+    EVT_KEY_UP(TrackerView::OnKeyUp)
     EVT_LEFT_DOWN(TrackerView::OnMouseDown)
     EVT_MOTION(TrackerView::OnMouseDrag)
     EVT_LEFT_UP(TrackerView::OnMouseUp)
@@ -40,6 +41,40 @@ wxBEGIN_EVENT_TABLE(TrackerView, wxScrolledWindow)
 wxEND_EVENT_TABLE()
 
 namespace {
+    bool is_note_action(Action action) {
+        switch (action) {
+            case Action::NoteOff:
+            case Action::NoteC:
+            case Action::NoteCs:
+            case Action::NoteD:
+            case Action::NoteDs:
+            case Action::NoteE:
+            case Action::NoteF:
+            case Action::NoteFs:
+            case Action::NoteG:
+            case Action::NoteGs:
+            case Action::NoteA:
+            case Action::NoteAs:
+            case Action::NoteB:
+            case Action::NoteC2:
+            case Action::NoteCs2:
+            case Action::NoteD2:
+            case Action::NoteDs2:
+            case Action::NoteE2:
+            case Action::NoteF2:
+            case Action::NoteFs2:
+            case Action::NoteG2:
+            case Action::NoteGs2:
+            case Action::NoteA2:
+            case Action::NoteAs2:
+            case Action::NoteB2:
+            case Action::NoteC3:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     enum {
         ID_TRANSPOSE_UP1   = wxID_HIGHEST + 200,
         ID_TRANSPOSE_DOWN1,
@@ -795,7 +830,16 @@ void TrackerView::insert_note(uint8_t note) {
             m_cursor_row = std::min((int)m_pattern->row_count() - 1, m_cursor_row + (int)m_engine.step_size());
         }
     }
+
+    if (m_preview_active && (m_preview_track != m_cursor_track || m_preview_col != m_cursor_col || m_preview_note != final_note)) {
+        m_engine.stop_preview((size_t)m_preview_track, (size_t)m_preview_col);
+        m_preview_active = false;
+    }
     m_engine.preview_note(m_cursor_track, final_note, m_cursor_col);
+    m_preview_active = true;
+    m_preview_track = m_cursor_track;
+    m_preview_col = m_cursor_col;
+    m_preview_note = final_note;
     Refresh();
 }
 
@@ -1032,6 +1076,25 @@ bool TrackerView::handle_action(Action action) {
         return true;
     }
     return false;
+}
+
+void TrackerView::OnKeyUp(wxKeyEvent& event) {
+    int key = event.GetKeyCode();
+    int wx_mods = event.GetModifiers();
+    int modifiers = 0;
+    if (wx_mods & wxMOD_CONTROL) modifiers |= 0x1000;
+    if (wx_mods & wxMOD_ALT)     modifiers |= 0x2000;
+    if (wx_mods & wxMOD_SHIFT)   modifiers |= 0x4000;
+
+    Action action = m_engine.m_key_bindings.get_action(key, modifiers);
+    if (is_note_action(action) && m_preview_active && m_preview_track >= 0 && m_preview_col >= 0) {
+        m_engine.stop_preview((size_t)m_preview_track, (size_t)m_preview_col);
+        m_preview_active = false;
+        m_preview_track = -1;
+        m_preview_col = -1;
+        m_preview_note = 255;
+    }
+    event.Skip();
 }
 
 void TrackerView::start_text_edit() {

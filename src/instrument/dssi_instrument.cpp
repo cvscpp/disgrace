@@ -233,6 +233,19 @@ bool DSSIInstrument::spawn_sandbox(const std::string& plugin_path, int plugin_id
             m_audio_out_r = atoi(line + 8);
         } else if (strcmp(line, "READY") == 0) {
             break;
+        } else if (strncmp(line, "PROGRAM_COUNT ", 14) == 0) {
+            int cnt = atoi(line + 14);
+            m_programs.clear();
+            m_programs.reserve((size_t)cnt);
+        } else if (strncmp(line, "PROGRAM ", 8) == 0) {
+            ProgramInfo pi{};
+            char name_buf[512] = {};
+            int seq_idx = 0;
+            if (sscanf(line + 8, "%d %lu %lu %511[^\n]",
+                       &seq_idx, &pi.bank, &pi.program, name_buf) >= 3) {
+                pi.name = name_buf;
+                m_programs.push_back(pi);
+            }
         }
     }
 
@@ -272,6 +285,7 @@ bool DSSIInstrument::load_plugin(const std::string& path, int index)
     m_path  = path;
     m_index = index;
     m_ctrl_info.clear();
+    m_programs.clear();
     m_bank    = 0;
     m_program = 0;
     return spawn_sandbox(path, index);

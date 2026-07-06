@@ -23,6 +23,7 @@
 #pragma once
 
 #include <semaphore.h>
+#include <cstddef>
 #include <cstdint>
 
 namespace disgrace_ns {

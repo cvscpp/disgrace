@@ -348,6 +348,7 @@ public:
 
     friend class SongSerializer;
     friend class XrnsImporter;
+    friend class MidiImporter;
 
 private:
     void propagate_sample_rate(uint32_t sr);

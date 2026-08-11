@@ -59,6 +59,7 @@ disgrace_SOURCES = \
     io/project_archive.cpp \
     io/song_serializer.cpp \
     io/xrns_importer.cpp \
+    io/midi_importer.cpp \
     midi/midi_input.cpp \
     mixer/track.cpp \
     mixer/track_clipboard.cpp \

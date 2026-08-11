@@ -20,9 +20,11 @@
 #include "../io/song_serializer.h"
 #include "../io/project_archive.h"
 #include "../io/xrns_importer.h"
+#include "../io/midi_importer.h"
 #include <filesystem>
 #include <iostream>
 #include <chrono>
+#include <algorithm>
 
 namespace fs = std::filesystem;
 
@@ -87,12 +89,23 @@ void Engine::load_project(const ::std::string& path)
 void Engine::import_audio(const ::std::string& path)
 {
     std::string path_str(path);
+    std::transform(path_str.begin(), path_str.end(), path_str.begin(), ::tolower);
     
     if (path_str.size() >= 5 && path_str.compare(path_str.size() - 5, 5, ".xrns") == 0) {
         if (XrnsImporter::import(*this, path)) {
             std::cout << "XRNS import successful" << std::endl;
         } else {
             std::cerr << "Failed to import XRNS file" << std::endl;
+        }
+        return;
+    }
+    
+    if ((path_str.size() >= 4 && path_str.compare(path_str.size() - 4, 4, ".mid") == 0) ||
+        (path_str.size() >= 5 && path_str.compare(path_str.size() - 5, 5, ".midi") == 0)) {
+        if (MidiImporter::import(*this, path)) {
+            std::cout << "MIDI import successful" << std::endl;
+        } else {
+            std::cerr << "Failed to import MIDI file" << std::endl;
         }
         return;
     }

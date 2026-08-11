@@ -445,7 +445,7 @@ void ProjectPanel::on_load(wxCommandEvent& event) {
 }
 
 void ProjectPanel::on_import(wxCommandEvent& event) {
-    wxFileDialog dlg(this, "Import Audio", "", "", "Audio Files (*.wav;*.flac;*.ogg;*.mp3;*.aiff;*.sf2;*.xrns)|*.wav;*.flac;*.ogg;*.mp3;*.aiff;*.sf2;*.xrns;*.WAV;*.FLAC;*.OGG;*.MP3;*.AIFF;*.SF2;*.XRNS", wxFD_OPEN);
+    wxFileDialog dlg(this, "Import Audio", "", "", "Audio Files (*.wav;*.flac;*.ogg;*.mp3;*.aiff;*.sf2;*.xrns;*.mid;*.midi)|*.wav;*.flac;*.ogg;*.mp3;*.aiff;*.sf2;*.xrns;*.mid;*.midi;*.WAV;*.FLAC;*.OGG;*.MP3;*.AIFF;*.SF2;*.XRNS;*.MID;*.MIDI", wxFD_OPEN);
     if (dlg.ShowModal() == wxID_OK) {
         m_engine.import_audio(dlg.GetPath().ToStdString());
         if (m_main_window) m_main_window->update_all_uis();

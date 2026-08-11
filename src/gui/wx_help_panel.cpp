@@ -250,6 +250,7 @@ void HelpPanel::load_documentation() {
 <tr><td><b>.sfz</b></td><td>SFZ instrument (absolute path reference; not embedded)</td></tr>
 <tr><td><b>.xrni</b></td><td>Renoise instrument (absolute path reference; not embedded)</td></tr>
 <tr><td><b>.xrns</b></td><td>Renoise song (importable via File &rarr; Import XRNS)</td></tr>
+<tr><td><b>.mid / .midi</b></td><td>Standard MIDI file (importable via File &rarr; Import Audio; one track per channel, MIDI instruments)</td></tr>
 <tr><td><b>.chain</b></td><td>Saved DSP effect chain (JSON)</td></tr>
 <tr><td><b>.json</b></td><td>Individual effect preset</td></tr>
 </table>

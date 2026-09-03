@@ -23,12 +23,11 @@ AnalogVUMeter::AnalogVUMeter(wxWindow* parent, wxWindowID id, Engine& engine)
 void AnalogVUMeter::level(float l) {
     m_level = l;
     
-    // VU Meter ballistics: Rise is usually faster than fall
-    // Standard is roughly 300ms to reach 99%
+    // VU Meter ballistics: Rise ~200ms, fall ~550ms to 95%
     if (m_level > m_smooth_level) {
-        m_smooth_level = 0.7f * m_smooth_level + 0.3f * m_level; // Faster rise
+        m_smooth_level += (m_level - m_smooth_level) * 0.1f;
     } else {
-        m_smooth_level = 0.92f * m_smooth_level + 0.08f * m_level; // Slower fall
+        m_smooth_level += (m_level - m_smooth_level) * 0.03f;
     }
     
     Refresh(false);

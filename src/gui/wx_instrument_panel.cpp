@@ -39,6 +39,7 @@
 #include <wx/sizer.h>
 #include <wx/msgdlg.h>
 #include <wx/filedlg.h>
+#include <wx/dcbuffer.h>
 #include <wx/textdlg.h>
 #include <wx/dir.h>
 #include <wx/filename.h>
@@ -229,6 +230,212 @@ namespace disgrace_ns {
 namespace {
 constexpr int kInputMeterIntervalMs = 16;
 }
+
+// ---- PianoWidget implementation ----
+
+wxBEGIN_EVENT_TABLE(PianoWidget, wxPanel)
+    EVT_PAINT(PianoWidget::OnPaint)
+    EVT_LEFT_DOWN(PianoWidget::OnMouseDown)
+    EVT_LEFT_UP(PianoWidget::OnMouseUp)
+    EVT_MOTION(PianoWidget::OnMotion)
+wxEND_EVENT_TABLE()
+
+PianoWidget::PianoWidget(wxWindow* parent, wxWindowID id, NoteCallback on_note_on, NoteCallback on_note_off)
+    : wxPanel(parent, id), m_note_on_cb(std::move(on_note_on)), m_note_off_cb(std::move(on_note_off))
+{
+    SetBackgroundStyle(wxBG_STYLE_PAINT);
+    SetCanFocus(false);
+    SetMinSize(wxSize(-1, 120));
+    SetMaxSize(wxSize(-1, 120));
+    m_notes_on.resize(128, false);
+}
+
+static const int kWhiteSemitones[] = {0, 2, 4, 5, 7, 9, 11};
+
+static int white_key_to_midi(int white_idx, int base_note) {
+    int octave = white_idx / 7;
+    int wi = white_idx % 7;
+    return base_note + octave * 12 + kWhiteSemitones[wi];
+}
+
+static int midi_to_white_key(int note, int base_note) {
+    int relative = note - base_note;
+    if (relative < 0) return -1;
+    int octave = relative / 12;
+    int semi = relative % 12;
+    for (int i = 0; i < 7; ++i) {
+        if (kWhiteSemitones[i] == semi) return octave * 7 + i;
+    }
+    return -1;
+}
+
+int PianoWidget::m_note_from_x(int x) const {
+    int w = GetClientSize().GetWidth();
+    if (m_num_white_keys <= 0 || w <= 0) return -1;
+    float kw = (float)w / m_num_white_keys;
+    int white_idx = (int)(x / kw);
+    if (white_idx < 0) white_idx = 0;
+    if (white_idx >= m_num_white_keys) white_idx = m_num_white_keys - 1;
+    return white_key_to_midi(white_idx, m_base_note);
+}
+
+int PianoWidget::m_x_from_note(int note) const {
+    int w = GetClientSize().GetWidth();
+    if (m_num_white_keys <= 0 || w <= 0) return -1;
+    int wi = midi_to_white_key(note, m_base_note);
+    if (wi < 0) return -1;
+    return (int)((float)wi / m_num_white_keys * w);
+}
+
+void PianoWidget::OnPaint(wxPaintEvent& event) {
+    wxAutoBufferedPaintDC dc(this);
+    wxSize size = GetClientSize();
+    int w = size.GetWidth();
+    int h = size.GetHeight();
+
+    dc.SetBrush(wxBrush(wxColour(40, 40, 40)));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawRectangle(0, 0, w, h);
+
+    if (m_num_white_keys <= 0) return;
+    float kw = (float)w / m_num_white_keys;
+
+    for (int i = 0; i < m_num_white_keys; ++i) {
+        int x = (int)(i * kw);
+        int kw_i = (int)((i + 1) * kw) - x;
+        int note = white_key_to_midi(i, m_base_note);
+        bool is_on = (note >= 0 && note < 128 && m_notes_on[note]);
+
+        if (is_on)
+            dc.SetBrush(wxBrush(wxColour(100, 180, 255)));
+        else
+            dc.SetBrush(wxBrush(wxColour(240, 240, 240)));
+        dc.SetPen(wxPen(wxColour(120, 120, 120)));
+        dc.DrawRectangle(x, 0, kw_i, h);
+
+        if (note % 12 == 0) {
+            dc.SetFont(wxFont(7, wxFONTFAMILY_MODERN, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+            dc.SetTextForeground(wxColour(100, 100, 100));
+            wxString lbl;
+            lbl.Printf("C%d", note / 12 - 1);
+            dc.DrawText(lbl, x + 2, h - 14);
+        }
+    }
+
+    // Black keys: keyboard starts at A. Within each group of 7 white keys,
+    // the pattern from A is: A#(yes) B(no) C#(yes) D#(yes) E(no) F#(yes) G#(yes)
+    static const bool has_black_after[] = {true, false, true, true, false, true, true};
+
+    for (int i = 0; i < m_num_white_keys; ++i) {
+        if (!has_black_after[i % 7]) continue;
+
+        int note = white_key_to_midi(i, m_base_note);
+        int black_note = note + 1;
+        int bw = (int)(kw * 0.6f);
+        float bx = (i + 1) * kw - bw * 0.5f;
+        int bh = (int)(h * 0.6f);
+        bool is_on = (black_note >= 0 && black_note < 128 && m_notes_on[black_note]);
+
+        if (is_on)
+            dc.SetBrush(wxBrush(wxColour(60, 140, 220)));
+        else
+            dc.SetBrush(wxBrush(wxColour(30, 30, 30)));
+        dc.SetPen(wxPen(wxColour(20, 20, 20)));
+        dc.DrawRectangle((int)bx, 0, bw, bh);
+    }
+}
+
+void PianoWidget::OnMouseDown(wxMouseEvent& event) {
+    int x = event.GetX();
+    int y = event.GetY();
+    int w = GetClientSize().GetWidth();
+    int h = GetClientSize().GetHeight();
+    if (m_num_white_keys <= 0 || w <= 0) return;
+    float kw = (float)w / m_num_white_keys;
+
+    static const bool has_black_after[] = {true, false, true, true, false, true, true};
+
+    for (int i = 0; i < m_num_white_keys; ++i) {
+        if (!has_black_after[i % 7]) continue;
+
+        int note = white_key_to_midi(i, m_base_note);
+        int black_note = note + 1;
+        int bw = (int)(kw * 0.6f);
+        float bx = (i + 1) * kw - bw * 0.5f;
+        int bh = (int)(h * 0.6f);
+        if (x >= (int)bx && x < (int)bx + bw && y < bh) {
+            if (black_note >= 0 && black_note < 128 && !m_notes_on[black_note]) {
+                m_notes_on[black_note] = true;
+                m_active_note = black_note;
+                if (m_note_on_cb) m_note_on_cb(black_note);
+                Refresh(false);
+            }
+            return;
+        }
+    }
+
+    int white_idx = (int)(x / kw);
+    if (white_idx < 0) white_idx = 0;
+    if (white_idx >= m_num_white_keys) return;
+    int note = white_key_to_midi(white_idx, m_base_note);
+    if (note >= 0 && note < 128 && !m_notes_on[note]) {
+        m_notes_on[note] = true;
+        m_active_note = note;
+        if (m_note_on_cb) m_note_on_cb(note);
+        Refresh(false);
+    }
+}
+
+void PianoWidget::OnMouseUp(wxMouseEvent& event) {
+    if (m_active_note >= 0 && m_active_note < 128 && m_notes_on[m_active_note]) {
+        m_notes_on[m_active_note] = false;
+        if (m_note_off_cb) m_note_off_cb(m_active_note);
+        m_active_note = -1;
+        Refresh(false);
+    }
+}
+
+void PianoWidget::OnMotion(wxMouseEvent& event) {
+    if (!event.LeftIsDown()) return;
+    int x = event.GetX();
+    int w = GetClientSize().GetWidth();
+    if (m_num_white_keys <= 0 || w <= 0) return;
+    float kw = (float)w / m_num_white_keys;
+
+    int white_idx = (int)(x / kw);
+    if (white_idx < 0) white_idx = 0;
+    if (white_idx >= m_num_white_keys) return;
+    int note = white_key_to_midi(white_idx, m_base_note);
+
+    if (note != m_active_note) {
+        if (m_active_note >= 0 && m_active_note < 128 && m_notes_on[m_active_note]) {
+            m_notes_on[m_active_note] = false;
+            if (m_note_off_cb) m_note_off_cb(m_active_note);
+        }
+        if (note >= 0 && note < 128) {
+            m_notes_on[note] = true;
+            m_active_note = note;
+            if (m_note_on_cb) m_note_on_cb(note);
+        }
+        Refresh(false);
+    }
+}
+
+void PianoWidget::show_note_on(int note) {
+    if (note >= 0 && note < 128) {
+        m_notes_on[note] = true;
+        Refresh(false);
+    }
+}
+
+void PianoWidget::show_note_off(int note) {
+    if (note >= 0 && note < 128) {
+        m_notes_on[note] = false;
+        Refresh(false);
+    }
+}
+
+// ---- InstrumentPanel implementation ----
 
 InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     : wxPanel(parent, wxID_ANY), m_engine(engine)
@@ -1166,6 +1373,14 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
 
     m_right_panel->SetSizer(right_sizer);
 
+    // Piano keyboard at the bottom of the right panel
+    m_piano = new PianoWidget(m_right_panel, wxID_ANY, [this](int note){ on_piano_note_on(note); },
+                                                    [this](int note){ on_piano_note_off(note); });
+    right_sizer->Add(m_piano, 0, wxEXPAND | wxALL, 2);
+
+    // Keyboard note preview - use CHAR_HOOK to intercept before child widgets
+    Bind(wxEVT_CHAR_HOOK, &InstrumentPanel::OnCharHook, this);
+
     update_rec_inputs();
     update_midi_input_choice();
     update_instrument_list();
@@ -1288,6 +1503,7 @@ void InstrumentPanel::update_instrument_list() {
 void InstrumentPanel::on_inst_select_idx(int idx) {
     m_selected_instrument = idx;
     m_selected_sample = -1;
+    m_engine.set_current_instrument(idx);
     update_instrument_list();
     update_editor();
 }
@@ -2240,6 +2456,7 @@ void InstrumentPanel::on_piper_browse(wxCommandEvent& /*event*/) {
 }
 
 void InstrumentPanel::on_plugin_scan(wxCommandEvent& event) {
+    m_plugin_browser->Clear();
     m_plugin_map.clear();
     std::vector<std::string> paths = plugin_scan_paths();
     for (const auto& path : paths) {
@@ -2354,6 +2571,63 @@ void InstrumentPanel::on_detach(wxCommandEvent& event) {
     Hide();
     m_detached_window = new DetachedFrame(this, "Instruments", GetParent(), m_tab_index);
     m_detached_window->set_on_detach_callback([this]() { m_detached_window = nullptr; });
+}
+
+void InstrumentPanel::on_piano_note_on(int note) {
+    if (m_piano) m_piano->show_note_on(note);
+    if (m_selected_instrument < 0) return;
+    int track_idx = m_engine.find_track_for_instrument((size_t)m_selected_instrument);
+    if (track_idx < 0) return;
+    m_engine.preview_note((size_t)track_idx, (uint8_t)note);
+}
+
+void InstrumentPanel::on_piano_note_off(int note) {
+    if (m_piano) m_piano->show_note_off(note);
+    if (m_selected_instrument < 0) return;
+    int track_idx = m_engine.find_track_for_instrument((size_t)m_selected_instrument);
+    if (track_idx < 0) return;
+    m_engine.stop_preview((size_t)track_idx);
+}
+
+void InstrumentPanel::preview_note_on(int note) {
+    on_piano_note_on(note);
+    m_preview_active = true;
+    m_preview_note = note;
+}
+
+void InstrumentPanel::preview_note_off() {
+    if (m_preview_active && m_preview_note >= 0) {
+        on_piano_note_off(m_preview_note);
+        m_preview_active = false;
+        m_preview_note = -1;
+    }
+}
+
+void InstrumentPanel::OnKeyDown(wxKeyEvent& event) {
+    int key = event.GetKeyCode();
+    int wx_mods = event.GetModifiers();
+    int modifiers = 0;
+    if (wx_mods & wxMOD_CONTROL) modifiers |= 0x1000;
+    if (wx_mods & wxMOD_ALT)     modifiers |= 0x2000;
+    if (wx_mods & wxMOD_SHIFT)   modifiers |= 0x4000;
+
+    Action action = m_engine.m_key_bindings.get_action(key, modifiers);
+
+    auto is_note_action = [](Action a) -> bool {
+        return ((int)a >= (int)Action::NoteC && (int)a <= (int)Action::NoteB) ||
+               ((int)a >= (int)Action::NoteC2 && (int)a <= (int)Action::NoteB2) ||
+               (a == Action::NoteC3) || (a == Action::NoteOff);
+    };
+
+    event.Skip();
+}
+
+void InstrumentPanel::OnKeyUp(wxKeyEvent& event) {
+    event.Skip();
+}
+
+void InstrumentPanel::OnCharHook(wxKeyEvent& event) {
+    event.Skip();
 }
 
 } // namespace disgrace_ns

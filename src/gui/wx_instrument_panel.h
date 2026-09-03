@@ -18,28 +18,58 @@
 
 #pragma once
 
+#include <wx/wxprec.h>
 #include <wx/panel.h>
 #include <wx/button.h>
-#include <wx/tglbtn.h>
-#include <wx/listbox.h>
-#include <wx/filectrl.h>
-#include <wx/scrolwin.h>
-#include <wx/textctrl.h>
 #include <wx/choice.h>
-#include <wx/checkbox.h>
 #include <wx/slider.h>
-#include <wx/spinctrl.h>
-#include <wx/sizer.h>
+#include <wx/checkbox.h>
+#include <wx/listbox.h>
+#include <wx/splitter.h>
 #include <wx/stattext.h>
+#include <wx/msgdlg.h>
 #include <wx/filedlg.h>
+#include <wx/spinctrl.h>
+#include <wx/textctrl.h>
+#include <wx/scrolwin.h>
+#include <functional>
 #include <wx/splitter.h>
 #include <wx/timer.h>
 #include <map>
+#include <set>
 #include <vector>
 
 namespace disgrace_ns {
 
 class Engine;
+
+// Simple piano keyboard widget for mouse-triggered note preview
+class PianoWidget : public wxPanel {
+public:
+    using NoteCallback = std::function<void(int note)>;
+
+    PianoWidget(wxWindow* parent, wxWindowID id, NoteCallback on_note_on, NoteCallback on_note_off);
+
+    void OnPaint(wxPaintEvent& event);
+    void OnMouseDown(wxMouseEvent& event);
+    void OnMouseUp(wxMouseEvent& event);
+    void OnMotion(wxMouseEvent& event);
+
+    void show_note_on(int note);
+    void show_note_off(int note);
+
+private:
+    NoteCallback m_note_on_cb;
+    NoteCallback m_note_off_cb;
+    int m_note_from_x(int x) const;
+    int m_x_from_note(int note) const;
+    int m_base_note = 21;   // A0 = MIDI 21 (full piano starts here)
+    int m_num_white_keys = 52; // A0 to C8 = 52 white keys
+    int m_active_note = -1;
+    std::vector<bool> m_notes_on;
+
+    DECLARE_EVENT_TABLE()
+};
 
 class InstrumentPanel : public wxPanel {
 public:
@@ -53,6 +83,9 @@ public:
     void cut();
     void copy();
     void paste();
+
+    void preview_note_on(int note);
+    void preview_note_off();
 
     struct PluginInfo {
         std::string name;
@@ -232,6 +265,20 @@ private:
     void on_zyn_preset(wxCommandEvent& event);
     void on_zyn_prev(wxCommandEvent& event);
     void on_zyn_next(wxCommandEvent& event);
+
+    // Keyboard note preview
+    void OnKeyDown(wxKeyEvent& event);
+    void OnKeyUp(wxKeyEvent& event);
+    void OnCharHook(wxKeyEvent& event);
+    std::set<int> m_keys_pressed;
+    bool m_preview_active = false;
+    int m_preview_track = -1;
+    int m_preview_note = -1;
+
+    // Piano keyboard
+    class PianoWidget* m_piano = nullptr;
+    void on_piano_note_on(int note);
+    void on_piano_note_off(int note);
 
 public:
     void set_tab_index(int idx) { m_tab_index = idx; }

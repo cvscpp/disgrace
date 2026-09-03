@@ -27,6 +27,7 @@
 #include <wx/sizer.h>
 #include <wx/panel.h>
 #include <wx/statusbr.h>
+#include <set>
 
 namespace disgrace_ns {
 
@@ -56,6 +57,7 @@ public:
     void OnTimer(wxTimerEvent& event);
     void OnClose(wxCloseEvent& event);
     void OnKeyDown(wxKeyEvent& event);
+    void OnKeyUp(wxKeyEvent& event);
     void OnCharHook(wxKeyEvent& event);
 
 private:
@@ -79,6 +81,8 @@ private:
     HelpPanel* m_help_panel;
 
     int m_selected_tab;
+
+    std::set<int> m_inst_keys_pressed;
 
     DECLARE_EVENT_TABLE()
 };

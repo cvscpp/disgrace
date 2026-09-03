@@ -569,11 +569,20 @@ void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float*
     MidiMessage msg;
     while (m_midi_queue.pop(msg)) {
         uint8_t status = msg.status & 0xF0;
+        // Route MIDI to focused instrument when instrument tab is active
+        size_t target_track = m_record_track;
+        if (m_instrument_tab_active.load()) {
+            int fi = m_focused_instrument.load();
+            if (fi >= 0) {
+                int t = find_track_for_instrument((size_t)fi);
+                if (t >= 0) target_track = (size_t)t;
+            }
+        }
         if (status == 0x90 && msg.data2 != 0) {
-            m_tracks[m_record_track].note_on(msg.data1, msg.data2);
+            m_tracks[target_track].note_on(msg.data1, msg.data2);
             if (m_record_enabled && transport().is_playing()) record_note(msg.data1);
         } else if (status == 0x80 || (status == 0x90 && msg.data2 == 0)) {
-            m_tracks[m_record_track].note_off();
+            m_tracks[target_track].note_off();
             if (m_record_enabled && transport().is_playing()) record_note_off();
         }
     }
@@ -1392,6 +1401,19 @@ void Engine::enable_record(bool e) { m_record_enabled = e; }
 TransportState Engine::transport_state() const { return transport().state(); }
 size_t Engine::current_order_pos() const { return m_order_pos.load(); }
 void Engine::set_loop(bool e) { transport().set_loop(e); }
+
+void Engine::set_current_instrument(int index) {
+    m_focused_instrument.store(index);
+}
+
+int Engine::find_track_for_instrument(size_t inst_index) const {
+    if (inst_index >= m_instruments.size()) return -1;
+    Instrument* target = m_instruments[inst_index].get();
+    for (size_t i = 0; i < m_tracks.size(); ++i) {
+        if (m_tracks[i].instrument() == target) return (int)i;
+    }
+    return -1;
+}
 
 void Engine::set_master_gain(float g) { m_master.set_gain(g); }
 float Engine::master_gain() const { return m_master.gain(); }

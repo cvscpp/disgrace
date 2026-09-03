@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <string>
 #include <memory>
+#include "../dsp/dsp_chain.h"
 #include "../dsp/mastering_filter.h"
 #include "../dsp/mastering_styles.h"
 #include "../dsp/reference_matcher.h"
@@ -47,11 +48,24 @@ public:
                  size_t nframes);
 
     void set_sample_rate(float sr) {
+        m_chain.set_sample_rate(sr);
         m_filter.set_sample_rate(sr);
     }
 
     float meter_l() const;
     float meter_r() const;
+
+    // Insert effects chain
+    disgrace_ns::DSPChain& chain() { return m_chain; }
+    const disgrace_ns::DSPChain& chain() const { return m_chain; }
+    void set_effect(size_t index, ::std::unique_ptr<disgrace_ns::DSP> dsp);
+    void enable_effect(size_t index, bool en);
+    void move_effect_up(size_t index);
+    void move_effect_down(size_t index);
+    void remove_effect(size_t index);
+    disgrace_ns::DSP* get_effect(size_t index) const;
+    void save_effect_chain(const std::string& path);
+    void load_effect_chain(const std::string& path);
 
     // Mastering Controls
     disgrace_ns::MasteringFilterDSP& mastering_filter() { return m_filter; }
@@ -73,6 +87,7 @@ public:
     ::std::atomic<float> m_meter_r{0.f};
     ::std::atomic<bool> m_muted{false};
 
+    disgrace_ns::DSPChain m_chain;
     disgrace_ns::MasteringFilterDSP m_filter;
     disgrace_ns::MasteringStylesDSP m_styles;
     disgrace_ns::ReferenceMatcherDSP m_reference_matcher;

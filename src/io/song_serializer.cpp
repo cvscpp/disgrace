@@ -69,6 +69,9 @@ namespace disgrace_ns
         jmaster["gain"] = engine.master_gain();
         jmaster["pan"] = engine.m_master.pan();
         jmaster["muted"] = engine.m_master.muted();
+        json jmaster_chain;
+        engine.m_master.chain().to_json(&jmaster_chain);
+        jmaster["chain"] = jmaster_chain;
         jmaster["filter"] = engine.m_master.mastering_filter().get_state();
         jmaster["styles"] = engine.m_master.mastering_styles().get_state();
         jmaster["reference_matcher"] = engine.m_master.reference_matcher().get_state();
@@ -268,6 +271,9 @@ namespace disgrace_ns
             engine.set_master_gain(j["master"].value("gain", 1.0f));
             engine.m_master.set_pan(j["master"].value("pan", 0.0f));
             engine.m_master.set_mute(j["master"].value("muted", false));
+            if (j["master"].contains("chain")) {
+                engine.m_master.chain().from_json(&j["master"]["chain"]);
+            }
             if (j["master"].contains("filter")) {
                 engine.m_master.mastering_filter().set_state(j["master"]["filter"]);
             }

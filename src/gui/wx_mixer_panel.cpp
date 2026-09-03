@@ -528,268 +528,174 @@ void MixerPanel::update_effect_editor() {
     int bus_idx = is_bus ? (m_selected_track - kSelectedBusBase) : -1;
     int track_idx = is_track ? (m_selected_track - kSelectedTrackBase) : -1;
 
+    auto get_fx = [&](size_t idx) -> DSP* {
+        if (is_master) return m_engine.m_master.get_effect(idx);
+        if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count())
+            return m_engine.bus(bus_idx).get_effect(idx);
+        if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count())
+            return m_engine.track(track_idx).get_effect(idx);
+        return nullptr;
+    };
+
+    // --- Effect Chain (shared for master, track, and bus) ---
+    wxBoxSizer* chain_sizer = new wxBoxSizer(wxVERTICAL);
+    for (size_t i = 0; i < MAX_INSERTS; ++i) {
+        DSP* dsp = get_fx(i);
+        if (dsp) {
+            wxPanel* row = new wxPanel(m_fx_chain_group, wxID_ANY);
+            row->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_lpb_highlight));
+            wxBoxSizer* row_sizer = new wxBoxSizer(wxHORIZONTAL);
+
+            wxCheckBox* bypass = new wxCheckBox(row, wxID_ANY, "");
+            bypass->SetValue(!dsp->is_bypassed());
+            bypass->Bind(wxEVT_CHECKBOX, [this, i, is_master, is_bus, is_track, track_idx, bus_idx](wxCommandEvent& ev) {
+                DSP* d = nullptr;
+                if (is_master) d = m_engine.m_master.get_effect(i);
+                else if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count()) d = m_engine.bus(bus_idx).get_effect(i);
+                else if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count()) d = m_engine.track(track_idx).get_effect(i);
+                if(d) d->set_bypass(!ev.IsChecked());
+            });
+            row_sizer->Add(bypass, 0, wxALL, 2);
+
+            wxButton* sel_btn = new wxButton(row, wxID_ANY, dsp->name(), wxDefaultPosition, wxSize(100, 25));
+            if ((int)i == m_selected_fx_slot) {
+                sel_btn->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_selection_color));
+                sel_btn->SetForegroundColour(ThemeManager::contrastColor(m_engine.m_selection_color));
+            }
+            sel_btn->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent& ev) {
+                m_selected_fx_slot = (int)i;
+                update_effect_editor();
+            });
+            row_sizer->Add(sel_btn, 1, wxALL, 2);
+
+            wxButton* up = new wxButton(row, wxID_ANY, "^", wxDefaultPosition, wxSize(25, 25));
+            up->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_UP, wxART_BUTTON, wxSize(14, 14)));
+            up->Bind(wxEVT_BUTTON, [this, i, is_master, is_bus, is_track, track_idx, bus_idx](wxCommandEvent& ev) {
+                if (is_master) m_engine.m_master.move_effect_up(i);
+                else if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count()) m_engine.bus(bus_idx).move_effect_up(i);
+                else if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count()) m_engine.track(track_idx).move_effect_up(i);
+                update_effect_editor();
+            });
+            row_sizer->Add(up, 0, wxALL, 1);
+
+            wxButton* down = new wxButton(row, wxID_ANY, "v", wxDefaultPosition, wxSize(25, 25));
+            down->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_DOWN, wxART_BUTTON, wxSize(14, 14)));
+            down->Bind(wxEVT_BUTTON, [this, i, is_master, is_bus, is_track, track_idx, bus_idx](wxCommandEvent& ev) {
+                if (is_master) m_engine.m_master.move_effect_down(i);
+                else if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count()) m_engine.bus(bus_idx).move_effect_down(i);
+                else if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count()) m_engine.track(track_idx).move_effect_down(i);
+                update_effect_editor();
+            });
+            row_sizer->Add(down, 0, wxALL, 1);
+
+            wxButton* rem = new wxButton(row, wxID_ANY, "X", wxDefaultPosition, wxSize(25, 25));
+            rem->SetBitmap(wxArtProvider::GetBitmap(wxART_DELETE, wxART_BUTTON, wxSize(14, 14)));
+            rem->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_warning_color));
+            rem->Bind(wxEVT_BUTTON, [this, i, is_master, is_bus, is_track, track_idx, bus_idx](wxCommandEvent& ev) {
+                if (is_master) m_engine.m_master.remove_effect(i);
+                else if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count()) m_engine.bus(bus_idx).remove_effect(i);
+                else if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count()) m_engine.track(track_idx).remove_effect(i);
+                m_selected_fx_slot = -1;
+                update_effect_editor();
+            });
+            row_sizer->Add(rem, 0, wxALL, 1);
+
+            row->SetSizer(row_sizer);
+            chain_sizer->Add(row, 0, wxEXPAND | wxALL, 1);
+        }
+    }
+    m_fx_chain_group->SetSizer(chain_sizer);
+    m_fx_chain_group->FitInside();
+
+    // --- Params Panel ---
     wxBoxSizer* params_sizer = new wxBoxSizer(wxVERTICAL);
 
-    if (is_master) {
-        params_sizer->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "Styles and Filters are in the master pane on the right."), 0, wxALL, 5);
-        params_sizer->Add(new wxStaticLine(m_fx_params_group), 0, wxEXPAND | wxALL, 5);
+    // Show effect parameter editor if an effect is selected
+    DSP* selected_dsp = get_fx(m_selected_fx_slot);
+    if (selected_dsp) {
+        wxStaticText* header = new wxStaticText(m_fx_params_group, wxID_ANY, "Editing: " + selected_dsp->name());
+        wxFont font = header->GetFont(); font.SetWeight(wxFONTWEIGHT_BOLD); header->SetFont(font);
+        params_sizer->Add(header, 0, wxALL, 5);
 
-        // --- Reference Matcher Section ---
-        wxStaticText* rm_header = new wxStaticText(m_fx_params_group, wxID_ANY, "Reference Matcher");
-        wxFont rm_font = rm_header->GetFont(); rm_font.SetWeight(wxFONTWEIGHT_BOLD); rm_header->SetFont(rm_font);
-        params_sizer->Add(rm_header, 0, wxALL, 5);
-
-        auto& matcher = m_engine.m_master.reference_matcher();
-
-        // Helper to add sliders
-        auto add_rm_slider = [&](const wxString& label, float min, float max, float val, std::function<void(float)> setter) {
-            wxBoxSizer* s_row = new wxBoxSizer(wxHORIZONTAL);
-            s_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, label, wxDefaultPosition, wxSize(100, -1)), 0, wxALL, 5);
-            wxSlider* sl = new wxSlider(m_fx_params_group, wxID_ANY, (int)(((val - min) / (max - min)) * 1000), 0, 1000, wxDefaultPosition, wxSize(200, -1));
-            sl->Bind(wxEVT_SLIDER, [this, min, max, setter](wxCommandEvent& ev) {
+        auto presets = selected_dsp->get_presets();
+        wxChoice* p_choice = nullptr;
+        if (!presets.empty()) {
+            wxBoxSizer* p_row = new wxBoxSizer(wxHORIZONTAL);
+            p_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "Preset:", wxDefaultPosition, wxSize(80, -1)), 0, wxALL, 5);
+            p_choice = new wxChoice(m_fx_params_group, wxID_ANY, wxDefaultPosition, wxSize(200, -1));
+            for (const auto& p : presets) p_choice->Append(p);
+            p_choice->Append("Manual");
+            if (!p_choice->SetStringSelection(selected_dsp->current_preset())) p_choice->SetStringSelection("Manual");
+            p_choice->Bind(wxEVT_CHOICE, [this, selected_dsp](wxCommandEvent& ev) {
                 if (m_is_updating_ui) return;
-                setter(min + ((float)ev.GetInt() / 1000.0f) * (max - min));
+                selected_dsp->load_preset(ev.GetString().ToStdString());
+                CallAfter([this]() { update_effect_editor(); });
+            });
+            p_row->Add(p_choice, 1, wxEXPAND | wxALL, 5);
+            params_sizer->Add(p_row, 0, wxEXPAND | wxALL, 2);
+        }
+
+        auto add_slider = [&](const wxString& label, float min, float max, float val, std::function<void(float)> setter) {
+            wxBoxSizer* s_row = new wxBoxSizer(wxHORIZONTAL);
+            s_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, label, wxDefaultPosition, wxSize(80, -1)), 0, wxALL, 5);
+            int steps = 1000;
+            wxSlider* sl = new wxSlider(m_fx_params_group, wxID_ANY, (int)(((val - min) / (max - min)) * steps), 0, steps, wxDefaultPosition, wxSize(200, -1));
+            sl->Bind(wxEVT_SLIDER, [this, selected_dsp, p_choice, min, max, steps, setter](wxCommandEvent& ev) {
+                if (m_is_updating_ui) return;
+                setter(min + ((float)ev.GetInt() / (float)steps) * (max - min));
+                selected_dsp->set_current_preset("Manual");
+                if (p_choice) p_choice->SetStringSelection("Manual");
             });
             s_row->Add(sl, 1, wxEXPAND | wxALL, 5);
             params_sizer->Add(s_row, 0, wxEXPAND | wxALL, 2);
         };
 
-        // Reference file info
-        wxBoxSizer* ref_row = new wxBoxSizer(wxHORIZONTAL);
-        ref_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "Reference:", wxDefaultPosition, wxSize(100, -1)), 0, wxALL, 5);
-        if (matcher.is_reference_loaded()) {
-            wxString ref_name = matcher.get_reference_path();
-            if (ref_name.Len() > 40) ref_name = "..." + ref_name.Right(40);
-            ref_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, ref_name), 1, wxALL | wxALIGN_CENTER_VERTICAL, 5);
-        } else {
-            ref_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "(No reference loaded)"), 1, wxALL | wxALIGN_CENTER_VERTICAL, 5);
-        }
-        wxButton* load_ref_btn = new wxButton(m_fx_params_group, wxID_ANY, "Load");
-        load_ref_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(14, 14)));
-        load_ref_btn->Bind(wxEVT_BUTTON, [this, &matcher](wxCommandEvent& ev) {
-            wxFileDialog dlg(this, "Load Reference Track", "", "", "Audio files (*.wav;*.flac;*.ogg;*.mp3)|*.wav;*.flac;*.ogg;*.mp3", wxFD_OPEN);
-            if (dlg.ShowModal() == wxID_OK) {
-                if (matcher.load_reference(dlg.GetPath().ToStdString())) {
-                    update_effect_editor();
-                }
-            }
-        });
-        ref_row->Add(load_ref_btn, 0, wxALL, 2);
-        params_sizer->Add(ref_row, 0, wxEXPAND | wxALL, 2);
-
-        // Presets
-        wxBoxSizer* rm_preset_row = new wxBoxSizer(wxHORIZONTAL);
-        rm_preset_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "Preset:", wxDefaultPosition, wxSize(100, -1)), 0, wxALL, 5);
-        wxChoice* rm_preset_choice = new wxChoice(m_fx_params_group, wxID_ANY);
-        for (const auto& p : matcher.get_presets()) rm_preset_choice->Append(p);
-        rm_preset_choice->SetStringSelection(matcher.current_preset());
-        rm_preset_choice->Bind(wxEVT_CHOICE, [this, &matcher](wxCommandEvent& ev) {
-            if (m_is_updating_ui) return;
-            matcher.load_preset(ev.GetString().ToStdString());
-            CallAfter([this]() { update_effect_editor(); });
-        });
-        rm_preset_row->Add(rm_preset_choice, 1, wxEXPAND | wxALL, 5);
-        params_sizer->Add(rm_preset_row, 0, wxEXPAND | wxALL, 2);
-
-        // Match controls
-        wxBoxSizer* match_row = new wxBoxSizer(wxHORIZONTAL);
-        wxCheckBox* match_rms = new wxCheckBox(m_fx_params_group, wxID_ANY, "Match RMS");
-        match_rms->SetValue(matcher.get_match_rms());
-        match_rms->Bind(wxEVT_CHECKBOX, [this, &matcher](wxCommandEvent& ev) { matcher.set_match_rms(ev.IsChecked()); });
-        match_row->Add(match_rms, 0, wxALL, 5);
-
-        wxCheckBox* match_eq = new wxCheckBox(m_fx_params_group, wxID_ANY, "Match EQ");
-        match_eq->SetValue(matcher.get_match_eq());
-        match_eq->Bind(wxEVT_CHECKBOX, [this, &matcher](wxCommandEvent& ev) { matcher.set_match_eq(ev.IsChecked()); });
-        match_row->Add(match_eq, 0, wxALL, 5);
-
-        wxCheckBox* match_width = new wxCheckBox(m_fx_params_group, wxID_ANY, "Match Width");
-        match_width->SetValue(matcher.get_match_width());
-        match_width->Bind(wxEVT_CHECKBOX, [this, &matcher](wxCommandEvent& ev) { matcher.set_match_width(ev.IsChecked()); });
-        match_row->Add(match_width, 0, wxALL, 5);
-
-        wxCheckBox* match_dyn = new wxCheckBox(m_fx_params_group, wxID_ANY, "Match Dynamics");
-        match_dyn->SetValue(matcher.get_match_dynamics());
-        match_dyn->Bind(wxEVT_CHECKBOX, [this, &matcher](wxCommandEvent& ev) { matcher.set_match_dynamics(ev.IsChecked()); });
-        match_row->Add(match_dyn, 0, wxALL, 5);
-        params_sizer->Add(match_row, 0, wxEXPAND | wxALL, 2);
-
-        // Mix slider
-        add_rm_slider("Mix", 0.0f, 1.0f, matcher.get_mix(), [&matcher](float v){ matcher.set_mix(v); });
-
-        // Target RMS
-        add_rm_slider("Target RMS (dB)", -24.0f, -6.0f, matcher.get_target_rms(), [&matcher](float v){ matcher.set_target_rms(v); });
-
-        // Limiter controls
-        wxBoxSizer* limit_row = new wxBoxSizer(wxHORIZONTAL);
-        wxCheckBox* limit_en = new wxCheckBox(m_fx_params_group, wxID_ANY, "Limiter");
-        limit_en->SetValue(matcher.get_limit());
-        limit_en->Bind(wxEVT_CHECKBOX, [this, &matcher](wxCommandEvent& ev) { matcher.set_limit(ev.IsChecked()); });
-        limit_row->Add(limit_en, 0, wxALL, 5);
-
-        add_rm_slider("Ceiling", 0.8f, 1.0f, matcher.get_limit_threshold(), [&matcher](float v){ matcher.set_limit_threshold(v); });
-        params_sizer->Add(limit_row, 0, wxEXPAND | wxALL, 2);
-    } else {
-        // --- Regular Track/Bus UI ---
-        auto get_fx = [&](size_t idx) -> DSP* {
-            if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count())
-                return m_engine.bus(bus_idx).get_effect(idx);
-            if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count())
-                return m_engine.track(track_idx).get_effect(idx);
-            return nullptr;
-        };
-
-        wxBoxSizer* chain_sizer = new wxBoxSizer(wxVERTICAL);
-        for (size_t i = 0; i < MAX_INSERTS; ++i) {
-            DSP* dsp = get_fx(i);
-            if (dsp) {
-                wxPanel* row = new wxPanel(m_fx_chain_group, wxID_ANY);
-                row->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_lpb_highlight));
-                wxBoxSizer* row_sizer = new wxBoxSizer(wxHORIZONTAL);
-
-                wxCheckBox* bypass = new wxCheckBox(row, wxID_ANY, "");
-                bypass->SetValue(!dsp->is_bypassed());
-                bypass->Bind(wxEVT_CHECKBOX, [this, i, is_bus, is_track, track_idx, bus_idx](wxCommandEvent& ev) {
-                    DSP* d = nullptr;
-                    if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count()) d = m_engine.bus(bus_idx).get_effect(i);
-                    else if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count()) d = m_engine.track(track_idx).get_effect(i);
-                    if(d) d->set_bypass(!ev.IsChecked());
-                });
-                row_sizer->Add(bypass, 0, wxALL, 2);
-
-                wxButton* sel_btn = new wxButton(row, wxID_ANY, dsp->name(), wxDefaultPosition, wxSize(100, 25));
-                if ((int)i == m_selected_fx_slot) {
-                    sel_btn->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_selection_color));
-                    sel_btn->SetForegroundColour(ThemeManager::contrastColor(m_engine.m_selection_color));
-                }
-                sel_btn->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent& ev) {
-                    m_selected_fx_slot = (int)i;
-                    update_effect_editor();
-                });
-                row_sizer->Add(sel_btn, 1, wxALL, 2);
-
-                wxButton* up = new wxButton(row, wxID_ANY, "^", wxDefaultPosition, wxSize(25, 25));
-                up->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_UP, wxART_BUTTON, wxSize(14, 14)));
-                up->Bind(wxEVT_BUTTON, [this, i, is_bus, is_track, track_idx, bus_idx](wxCommandEvent& ev) {
-                    if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count()) m_engine.bus(bus_idx).move_effect_up(i);
-                    else if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count()) m_engine.track(track_idx).move_effect_up(i);
-                    update_effect_editor();
-                });
-                row_sizer->Add(up, 0, wxALL, 1);
-
-                wxButton* down = new wxButton(row, wxID_ANY, "v", wxDefaultPosition, wxSize(25, 25));
-                down->SetBitmap(wxArtProvider::GetBitmap(wxART_GO_DOWN, wxART_BUTTON, wxSize(14, 14)));
-                down->Bind(wxEVT_BUTTON, [this, i, is_bus, is_track, track_idx, bus_idx](wxCommandEvent& ev) {
-                    if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count()) m_engine.bus(bus_idx).move_effect_down(i);
-                    else if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count()) m_engine.track(track_idx).move_effect_down(i);
-                    update_effect_editor();
-                });
-                row_sizer->Add(down, 0, wxALL, 1);
-
-                wxButton* rem = new wxButton(row, wxID_ANY, "X", wxDefaultPosition, wxSize(25, 25));
-                rem->SetBitmap(wxArtProvider::GetBitmap(wxART_DELETE, wxART_BUTTON, wxSize(14, 14)));
-                rem->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_warning_color));
-                rem->Bind(wxEVT_BUTTON, [this, i, is_bus, is_track, track_idx, bus_idx](wxCommandEvent& ev) {
-                    if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count()) m_engine.bus(bus_idx).remove_effect(i);
-                    else if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count()) m_engine.track(track_idx).remove_effect(i);
-                    m_selected_fx_slot = -1;
-                    update_effect_editor();
-                });
-                row_sizer->Add(rem, 0, wxALL, 1);
-
-                row->SetSizer(row_sizer);
-                chain_sizer->Add(row, 0, wxEXPAND | wxALL, 1);
-            }
-        }
-        m_fx_chain_group->SetSizer(chain_sizer);
-        m_fx_chain_group->FitInside();
-
-        DSP* dsp = get_fx(m_selected_fx_slot);
-        if (dsp) {
-            wxStaticText* header = new wxStaticText(m_fx_params_group, wxID_ANY, "Editing: " + dsp->name());
-            wxFont font = header->GetFont(); font.SetWeight(wxFONTWEIGHT_BOLD); header->SetFont(font);
-            params_sizer->Add(header, 0, wxALL, 5);
-
-            // Presets Dropdown
-            auto presets = dsp->get_presets();
-            wxChoice* p_choice = nullptr;
-            if (!presets.empty()) {
-                wxBoxSizer* p_row = new wxBoxSizer(wxHORIZONTAL);
-                p_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "Preset:", wxDefaultPosition, wxSize(80, -1)), 0, wxALL, 5);
-                p_choice = new wxChoice(m_fx_params_group, wxID_ANY, wxDefaultPosition, wxSize(200, -1));
-                for (const auto& p : presets) p_choice->Append(p);
-                p_choice->Append("Manual");
-                if (!p_choice->SetStringSelection(dsp->current_preset())) p_choice->SetStringSelection("Manual");
-                p_choice->Bind(wxEVT_CHOICE, [this, dsp](wxCommandEvent& ev) {
-                    if (m_is_updating_ui) return;
-                    dsp->load_preset(ev.GetString().ToStdString());
-                    CallAfter([this]() { update_effect_editor(); });
-                });
-                p_row->Add(p_choice, 1, wxEXPAND | wxALL, 5);
-                params_sizer->Add(p_row, 0, wxEXPAND | wxALL, 2);
-            }
-
-            auto add_slider = [&](const wxString& label, float min, float max, float val, std::function<void(float)> setter) {
-                wxBoxSizer* s_row = new wxBoxSizer(wxHORIZONTAL);
-                s_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, label, wxDefaultPosition, wxSize(80, -1)), 0, wxALL, 5);
-                int steps = 1000;
-                wxSlider* sl = new wxSlider(m_fx_params_group, wxID_ANY, (int)(((val - min) / (max - min)) * steps), 0, steps, wxDefaultPosition, wxSize(200, -1));
-                sl->Bind(wxEVT_SLIDER, [this, dsp, p_choice, min, max, steps, setter](wxCommandEvent& ev) {
-                    if (m_is_updating_ui) return;
-                    setter(min + ((float)ev.GetInt() / (float)steps) * (max - min));
-                    dsp->set_current_preset("Manual");
-                    if (p_choice) p_choice->SetStringSelection("Manual");
-                });
-                s_row->Add(sl, 1, wxEXPAND | wxALL, 5);
-                params_sizer->Add(s_row, 0, wxEXPAND | wxALL, 2);
-            };
-
-            if (auto* g = dynamic_cast<disgrace_ns::GainDSP*>(dsp)) {
-                add_slider("Gain", 0.0f, 2.0f, g->gain, [g](float v){ g->gain = v; });
-            } else if (auto* d = dynamic_cast<disgrace_ns::DelayDSP*>(dsp)) {
+        if (auto* g = dynamic_cast<disgrace_ns::GainDSP*>(selected_dsp)) {
+            add_slider("Gain", 0.0f, 2.0f, g->gain, [g](float v){ g->gain = v; });
+        } else if (auto* d = dynamic_cast<disgrace_ns::DelayDSP*>(selected_dsp)) {
                 add_slider("Feedback", 0.0f, 0.99f, d->feedback, [d](float v){ d->feedback = v; });
                 add_slider("Mix", 0.0f, 1.0f, d->mix, [d](float v){ d->mix = v; });
-            } else if (auto* rev = dynamic_cast<disgrace_ns::ReverbDSP*>(dsp)) {
+            } else if (auto* rev = dynamic_cast<disgrace_ns::ReverbDSP*>(selected_dsp)) {
                 add_slider("Room Size", 0.0f, 1.0f, rev->room_size, [rev](float v){ rev->room_size = v; });
                 add_slider("Damp", 0.0f, 1.0f, rev->damp, [rev](float v){ rev->damp = v; });
                 add_slider("Mix", 0.0f, 1.0f, rev->mix, [rev](float v){ rev->mix = v; });
-            } else if (auto* lim = dynamic_cast<disgrace_ns::LimiterDSP*>(dsp)) {
+            } else if (auto* lim = dynamic_cast<disgrace_ns::LimiterDSP*>(selected_dsp)) {
                 add_slider("Ceiling", 0.0f, 1.0f, lim->ceiling, [lim](float v){ lim->ceiling = v; });
                 add_slider("Threshold", 0.0f, 1.0f, lim->threshold, [lim](float v){ lim->threshold = v; });
-            } else if (auto* exc = dynamic_cast<disgrace_ns::ExciterDSP*>(dsp)) {
+            } else if (auto* exc = dynamic_cast<disgrace_ns::ExciterDSP*>(selected_dsp)) {
                 add_slider("Amount", 0.0f, 1.0f, exc->amount, [exc](float v){ exc->amount = v; });
                 add_slider("Freq", 0.0f, 1.0f, exc->freq, [exc](float v){ exc->freq = v; });
-            } else if (auto* pha = dynamic_cast<disgrace_ns::PhaserDSP*>(dsp)) {
+            } else if (auto* pha = dynamic_cast<disgrace_ns::PhaserDSP*>(selected_dsp)) {
                 add_slider("Rate", 0.0f, 1.0f, pha->rate, [pha](float v){ pha->rate = v; });
                 add_slider("Depth", 0.0f, 1.0f, pha->depth, [pha](float v){ pha->depth = v; });
                 add_slider("Feedback", 0.0f, 1.0f, pha->feedback, [pha](float v){ pha->feedback = v; });
                 add_slider("Mix", 0.0f, 1.0f, pha->mix, [pha](float v){ pha->mix = v; });
-            } else if (auto* fla = dynamic_cast<disgrace_ns::FlangerDSP*>(dsp)) {
+            } else if (auto* fla = dynamic_cast<disgrace_ns::FlangerDSP*>(selected_dsp)) {
                 add_slider("Rate", 0.0f, 1.0f, fla->rate, [fla](float v){ fla->rate = v; });
                 add_slider("Depth", 0.0f, 1.0f, fla->depth, [fla](float v){ fla->depth = v; });
                 add_slider("Feedback", 0.0f, 1.0f, fla->feedback, [fla](float v){ fla->feedback = v; });
                 add_slider("Mix", 0.0f, 1.0f, fla->mix, [fla](float v){ fla->mix = v; });
-            } else if (auto* ech = dynamic_cast<disgrace_ns::EchoDSP*>(dsp)) {
+            } else if (auto* ech = dynamic_cast<disgrace_ns::EchoDSP*>(selected_dsp)) {
                 add_slider("Time", 0.0f, 1.0f, ech->time, [ech](float v){ ech->time = v; });
                 add_slider("Feedback", 0.0f, 1.0f, ech->feedback, [ech](float v){ ech->feedback = v; });
                 add_slider("Damp", 0.0f, 1.0f, ech->damp, [ech](float v){ ech->damp = v; });
                 add_slider("Mix", 0.0f, 1.0f, ech->mix, [ech](float v){ ech->mix = v; });
-            } else if (auto* cmp = dynamic_cast<disgrace_ns::CompressorDSP*>(dsp)) {
+            } else if (auto* cmp = dynamic_cast<disgrace_ns::CompressorDSP*>(selected_dsp)) {
                 add_slider("Threshold", 0.0f, 1.0f, cmp->threshold, [cmp](float v){ cmp->threshold = v; });
                 add_slider("Ratio", 1.0f, 20.0f, cmp->ratio, [cmp](float v){ cmp->ratio = v; });
                 add_slider("Attack", 0.001f, 0.5f, cmp->attack, [cmp](float v){ cmp->attack = v; });
                 add_slider("Release", 0.01f, 2.0f, cmp->release, [cmp](float v){ cmp->release = v; });
                 add_slider("Makeup", 0.0f, 2.0f, cmp->makeup, [cmp](float v){ cmp->makeup = v; });
-            } else if (auto* geq = dynamic_cast<disgrace_ns::GraphicalEQDSP*>(dsp)) {
+            } else if (auto* geq = dynamic_cast<disgrace_ns::GraphicalEQDSP*>(selected_dsp)) {
                 wxBoxSizer* eq_sizer = new wxBoxSizer(wxHORIZONTAL);
                 for (int b = 0; b < 12; ++b) {
                     wxBoxSizer* band_sizer = new wxBoxSizer(wxVERTICAL);
                     wxSlider* s = new wxSlider(m_fx_params_group, wxID_ANY, (int)(geq->get_band_gain(b) * 10.0f), -120, 120, wxDefaultPosition, wxSize(-1, 100), wxSL_VERTICAL | wxSL_INVERSE | wxSL_TICKS);
                     s->SetTickFreq(60);
-                    s->Bind(wxEVT_SLIDER, [this, dsp, geq, b, p_choice](wxCommandEvent& ev){
+                    s->Bind(wxEVT_SLIDER, [this, selected_dsp, geq, b, p_choice](wxCommandEvent& ev){
                         if (m_is_updating_ui) return;
                         geq->set_band_gain(b, (float)ev.GetInt() / 10.0f);
-                        dsp->set_current_preset("Manual");
+                        selected_dsp->set_current_preset("Manual");
                         if (p_choice) p_choice->SetStringSelection("Manual");
                     });
                     band_sizer->Add(s, 1, wxEXPAND | wxALL, 2);
@@ -801,30 +707,30 @@ void MixerPanel::update_effect_editor() {
                     eq_sizer->Add(band_sizer, 1, wxEXPAND | wxALL, 2);
                 }
                 params_sizer->Add(eq_sizer, 0, wxEXPAND | wxALL, 2);
-            } else if (auto* cab = dynamic_cast<disgrace_ns::CabinetDSP*>(dsp)) {
+            } else if (auto* cab = dynamic_cast<disgrace_ns::CabinetDSP*>(selected_dsp)) {
                 add_slider("Low Cut", 20.0f, 500.0f, cab->low_cut, [cab](float v){ cab->low_cut = v; });
                 add_slider("High Cut", 1000.0f, 15000.0f, cab->high_cut, [cab](float v){ cab->high_cut = v; });
                 add_slider("Peak Freq", 500.0f, 8000.0f, cab->peak_freq, [cab](float v){ cab->peak_freq = v; });
                 add_slider("Peak Gain", -12.0f, 12.0f, cab->peak_gain, [cab](float v){ cab->peak_gain = v; });
-            } else if (auto* dis = dynamic_cast<disgrace_ns::DistortionDSP*>(dsp)) {
+            } else if (auto* dis = dynamic_cast<disgrace_ns::DistortionDSP*>(selected_dsp)) {
                 add_slider("Drive", 0.0f, 1.0f, dis->drive, [dis](float v){ dis->drive = v; });
                 add_slider("Mix", 0.0f, 1.0f, dis->mix, [dis](float v){ dis->mix = v; });
-            } else if (auto* cho = dynamic_cast<disgrace_ns::ChorusDSP*>(dsp)) {
+            } else if (auto* cho = dynamic_cast<disgrace_ns::ChorusDSP*>(selected_dsp)) {
                 add_slider("Rate", 0.0f, 1.0f, cho->rate, [cho](float v){ cho->rate = v; });
                 add_slider("Depth", 0.0f, 1.0f, cho->depth, [cho](float v){ cho->depth = v; });
                 add_slider("Feedback", 0.0f, 1.0f, cho->feedback, [cho](float v){ cho->feedback = v; });
                 add_slider("Mix", 0.0f, 1.0f, cho->mix, [cho](float v){ cho->mix = v; });
-            } else if (auto* exp = dynamic_cast<disgrace_ns::StereoExpanderDSP*>(dsp)) {
+            } else if (auto* exp = dynamic_cast<disgrace_ns::StereoExpanderDSP*>(selected_dsp)) {
                 add_slider("Width", 0.0f, 2.0f, exp->width, [exp](float v){ exp->width = v; });
-            } else if (auto* rmo = dynamic_cast<disgrace_ns::RingModulatorDSP*>(dsp)) {
+            } else if (auto* rmo = dynamic_cast<disgrace_ns::RingModulatorDSP*>(selected_dsp)) {
                 add_slider("Freq", 0.0f, 1.0f, rmo->freq, [rmo](float v){ rmo->freq = v; });
                 add_slider("Mix", 0.0f, 1.0f, rmo->mix, [rmo](float v){ rmo->mix = v; });
-            } else if (auto* gate = dynamic_cast<disgrace_ns::GateDSP*>(dsp)) {
+            } else if (auto* gate = dynamic_cast<disgrace_ns::GateDSP*>(selected_dsp)) {
                 add_slider("Threshold", 0.0f, 1.0f, gate->threshold, [gate](float v){ gate->threshold = v; });
                 add_slider("Range", 0.0f, 1.0f, gate->range, [gate](float v){ gate->range = v; });
                 add_slider("Attack", 0.001f, 0.5f, gate->attack, [gate](float v){ gate->attack = v; });
                 add_slider("Release", 0.01f, 2.0f, gate->release, [gate](float v){ gate->release = v; });
-            } else if (auto* rm = dynamic_cast<disgrace_ns::ReferenceMatcherDSP*>(dsp)) {
+            } else if (auto* rm = dynamic_cast<disgrace_ns::ReferenceMatcherDSP*>(selected_dsp)) {
                 // Reference file info
                 wxBoxSizer* ref_row = new wxBoxSizer(wxHORIZONTAL);
                 ref_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "Reference:", wxDefaultPosition, wxSize(80, -1)), 0, wxALL, 5);
@@ -849,7 +755,7 @@ void MixerPanel::update_effect_editor() {
 
                 add_slider("Mix", 0.0f, 1.0f, rm->get_mix(), [rm](float v){ rm->set_mix(v); });
                 add_slider("Target RMS (dB)", -24.0f, -6.0f, rm->get_target_rms(), [rm](float v){ rm->set_target_rms(v); });
-            } else if (auto* voc = dynamic_cast<disgrace_ns::VocoderDSP*>(dsp)) {
+            } else if (auto* voc = dynamic_cast<disgrace_ns::VocoderDSP*>(selected_dsp)) {
                 add_slider("Attack", 0.001f, 0.2f, voc->attack, [voc](float v){ voc->attack = v; });
                 add_slider("Release", 0.001f, 0.5f, voc->release, [voc](float v){ voc->release = v; });
                 add_slider("Bandwidth", 0.01f, 0.5f, voc->bandwidth, [voc](float v){ voc->bandwidth = v; voc->update_bands(); });
@@ -874,6 +780,97 @@ void MixerPanel::update_effect_editor() {
         } else {
             params_sizer->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "No effect selected"), 0, wxALL, 5);
         }
+
+    // --- Reference Matcher Section (master only) ---
+    if (is_master) {
+        params_sizer->Add(new wxStaticLine(m_fx_params_group), 0, wxEXPAND | wxALL, 5);
+
+        wxStaticText* rm_header = new wxStaticText(m_fx_params_group, wxID_ANY, "Reference Matcher");
+        wxFont rm_font = rm_header->GetFont(); rm_font.SetWeight(wxFONTWEIGHT_BOLD); rm_header->SetFont(rm_font);
+        params_sizer->Add(rm_header, 0, wxALL, 5);
+
+        auto& matcher = m_engine.m_master.reference_matcher();
+
+        auto add_rm_slider = [&](const wxString& label, float min, float max, float val, std::function<void(float)> setter) {
+            wxBoxSizer* s_row = new wxBoxSizer(wxHORIZONTAL);
+            s_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, label, wxDefaultPosition, wxSize(100, -1)), 0, wxALL, 5);
+            wxSlider* sl = new wxSlider(m_fx_params_group, wxID_ANY, (int)(((val - min) / (max - min)) * 1000), 0, 1000, wxDefaultPosition, wxSize(200, -1));
+            sl->Bind(wxEVT_SLIDER, [this, min, max, setter](wxCommandEvent& ev) {
+                if (m_is_updating_ui) return;
+                setter(min + ((float)ev.GetInt() / 1000.0f) * (max - min));
+            });
+            s_row->Add(sl, 1, wxEXPAND | wxALL, 5);
+            params_sizer->Add(s_row, 0, wxEXPAND | wxALL, 2);
+        };
+
+        wxBoxSizer* ref_row = new wxBoxSizer(wxHORIZONTAL);
+        ref_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "Reference:", wxDefaultPosition, wxSize(100, -1)), 0, wxALL, 5);
+        if (matcher.is_reference_loaded()) {
+            wxString ref_name = matcher.get_reference_path();
+            if (ref_name.Len() > 40) ref_name = "..." + ref_name.Right(40);
+            ref_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, ref_name), 1, wxALL | wxALIGN_CENTER_VERTICAL, 5);
+        } else {
+            ref_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "(No reference loaded)"), 1, wxALL | wxALIGN_CENTER_VERTICAL, 5);
+        }
+        wxButton* load_ref_btn = new wxButton(m_fx_params_group, wxID_ANY, "Load");
+        load_ref_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(14, 14)));
+        load_ref_btn->Bind(wxEVT_BUTTON, [this, &matcher](wxCommandEvent& ev) {
+            wxFileDialog dlg(this, "Load Reference Track", "", "", "Audio files (*.wav;*.flac;*.ogg;*.mp3)|*.wav;*.flac;*.ogg;*.mp3", wxFD_OPEN);
+            if (dlg.ShowModal() == wxID_OK) {
+                if (matcher.load_reference(dlg.GetPath().ToStdString())) {
+                    update_effect_editor();
+                }
+            }
+        });
+        ref_row->Add(load_ref_btn, 0, wxALL, 2);
+        params_sizer->Add(ref_row, 0, wxEXPAND | wxALL, 2);
+
+        wxBoxSizer* rm_preset_row = new wxBoxSizer(wxHORIZONTAL);
+        rm_preset_row->Add(new wxStaticText(m_fx_params_group, wxID_ANY, "Preset:", wxDefaultPosition, wxSize(100, -1)), 0, wxALL, 5);
+        wxChoice* rm_preset_choice = new wxChoice(m_fx_params_group, wxID_ANY);
+        for (const auto& p : matcher.get_presets()) rm_preset_choice->Append(p);
+        rm_preset_choice->SetStringSelection(matcher.current_preset());
+        rm_preset_choice->Bind(wxEVT_CHOICE, [this, &matcher](wxCommandEvent& ev) {
+            if (m_is_updating_ui) return;
+            matcher.load_preset(ev.GetString().ToStdString());
+            CallAfter([this]() { update_effect_editor(); });
+        });
+        rm_preset_row->Add(rm_preset_choice, 1, wxEXPAND | wxALL, 5);
+        params_sizer->Add(rm_preset_row, 0, wxEXPAND | wxALL, 2);
+
+        wxBoxSizer* match_row = new wxBoxSizer(wxHORIZONTAL);
+        wxCheckBox* match_rms = new wxCheckBox(m_fx_params_group, wxID_ANY, "Match RMS");
+        match_rms->SetValue(matcher.get_match_rms());
+        match_rms->Bind(wxEVT_CHECKBOX, [this, &matcher](wxCommandEvent& ev) { matcher.set_match_rms(ev.IsChecked()); });
+        match_row->Add(match_rms, 0, wxALL, 5);
+
+        wxCheckBox* match_eq = new wxCheckBox(m_fx_params_group, wxID_ANY, "Match EQ");
+        match_eq->SetValue(matcher.get_match_eq());
+        match_eq->Bind(wxEVT_CHECKBOX, [this, &matcher](wxCommandEvent& ev) { matcher.set_match_eq(ev.IsChecked()); });
+        match_row->Add(match_eq, 0, wxALL, 5);
+
+        wxCheckBox* match_width = new wxCheckBox(m_fx_params_group, wxID_ANY, "Match Width");
+        match_width->SetValue(matcher.get_match_width());
+        match_width->Bind(wxEVT_CHECKBOX, [this, &matcher](wxCommandEvent& ev) { matcher.set_match_width(ev.IsChecked()); });
+        match_row->Add(match_width, 0, wxALL, 5);
+
+        wxCheckBox* match_dyn = new wxCheckBox(m_fx_params_group, wxID_ANY, "Match Dynamics");
+        match_dyn->SetValue(matcher.get_match_dynamics());
+        match_dyn->Bind(wxEVT_CHECKBOX, [this, &matcher](wxCommandEvent& ev) { matcher.set_match_dynamics(ev.IsChecked()); });
+        match_row->Add(match_dyn, 0, wxALL, 5);
+        params_sizer->Add(match_row, 0, wxEXPAND | wxALL, 2);
+
+        add_rm_slider("Mix", 0.0f, 1.0f, matcher.get_mix(), [&matcher](float v){ matcher.set_mix(v); });
+        add_rm_slider("Target RMS (dB)", -24.0f, -6.0f, matcher.get_target_rms(), [&matcher](float v){ matcher.set_target_rms(v); });
+
+        wxBoxSizer* limit_row = new wxBoxSizer(wxHORIZONTAL);
+        wxCheckBox* limit_en = new wxCheckBox(m_fx_params_group, wxID_ANY, "Limiter");
+        limit_en->SetValue(matcher.get_limit());
+        limit_en->Bind(wxEVT_CHECKBOX, [this, &matcher](wxCommandEvent& ev) { matcher.set_limit(ev.IsChecked()); });
+        limit_row->Add(limit_en, 0, wxALL, 5);
+
+        add_rm_slider("Ceiling", 0.8f, 1.0f, matcher.get_limit_threshold(), [&matcher](float v){ matcher.set_limit_threshold(v); });
+        params_sizer->Add(limit_row, 0, wxEXPAND | wxALL, 2);
     }
 
     m_fx_params_group->SetSizer(params_sizer);
@@ -911,25 +908,29 @@ void MixerPanel::on_bus_select(wxCommandEvent& event) {}
 
 void MixerPanel::on_add_fx(wxCommandEvent& event) {
     bool is_master = (m_selected_track == kSelectedMaster);
-    if (is_master) return; // Prevent adding effects to master bus
+    bool is_bus = (m_selected_track >= kSelectedBusBase);
+    bool is_track = (m_selected_track >= kSelectedTrackBase && m_selected_track < kSelectedBusBase);
+
+    if (!is_master && !is_bus && !is_track) return;
 
     int sel = m_avail_fx_browser->GetSelection();
     if (sel == wxNOT_FOUND) return;
     wxString fx_name = m_avail_fx_browser->GetString(sel);
 
-    bool is_bus = (m_selected_track >= kSelectedBusBase);
-    bool is_track = (m_selected_track >= kSelectedTrackBase && m_selected_track < kSelectedBusBase);
-    
     int bus_idx = is_bus ? (m_selected_track - kSelectedBusBase) : -1;
     int track_idx = is_track ? (m_selected_track - kSelectedTrackBase) : -1;
 
     auto get_fx_at = [&](size_t idx) -> DSP* {
+        if (is_master) return m_engine.m_master.get_effect(idx);
         if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count()) return m_engine.bus(bus_idx).get_effect(idx);
         if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count()) return m_engine.track(track_idx).get_effect(idx);
         return nullptr;
     };
     auto set_fx_at = [&](size_t idx, std::unique_ptr<DSP> dsp) {
-        if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count()) {
+        if (is_master) {
+            m_engine.m_master.set_effect(idx, std::move(dsp));
+            m_engine.m_master.enable_effect(idx, true);
+        } else if (is_bus && bus_idx >= 0 && bus_idx < (int)m_engine.bus_count()) {
              m_engine.bus(bus_idx).set_effect(idx, std::move(dsp)); 
              m_engine.bus(bus_idx).enable_effect(idx, true);
         } else if (is_track && track_idx >= 0 && track_idx < (int)m_engine.track_count()) {
@@ -981,14 +982,17 @@ void MixerPanel::on_fx_bypass(wxCommandEvent& event) {}
 
 void MixerPanel::on_save_chain(wxCommandEvent& event) {
     bool is_master = (m_selected_track == kSelectedMaster);
-    if (is_master) return;
+    bool is_bus = (m_selected_track >= kSelectedBusBase);
+    bool is_track = (m_selected_track >= kSelectedTrackBase && m_selected_track < kSelectedBusBase);
+
+    if (!is_master && !is_bus && !is_track) return;
 
     wxFileDialog dlg(this, "Save Chain", "", "", "Chain files (*.chain)|*.chain", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
     if (dlg.ShowModal() == wxID_OK) {
-        bool is_bus = (m_selected_track >= kSelectedBusBase);
-        bool is_track = (m_selected_track >= kSelectedTrackBase && m_selected_track < kSelectedBusBase);
-
-        if (is_bus) {
+        if (is_master) {
+            m_engine.m_master.save_effect_chain(dlg.GetPath().ToStdString());
+        }
+        else if (is_bus) {
             int idx = m_selected_track - kSelectedBusBase;
             if (idx >= 0 && idx < (int)m_engine.bus_count())
                 m_engine.bus(idx).save_effect_chain(dlg.GetPath().ToStdString());
@@ -1003,14 +1007,17 @@ void MixerPanel::on_save_chain(wxCommandEvent& event) {
 
 void MixerPanel::on_load_chain(wxCommandEvent& event) {
     bool is_master = (m_selected_track == kSelectedMaster);
-    if (is_master) return;
+    bool is_bus = (m_selected_track >= kSelectedBusBase);
+    bool is_track = (m_selected_track >= kSelectedTrackBase && m_selected_track < kSelectedBusBase);
+
+    if (!is_master && !is_bus && !is_track) return;
 
     wxFileDialog dlg(this, "Load Chain", "", "", "Chain files (*.chain)|*.chain", wxFD_OPEN);
     if (dlg.ShowModal() == wxID_OK) {
-        bool is_bus = (m_selected_track >= kSelectedBusBase);
-        bool is_track = (m_selected_track >= kSelectedTrackBase && m_selected_track < kSelectedBusBase);
-
-        if (is_bus) {
+        if (is_master) {
+            m_engine.m_master.load_effect_chain(dlg.GetPath().ToStdString());
+        }
+        else if (is_bus) {
             int idx = m_selected_track - kSelectedBusBase;
             if (idx >= 0 && idx < (int)m_engine.bus_count())
                 m_engine.bus(idx).load_effect_chain(dlg.GetPath().ToStdString());

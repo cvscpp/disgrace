@@ -26,6 +26,8 @@ private:
     std::vector<float> m_windowed;      // pre-allocated FFT work buffer
     std::vector<float> m_window_coeffs; // pre-computed Hanning window
     std::vector<float> m_magnitudes;
+    std::vector<float> m_peak_hold;     // per-bar peak hold
+    std::vector<int> m_peak_timer;      // per-bar peak hold timer
     size_t m_fft_size  = 2048;
     size_t m_write_pos = 0;    // next write slot in circular buffer
     size_t m_new_samples = 0;  // samples accumulated since last FFT run

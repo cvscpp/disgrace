@@ -25,8 +25,8 @@ void VUMeter::level(float l) {
 
     const float previous_level = m_level;
     const float previous_peak = m_peak_hold;
-    const float attack = 0.55f;
-    const float release = 0.18f;
+    const float attack = 0.1f;
+    const float release = 0.03f;
 
     if (l > m_level) {
         m_level += (l - m_level) * attack;
@@ -36,18 +36,18 @@ void VUMeter::level(float l) {
 
     if (m_level > m_peak_hold) {
         m_peak_hold = m_level;
-        m_peak_timer = 12;
+        m_peak_timer = 20;
     } else if (m_peak_timer > 0) {
         --m_peak_timer;
     } else {
-        m_peak_hold += (m_level - m_peak_hold) * 0.2f;
+        m_peak_hold += (m_level - m_peak_hold) * 0.1f;
         if (m_peak_hold < m_level) {
             m_peak_hold = m_level;
         }
     }
 
-    if (std::fabs(previous_level - m_level) < 0.002f &&
-        std::fabs(previous_peak - m_peak_hold) < 0.002f) {
+    if (std::fabs(previous_level - m_level) < 0.0001f &&
+        std::fabs(previous_peak - m_peak_hold) < 0.0001f) {
         return;
     }
 

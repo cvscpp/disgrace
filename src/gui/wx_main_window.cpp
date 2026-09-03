@@ -90,6 +90,7 @@ BEGIN_EVENT_TABLE(WxMainWindow, wxFrame)
     EVT_CLOSE(WxMainWindow::OnClose)
     EVT_CHAR_HOOK(WxMainWindow::OnCharHook)
     EVT_KEY_DOWN(WxMainWindow::OnKeyDown)
+    EVT_KEY_UP(WxMainWindow::OnKeyUp)
 END_EVENT_TABLE()
 
 WxMainWindow::WxMainWindow(int w, int h, const wxString& title, Engine& engine)
@@ -180,9 +181,13 @@ void WxMainWindow::init_panels() {
 
     m_tabs->Bind(wxEVT_NOTEBOOK_PAGE_CHANGED, [this](wxBookCtrlEvent& event) {
         m_selected_tab = event.GetSelection();
+        m_engine.set_instrument_tab_active(m_selected_tab == 4);
         update_all_uis();
         if (m_selected_tab == 1 && m_tracker_panel) {
             m_tracker_panel->grab_focus();
+        }
+        if (m_selected_tab == 4 && m_instrument_panel) {
+            m_instrument_panel->SetFocus();
         }
     }, wxID_ANY);
 }
@@ -282,6 +287,50 @@ void WxMainWindow::OnCharHook(wxKeyEvent& event) {
     };
 
     if (is_note_action(action)) {
+        if (m_selected_tab == 4 && m_instrument_panel) {
+            int note_val = -1;
+            switch (action) {
+                case Action::NoteC:  note_val = 0; break;
+                case Action::NoteCs: note_val = 1; break;
+                case Action::NoteD:  note_val = 2; break;
+                case Action::NoteDs: note_val = 3; break;
+                case Action::NoteE:  note_val = 4; break;
+                case Action::NoteF:  note_val = 5; break;
+                case Action::NoteFs: note_val = 6; break;
+                case Action::NoteG:  note_val = 7; break;
+                case Action::NoteGs: note_val = 8; break;
+                case Action::NoteA:  note_val = 9; break;
+                case Action::NoteAs: note_val = 10; break;
+                case Action::NoteB:  note_val = 11; break;
+                case Action::NoteC2: note_val = 12; break;
+                case Action::NoteCs2:note_val = 13; break;
+                case Action::NoteD2: note_val = 14; break;
+                case Action::NoteDs2:note_val = 15; break;
+                case Action::NoteE2: note_val = 16; break;
+                case Action::NoteF2: note_val = 17; break;
+                case Action::NoteFs2:note_val = 18; break;
+                case Action::NoteG2: note_val = 19; break;
+                case Action::NoteGs2:note_val = 20; break;
+                case Action::NoteA2: note_val = 21; break;
+                case Action::NoteAs2:note_val = 22; break;
+                case Action::NoteB2: note_val = 23; break;
+                case Action::NoteC3: note_val = 24; break;
+                case Action::NoteOff: note_val = -1; break;
+                default: break;
+            }
+            if (note_val >= 0) {
+                if (!m_inst_keys_pressed.count(key)) {
+                    m_inst_keys_pressed.insert(key);
+                    int final_note = note_val + m_engine.base_octave() * 12;
+                    if (final_note > 119) final_note = 119;
+                    m_instrument_panel->preview_note_on(final_note);
+                }
+            } else {
+                m_instrument_panel->preview_note_off();
+                m_inst_keys_pressed.clear();
+            }
+            return;
+        }
         event.Skip();
         return;
     }
@@ -303,6 +352,9 @@ void WxMainWindow::OnCharHook(wxKeyEvent& event) {
         case Action::Record:
             m_engine.enable_record(!m_engine.m_record_enabled);
             if (m_transport) m_transport->update();
+            if (m_selected_tab == 1 && m_tracker_panel) {
+                m_tracker_panel->get_tracker_view()->SetFocus();
+            }
             break;
         case Action::OctaveUp:
             m_engine.set_base_octave(m_engine.base_octave() + 1);
@@ -362,6 +414,17 @@ void WxMainWindow::OnCharHook(wxKeyEvent& event) {
 }
 
 void WxMainWindow::OnKeyDown(wxKeyEvent& event) {
+    event.Skip();
+}
+
+void WxMainWindow::OnKeyUp(wxKeyEvent& event) {
+    if (m_selected_tab == 4 && m_instrument_panel) {
+        int key = event.GetKeyCode();
+        if (m_inst_keys_pressed.count(key)) {
+            m_inst_keys_pressed.erase(key);
+            m_instrument_panel->preview_note_off();
+        }
+    }
     event.Skip();
 }
 

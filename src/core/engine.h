@@ -214,11 +214,18 @@ public:
     ::std::atomic<bool> m_record_enabled{false};
     size_t m_record_track{0};
 
+    // Focused instrument for instrument-panel preview
+    ::std::atomic<int> m_focused_instrument{-1};
+    ::std::atomic<bool> m_instrument_tab_active{false};
+    int find_track_for_instrument(size_t inst_index) const;
+
     void enable_record(bool e);
     void set_record_track(size_t t);
     void record_note(uint8_t note, size_t column = 0);
     void record_note_off(size_t column = 0);
-    void set_current_instrument(size_t index);
+    void set_current_instrument(int index);
+    int current_instrument() const { return m_focused_instrument.load(); }
+    void set_instrument_tab_active(bool active) { m_instrument_tab_active.store(active); }
     void toggle_metronome();
     void set_metronome_enabled(bool enabled);
     float metronome_volume() const { return m_metronome_volume; }

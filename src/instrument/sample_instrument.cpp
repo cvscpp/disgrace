@@ -76,6 +76,7 @@ namespace disgrace_ns
 
     void disgrace_ns::SampleInstrument::set_volume(float vol)
     {
+        m_volume = std::clamp(vol, 0.0f, 1.0f);
     }
 
     void disgrace_ns::SampleInstrument::set_pitch(float freq)
@@ -87,6 +88,10 @@ namespace disgrace_ns
     {
         for (size_t i = 0; i < frames; ++i) { out_l[i] = 0.f; out_r[i] = 0.f; }
         for (auto& v : m_voices) if (v && v->active()) v->process(out_l, out_r, frames);
+        for (size_t i = 0; i < frames; ++i) {
+            out_l[i] *= m_volume;
+            out_r[i] *= m_volume;
+        }
     }
 
     void disgrace_ns::SampleInstrument::add_sample(const std::string& name, std::shared_ptr<disgrace_ns::SampleData> data)
@@ -105,6 +110,9 @@ namespace disgrace_ns
     {
         if (index < m_samples.size()) {
             m_samples.erase(m_samples.begin() + index);
+            if (m_samples.empty()) m_selected_sample_index = 0;
+            else if (m_selected_sample_index >= m_samples.size())
+                m_selected_sample_index = m_samples.size() - 1;
             // Re-index undo states
             std::map<size_t, UndoState> next_states;
             for (auto& pair : m_undo_states) {
@@ -139,6 +147,17 @@ namespace disgrace_ns
             }
             next_states[to] = std::move(moving);
             m_undo_states = std::move(next_states);
+            if (m_selected_sample_index == from) {
+                m_selected_sample_index = to;
+            } else if (from < to &&
+                       m_selected_sample_index > from &&
+                       m_selected_sample_index <= to) {
+                --m_selected_sample_index;
+            } else if (to < from &&
+                       m_selected_sample_index >= to &&
+                       m_selected_sample_index < from) {
+                ++m_selected_sample_index;
+            }
         }
     }
 

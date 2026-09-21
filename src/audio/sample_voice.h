@@ -51,7 +51,7 @@ namespace disgrace_ns
                                 bool active() const override;
                    double position() const { return m_position; }
 
-                   // Set end position (0 = whole sample) and optional loop
+                   // Set an exclusive end position (0 = whole sample) and optional loop.
                    void set_region(size_t end_pos, bool loop, size_t loop_start) {
                        m_end_pos = end_pos;
                        m_loop_enabled = loop;
@@ -69,6 +69,7 @@ namespace disgrace_ns
         double m_engine_rate;
         double m_position = 0.0;
         double m_increment = 1.0;
+        double m_frequency = 440.0;
 
         float m_volume = 1.f;
         bool m_active = false;

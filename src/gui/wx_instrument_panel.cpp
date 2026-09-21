@@ -66,6 +66,7 @@ struct LoadedSampleInstrument {
     std::string name;
     std::vector<disgrace_ns::SampleEntry> samples;
     size_t selected_sample = 0;
+    float volume = 1.0f;
 };
 
 fs::path make_instrument_temp_dir(const char* prefix) {
@@ -93,6 +94,7 @@ bool save_sample_instrument_archive(const disgrace_ns::SampleInstrument& sampler
         instrument_json["selected_sample"] = sampler.sample_count() == 0
             ? 0
             : std::min(sampler.selected_sample(), sampler.sample_count() - 1);
+        instrument_json["volume"] = sampler.volume();
         instrument_json["samples"] = json::array();
 
         for (size_t i = 0; i < sampler.sample_count(); ++i) {
@@ -161,6 +163,7 @@ bool load_sample_instrument_archive(const std::string& archive_path,
 
         loaded = {};
         loaded.name = instrument_json.value("name", std::string("Loaded Sampler"));
+        loaded.volume = instrument_json.value("volume", 1.0f);
 
         if (instrument_json.contains("samples")) {
             for (const auto& sample_json : instrument_json["samples"]) {
@@ -639,7 +642,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
         if (m_waveform_view && m_engine.is_recording_sample()) {
             auto data = m_engine.recording_sample_data();
             if (data) {
-                m_waveform_view->set_sample(data);
+                m_waveform_view->set_sample(data, m_engine.recording_frames());
             }
         }
         // Update waveform playback cursor
@@ -657,24 +660,44 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
                 Engine::SampleRecordMode mode = m_engine.m_recording_sample_mode.load();
                 if (mode == Engine::SampleRecordMode::Free) {
                     auto data = m_engine.recording_sample_data();
-                    size_t frames = data ? data->left.size() : 0;
+                    size_t frames = data ? m_engine.recording_frames() : 0;
                     float secs = frames / (float)std::max(1u, m_engine.sample_rate());
-                    m_rec_status_lbl->SetLabel(wxString::Format("\u25cf REC  %.1fs", secs));
+                    m_rec_status_lbl->SetLabel(wxString::Format(
+                        "\u25cf REC  %.1fs  (%zu frames)", secs, frames));
                     m_rec_status_lbl->SetForegroundColour(*wxRED);
                 } else {
                     size_t row   = m_engine.m_recording_synced_row.load();
-                    size_t total = m_engine.pattern().row_count();
+                    size_t tick  = m_engine.m_recording_synced_tick.load();
+                    size_t total = std::max<size_t>(1, m_engine.pattern().row_count());
+                    row = std::min(row, total - 1);
+                    const double row_seconds =
+                        (double)m_engine.samples_per_row() /
+                        (double)std::max(1u, m_engine.sample_rate());
+                    const double tick_fraction =
+                        (double)std::min(tick, (size_t)std::max(1, m_engine.speed())) /
+                        (double)std::max(1, m_engine.speed());
                     if (m_engine.m_recording_synced_active.load()) {
                         size_t loops = m_engine.m_recording_loop_count.load();
+                        size_t rows_to_end = total - row;
+                        double seconds_to_end =
+                            std::max(0.0, rows_to_end * row_seconds -
+                                               tick_fraction * row_seconds);
+                        double elapsed_seconds =
+                            (double)m_engine.recording_frames() /
+                            (double)std::max(1u, m_engine.sample_rate());
                         m_rec_status_lbl->SetLabel(wxString::Format(
-                            "\u25cf REC  row %zu/%zu  loop %zu",
-                            row + 1, total, loops + 1));
+                            "\u25cf REC  %.1fs  row %zu/%zu  loop %zu  end in %zu rows (%.1fs)",
+                            elapsed_seconds,
+                            row + 1, total, loops + 1, rows_to_end, seconds_to_end));
                         m_rec_status_lbl->SetForegroundColour(*wxRED);
                     } else {
-                        size_t rows_to_go = (row == 0) ? 0 : (total - row);
+                        size_t rows_to_go = total - row;
+                        double seconds_to_go =
+                            std::max(0.0, rows_to_go * row_seconds -
+                                               tick_fraction * row_seconds);
                         m_rec_status_lbl->SetLabel(wxString::Format(
-                            "Waiting...  row %zu/%zu  (%zu to go)",
-                            row + 1, total, rows_to_go));
+                            "Armed  row %zu/%zu  starts in %zu rows (%.1fs)",
+                            row + 1, total, rows_to_go, seconds_to_go));
                         m_rec_status_lbl->SetForegroundColour(wxColour(180, 140, 0));
                     }
                 }
@@ -1948,6 +1971,7 @@ void InstrumentPanel::on_load(wxCommandEvent& event) {
     inst.set_name(loaded.name);
 
     auto* sampler = static_cast<SampleInstrument*>(&inst);
+    sampler->set_volume(loaded.volume);
     for (const auto& sample : loaded.samples) {
         sampler->add_sample(sample.name, sample.data);
     }
@@ -2094,13 +2118,13 @@ void InstrumentPanel::on_sample_stop(wxCommandEvent& event) {
     if (m_engine.m_recording_sample_data && !m_engine.m_recording_sample_data->left.empty()) {
         if (m_selected_sample >= 0 && m_selected_sample < (int)sampler->sample_count()) {
             sampler->push_undo(m_selected_sample);
-            sampler->get_sample(m_selected_sample).data = m_engine.m_recording_sample_data;
+            sampler->update_sample_data(m_selected_sample, m_engine.m_recording_sample_data);
         } else {
             sampler->add_sample("Recorded Sample", m_engine.m_recording_sample_data);
             m_selected_sample = (int)sampler->sample_count() - 1;
         }
-        update_editor();
     }
+    update_editor();
 }
 
 void InstrumentPanel::on_record_sample(wxCommandEvent& event) {
@@ -2375,7 +2399,7 @@ void InstrumentPanel::on_load_sample(wxCommandEvent& event) {
                 m_selected_sample = (int)s->sample_count() - 1;
             } else {
                 s->set_sample_name(m_selected_sample, dlg.GetFilename().ToStdString());
-                s->get_sample(m_selected_sample).data = data;
+                s->update_sample_data(m_selected_sample, data);
             }
             m_engine.mark_dirty();
             update_editor();

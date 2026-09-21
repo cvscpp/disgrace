@@ -17,6 +17,7 @@ public:
     WaveformView(wxWindow* parent, wxWindowID id, Engine& engine);
 
     void set_sample(std::shared_ptr<SampleData> s);
+    void set_sample(std::shared_ptr<SampleData> s, size_t visible_length);
     void set_color(unsigned int c) { m_color = c; Refresh(); }
 
     void zoom_in();
@@ -32,16 +33,21 @@ public:
 
     size_t selection_start() const { return m_sel_start < m_sel_end ? m_sel_start : m_sel_end; }
     size_t selection_end()   const { return m_sel_start < m_sel_end ? m_sel_end : m_sel_start; }
-    void set_channel_mode(ChannelMode mode) { m_mode = mode; Refresh(); }
-    void set_playback_pos(int64_t pos) { m_playback_pos = pos; Refresh(false); }
+    void set_channel_mode(ChannelMode mode) { m_mode = mode; Refresh(false); }
+    void set_playback_pos(int64_t pos) {
+        m_playback_pos = pos < 0 ? -1 : pos;
+        Refresh(false);
+    }
 
 private:
     void get_view_range(size_t& start, size_t& end);
+    size_t sample_length() const;
     // Returns pixel x for a sample position (or -1 if outside view).
     int sample_to_x(size_t pos, size_t view_start, size_t view_end, int width) const;
 
     Engine& m_engine;
     std::shared_ptr<SampleData> m_sample;
+    size_t m_visible_length = 0;
     unsigned int m_color = 0x40FF4000;
 
     size_t m_sel_start = 0;

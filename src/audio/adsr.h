@@ -17,6 +17,7 @@
  */
 
 #pragma once
+#include <algorithm>
 #include <cmath>
 
 namespace disgrace_ns
@@ -36,7 +37,7 @@ namespace disgrace_ns
 
         void set_sample_rate(double sr)
         {
-            m_sample_rate = sr;
+            m_sample_rate = std::max(1.0, sr);
         }
 
         void set(float attack,
@@ -44,28 +45,34 @@ namespace disgrace_ns
                  float sustain,
                  float release)
         {
-            m_attack  = attack;
-            m_decay   = decay;
-            m_sustain = sustain;
-            m_release = release;
+            m_attack  = std::max(0.0f, attack);
+            m_decay   = std::max(0.0f, decay);
+            m_sustain = std::clamp(sustain, 0.0f, 1.0f);
+            m_release = std::max(0.0f, release);
         }
 
         void note_on()
         {
             m_stage = Stage::Attack;
             m_level = 0.f;
+            m_release_start_level = 0.f;
         }
 
         void note_off()
         {
-            if (m_stage != Stage::Idle)
+            if (m_stage != Stage::Idle) {
+                m_release_start_level = m_level;
                 m_stage = Stage::Release;
+                if (m_release <= 0.0f || m_release_start_level <= 0.0f)
+                    reset();
+            }
         }
 
         void reset()
         {
             m_stage = Stage::Idle;
             m_level = 0.f;
+            m_release_start_level = 0.f;
         }
 
         float process()
@@ -76,8 +83,12 @@ namespace disgrace_ns
                     return 0.f;
 
                 case Stage::Attack:
-                    m_level += 1.0f /
-                    (m_attack * m_sample_rate);
+                    if (m_attack <= 0.0f) {
+                        m_level = 1.f;
+                        m_stage = Stage::Decay;
+                        break;
+                    }
+                    m_level += 1.0f / (m_attack * m_sample_rate);
 
                     if (m_level >= 1.f)
                     {
@@ -87,8 +98,12 @@ namespace disgrace_ns
                     break;
 
                 case Stage::Decay:
-                    m_level -= (1.f - m_sustain) /
-                    (m_decay * m_sample_rate);
+                    if (m_decay <= 0.0f) {
+                        m_level = m_sustain;
+                        m_stage = Stage::Sustain;
+                        break;
+                    }
+                    m_level -= (1.f - m_sustain) / (m_decay * m_sample_rate);
 
                     if (m_level <= m_sustain)
                     {
@@ -101,8 +116,11 @@ namespace disgrace_ns
                     break;
 
                 case Stage::Release:
-                    m_level -= m_sustain /
-                    (m_release * m_sample_rate);
+                    if (m_release <= 0.0f) {
+                        reset();
+                        return 0.f;
+                    }
+                    m_level -= m_release_start_level / (m_release * m_sample_rate);
 
                     if (m_level <= 0.f)
                     {
@@ -129,6 +147,7 @@ namespace disgrace_ns
         float m_release = 0.2f;
 
         float m_level = 0.f;
+        float m_release_start_level = 0.f;
         Stage m_stage = Stage::Idle;
     };
 

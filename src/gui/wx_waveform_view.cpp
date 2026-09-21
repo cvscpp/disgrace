@@ -2,7 +2,10 @@
 #include "theme.h"
 #include "../core/engine.h"
 
+#include <wx/dcbuffer.h>
 #include <wx/dcclient.h>
+#include <algorithm>
+#include <cmath>
 
 namespace disgrace_ns {
 
@@ -21,15 +24,46 @@ WaveformView::WaveformView(wxWindow* parent, wxWindowID id, Engine& engine)
 }
 
 void WaveformView::set_sample(std::shared_ptr<SampleData> s) {
+    set_sample(s, s ? s->left.size() : 0);
+}
+
+void WaveformView::set_sample(std::shared_ptr<SampleData> s, size_t visible_length) {
+    const bool changed = m_sample != s;
     m_sample = s;
-    Refresh();
+    m_visible_length = m_sample
+        ? std::min(visible_length, m_sample->left.size())
+        : 0;
+    const size_t length = sample_length();
+
+    if (changed) {
+        m_sel_start = m_sel_end = 0;
+        m_offset = 0;
+        m_zoom = 1.0;
+        m_playback_pos = -1;
+    } else {
+        m_sel_start = std::min(m_sel_start, length);
+        m_sel_end = std::min(m_sel_end, length);
+        if (length == 0) {
+            m_offset = 0;
+        } else if (m_offset >= length) {
+            m_offset = length - 1;
+        }
+        if (m_playback_pos >= 0 && (size_t)m_playback_pos > length)
+            m_playback_pos = -1;
+    }
+    Refresh(false);
+}
+
+size_t WaveformView::sample_length() const {
+    return m_sample ? std::min(m_visible_length, m_sample->left.size()) : 0;
 }
 
 void WaveformView::get_view_range(size_t& start, size_t& end) {
-    if (!m_sample || m_sample->left.empty()) { start = end = 0; return; }
-    size_t total = m_sample->left.size();
+    const size_t total = sample_length();
+    if (total == 0) { start = end = 0; return; }
+    m_offset = std::min(m_offset, total - 1);
     start = m_offset;
-    size_t visible = (size_t)(total / m_zoom);
+    size_t visible = (size_t)std::max(1.0, std::ceil(total / m_zoom));
     if (visible < 10) visible = 10;
     end = start + visible;
     if (end > total) {
@@ -40,7 +74,9 @@ void WaveformView::get_view_range(size_t& start, size_t& end) {
 }
 
 int WaveformView::sample_to_x(size_t pos, size_t view_start, size_t view_end, int width) const {
-    if (view_end <= view_start) return -1;
+    if (view_end <= view_start || width <= 0) return -1;
+    if (pos < view_start) return 0;
+    if (pos > view_end) return width;
     return (int)((double)(pos - view_start) / (view_end - view_start) * width);
 }
 
@@ -55,18 +91,21 @@ void WaveformView::view_selection() {
     if (m_sample && m_sel_start != m_sel_end) {
         size_t s = std::min(m_sel_start, m_sel_end);
         size_t e = std::max(m_sel_start, m_sel_end);
+        e = std::min(e, sample_length());
+        s = std::min(s, e);
         if (e > s) {
             m_offset = s;
-            m_zoom = (double)m_sample->left.size() / (e - s);
+            m_zoom = std::max(1.0, (double)sample_length() / (e - s));
             Refresh();
         }
     }
 }
 
 void WaveformView::OnPaint(wxPaintEvent&) {
-    wxPaintDC dc(this);
+    wxAutoBufferedPaintDC dc(this);
     wxSize size = GetClientSize();
     const int W = size.GetWidth(), H = size.GetHeight();
+    if (W <= 0 || H <= 0) return;
 
     const int TSH = 20; // time-scale strip height (top)
     const int WH  = H - TSH;
@@ -77,13 +116,13 @@ void WaveformView::OnPaint(wxPaintEvent&) {
     dc.SetPen(wxPen(bg));
     dc.DrawRectangle(0, 0, W, H);
 
-    if (!m_sample || m_sample->left.empty()) return;
+    if (!m_sample || sample_length() == 0) return;
 
     size_t view_start, view_end;
     get_view_range(view_start, view_end);
     if (view_end <= view_start) return;
 
-    double sample_rate = m_sample->sample_rate;
+    double sample_rate = std::max(1, m_sample->sample_rate);
     double view_dur = (double)(view_end - view_start) / sample_rate;
 
     double interval = 10.0;
@@ -116,6 +155,8 @@ void WaveformView::OnPaint(wxPaintEvent&) {
     // Waveform drawing helper — clips to [0, y_off, W, h]
     double spp = (double)(view_end - view_start) / W; // samples per pixel
     auto draw_channel = [&](const std::vector<float>& data, int y_off, int h, const wxString& label) {
+        const size_t data_size = std::min(data.size(), sample_length());
+        if (data_size == 0) return;
         int mid_y = y_off + h / 2;
         // Zero line
         dc.SetPen(wxPen(grid_col));
@@ -130,8 +171,8 @@ void WaveformView::OnPaint(wxPaintEvent&) {
         for (int i = 0; i < W; ++i) {
             size_t s = view_start + (size_t)(i * spp);
             size_t e = view_start + (size_t)((i + 1) * spp);
-            if (e > data.size()) e = data.size();
-            if (s >= data.size()) continue;
+            if (e > data_size) e = data_size;
+            if (s >= data_size) continue;
 
             float min_v = 1.0f, max_v = -1.0f;
             if (e > s) {
@@ -143,18 +184,20 @@ void WaveformView::OnPaint(wxPaintEvent&) {
                 min_v = max_v = data[s];
             }
 
-            int y1 = mid_y + (int)(min_v * (h / 2 - 2));
-            int y2 = mid_y + (int)(max_v * (h / 2 - 2));
+            const int amplitude = std::max(1, h / 2 - 2);
+            int y1 = mid_y - (int)(max_v * amplitude);
+            int y2 = mid_y - (int)(min_v * amplitude);
             // Clamp to wave area — never draw into the scale strip
-            y1 = std::max(y1, y_top);
-            y2 = std::min(y2, y_bot - 1);
+            y1 = std::clamp(y1, y_top, y_bot - 1);
+            y2 = std::clamp(y2, y_top, y_bot - 1);
             if (y1 > y2) std::swap(y1, y2);
             if (y1 == y2) dc.DrawPoint(i, y1);
             else          dc.DrawLine(i, y1, i, y2);
         }
     };
 
-    bool stereo   = !m_sample->right.empty();
+    bool stereo   = !m_sample->right.empty() &&
+                    std::min(m_sample->right.size(), sample_length()) > 0;
     bool both     = (m_mode == ChannelMode::Both) && stereo;
     if (both) {
         draw_channel(m_sample->left,  TSH,          WH / 2, "L");
@@ -206,6 +249,8 @@ void WaveformView::OnMouseDown(wxMouseEvent& event) {
     if (view_end <= view_start) return;
 
     int W = GetClientSize().GetWidth();
+    if (W <= 0) return;
+    x = std::clamp(x, 0, W);
     size_t pos = view_start + (size_t)((double)x / W * (view_end - view_start));
 
     // Check if we're near an existing selection edge
@@ -260,7 +305,8 @@ void WaveformView::OnMouseDrag(wxMouseEvent& event) {
     get_view_range(view_start, view_end);
     if (view_end <= view_start) return;
     int W = GetClientSize().GetWidth();
-    int x = std::max(0, std::min(event.GetX(), W - 1));
+    if (W <= 0) return;
+    int x = std::clamp(event.GetX(), 0, W);
     size_t pos = view_start + (size_t)((double)x / W * (view_end - view_start));
 
     if      (m_drag_mode == DragMode::DragStart) m_sel_start = pos;
@@ -286,4 +332,3 @@ void WaveformView::OnMouseWheel(wxMouseEvent& event) {
 }
 
 } // namespace disgrace_ns
-

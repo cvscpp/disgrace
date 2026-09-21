@@ -695,6 +695,7 @@ void Engine::render_block_multi(float** out_bufs, uint32_t num_outs, size_t fram
 
         // Always expose the current row so the GUI can show progress/countdown.
         m_recording_synced_row.store(m_current_row);
+        m_recording_synced_tick.store((size_t)m_current_tick);
 
         if (should_record && in_bufs) {
             SampleData* sd = m_recording_sample_ptr.load(std::memory_order_acquire);
@@ -1609,6 +1610,9 @@ UndoStack& Engine::undo_stack() { return m_undo; }
 BlockClipboard& Engine::clipboard() { return m_clipboard; }
 
 void Engine::start_recording_sample(SampleRecordMode mode, uint32_t channel, bool mono) {
+    if (m_is_recording_sample.load(std::memory_order_acquire))
+        return;
+
     m_recording_sample_mode.store(mode);
     m_recording_input_channel = channel;
     m_recording_is_mono = mono;
@@ -1622,12 +1626,15 @@ void Engine::start_recording_sample(SampleRecordMode mode, uint32_t channel, boo
     m_recording_sample_data = sd;
     m_recording_synced_active.store(false);
     m_recording_synced_row.store(0);
+    m_recording_synced_tick.store(0);
     m_recording_loop_count.store(0);
     m_recording_write_pos.store(0);
     // Publish raw pointer BEFORE setting the recording flag so the RT thread
     // always sees a valid pointer when m_is_recording_sample is true.
     m_recording_sample_ptr.store(sd.get(), std::memory_order_release);
     m_is_recording_sample.store(true, std::memory_order_release);
+    if (mode == SampleRecordMode::Synced && !is_playing())
+        play_pattern();
 }
 
 void Engine::stop_recording_sample() {

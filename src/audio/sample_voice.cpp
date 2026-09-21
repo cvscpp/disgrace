@@ -17,6 +17,7 @@
  */
 
 #include "sample_voice.h"
+#include <algorithm>
 #include <cmath>
 
 namespace disgrace_ns
@@ -36,15 +37,18 @@ namespace disgrace_ns
                             float freq,
                             size_t offset_samples)
     {
+        (void)note;
+        if (!m_sample || m_sample->left.empty() ||
+            m_sample->sample_rate <= 0 || m_engine_rate <= 0.0) {
+            m_active = false;
+            m_env.reset();
+            return;
+        }
+
         m_position = (double)offset_samples;
-
-        double base_freq =
-        440.0; // assume sample tuned to A4
-
-        m_increment =
-        (freq / base_freq) *
-        (double(m_sample->sample_rate) /
-        m_engine_rate);
+        m_frequency = std::max(0.0, (double)freq);
+        m_increment = (m_frequency / 440.0) *
+                      (double(m_sample->sample_rate) / m_engine_rate);
 
         m_volume = velocity / 127.f;
          m_env.note_on();
@@ -64,12 +68,10 @@ namespace disgrace_ns
 
     void disgrace_ns::SampleVoice::set_pitch(float freq)
     {
-        double base_freq = 440.0;
-
-        m_increment =
-        (freq / base_freq) *
-        (double(m_sample->sample_rate) /
-        m_engine_rate);
+        m_frequency = std::max(0.0, (double)freq);
+        if (m_sample && m_sample->sample_rate > 0 && m_engine_rate > 0.0)
+            m_increment = (m_frequency / 440.0) *
+                          (double(m_sample->sample_rate) / m_engine_rate);
     }
 
     void disgrace_ns::SampleVoice::set_volume(float vol)
@@ -79,13 +81,11 @@ namespace disgrace_ns
 
     void disgrace_ns::SampleVoice::set_engine_rate(double sr)
     {
-        m_engine_rate = sr;
+        m_engine_rate = std::max(1.0, sr);
         m_env.set_sample_rate(sr);
-        if (m_active && m_sample) {
-            double base_freq = 440.0;
-            double freq = base_freq * m_increment * (m_engine_rate / double(m_sample->sample_rate));
-            m_increment = (freq / base_freq) * (double(m_sample->sample_rate) / m_engine_rate);
-        }
+        if (m_sample && m_sample->sample_rate > 0)
+            m_increment = (m_frequency / 440.0) *
+                          (double(m_sample->sample_rate) / m_engine_rate);
     }
 
     bool disgrace_ns::SampleVoice::active() const
@@ -104,37 +104,45 @@ namespace disgrace_ns
             return;
         }
 
-        const size_t sample_size =
-        m_sample->left.size();
-
-        const size_t effective_end =
-            (m_end_pos > 0 && m_end_pos < sample_size) ? m_end_pos : (sample_size - 1);
-
-        for (size_t i = 0; i < frames; ++i)
-        {
-            if (m_position >= (double)effective_end)
-            {
-                if (m_loop_enabled) {
-                    m_position = (double)m_loop_start;
-                } else {
-                    m_active = false;
-                    return;
-                }
+            const size_t sample_size = m_sample->left.size();
+            if (sample_size == 0) {
+                m_active = false;
+                return;
             }
 
-            size_t idx = size_t(m_position);
-            float frac = float(m_position - idx);
+            const size_t effective_end =
+                (m_end_pos > 0) ? std::min(m_end_pos, sample_size) : sample_size;
+            if (effective_end == 0) {
+                m_active = false;
+                return;
+            }
 
-            // Linear interpolation
-            float l0 = m_sample->left[idx];
-            float l1 = m_sample->left[idx + 1];
-            float l  = l0 + (l1 - l0) * frac;
+            for (size_t i = 0; i < frames; ++i)
+            {
+                if (m_position >= (double)effective_end)
+                {
+                    if (m_loop_enabled) {
+                        m_position = (double)std::min(m_loop_start, effective_end - 1);
+                    } else {
+                        m_active = false;
+                        return;
+                    }
+                }
+
+                size_t idx = std::min(size_t(m_position), effective_end - 1);
+                float frac = float(m_position - idx);
+
+                // Linear interpolation
+                float l0 = m_sample->left[idx];
+                size_t next = std::min(idx + 1, sample_size - 1);
+                float l1 = m_sample->left[next];
+                float l  = l0 + (l1 - l0) * frac;
 
             float r = l;
             if (!m_sample->right.empty())
             {
                 float r0 = m_sample->right[idx];
-                float r1 = m_sample->right[idx + 1];
+                float r1 = m_sample->right[std::min(next, m_sample->right.size() - 1)];
                 r = r0 + (r1 - r0) * frac;
             }
 

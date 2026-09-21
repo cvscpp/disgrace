@@ -86,6 +86,8 @@ namespace disgrace_ns
 
             if (inst.type() == InstrumentType::Sampler) {
                 const auto& sampler = static_cast<const SampleInstrument&>(inst);
+                jinst["selected_sample"] = sampler.selected_sample();
+                jinst["volume"] = sampler.volume();
                 json jsamples = json::array();
                 for (size_t s = 0; s < sampler.sample_count(); ++s) {
                     const auto& sample = sampler.get_sample(s);
@@ -295,17 +297,21 @@ namespace disgrace_ns
                 Instrument& inst = engine.instrument(idx);
                 inst.set_name(ji["name"]);
 
-                if (type == InstrumentType::Sampler && ji.contains("samples")) {
+                if (type == InstrumentType::Sampler) {
                     SampleInstrument& sampler = static_cast<SampleInstrument&>(inst);
-                    for (auto& js : ji["samples"]) {
-                        std::shared_ptr<SampleData> sd = std::make_shared<SampleData>();
-                        fs::path sample_path = base_path / js["file"].get<std::string>();
-                        uint32_t rate;
-                        if (AudioFile::load_audio(sample_path.string(), sd->left, sd->right, rate)) {
-                            sd->sample_rate = rate;
-                            sampler.add_sample(js["name"], sd);
+                    if (ji.contains("samples")) {
+                        for (auto& js : ji["samples"]) {
+                            std::shared_ptr<SampleData> sd = std::make_shared<SampleData>();
+                            fs::path sample_path = base_path / js["file"].get<std::string>();
+                            uint32_t rate;
+                            if (AudioFile::load_audio(sample_path.string(), sd->left, sd->right, rate)) {
+                                sd->sample_rate = rate;
+                                sampler.add_sample(js["name"], sd);
+                            }
                         }
                     }
+                    sampler.set_selected_sample(ji.value("selected_sample", 0u));
+                    sampler.set_volume(ji.value("volume", 1.0f));
                 } else if (type == InstrumentType::SoundFont && ji.contains("soundfont")) {
                     SoundFontInstrument& sf = static_cast<SoundFontInstrument&>(inst);
                     fs::path sf_path = base_path / ji["soundfont"].get<std::string>();

@@ -117,6 +117,8 @@ public:
 
     double tempo() const;
     uint32_t lpb() const;
+    int speed() const { return m_timing.speed(); }
+    size_t samples_per_row() const { return m_timing.samples_per_row(); }
 
     void set_tempo(double);
     void set_lpb(uint32_t);
@@ -195,6 +197,8 @@ public:
     ::std::atomic<bool> m_recording_synced_active{false};
     // Current pattern row during recording (updated by RT thread, read by GUI).
     ::std::atomic<size_t> m_recording_synced_row{0};
+    // Current tick within the row during synced recording.
+    ::std::atomic<size_t> m_recording_synced_tick{0};
     // Number of complete pattern loops elapsed since synced recording became active.
     ::std::atomic<size_t> m_recording_loop_count{0};
     ::std::atomic<size_t> m_recording_write_pos{0};
@@ -250,6 +254,9 @@ public:
     // Returns the live recording buffer during recording, nullptr otherwise.
     std::shared_ptr<SampleData> recording_sample_data() const { return m_recording_sample_data; }
     bool is_recording_sample() const { return m_is_recording_sample.load(std::memory_order_relaxed); }
+    size_t recording_frames() const {
+        return m_recording_write_pos.load(std::memory_order_acquire);
+    }
 
     struct ExportOptions {
         uint32_t sample_rate = 44100;

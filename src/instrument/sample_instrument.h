@@ -60,8 +60,12 @@ namespace disgrace_ns
         SampleEntry& get_sample(size_t index) { return m_samples[index]; }
         void update_sample_data(size_t index, std::shared_ptr<disgrace_ns::SampleData> data);
 
-        void set_selected_sample(size_t index) { m_selected_sample_index = index; }
+        void set_selected_sample(size_t index) {
+            m_selected_sample_index = m_samples.empty()
+                ? 0 : std::min(index, m_samples.size() - 1);
+        }
         size_t selected_sample() const { return m_selected_sample_index; }
+        float volume() const { return m_volume; }
 
         void push_undo(size_t index);
         void undo(size_t index);
@@ -83,6 +87,7 @@ namespace disgrace_ns
         std::vector<SampleEntry> m_samples;
         size_t m_selected_sample_index = 0;
         double m_engine_rate;
+        float m_volume = 1.0f;
     };
 
 } // namespace disgrace_ns

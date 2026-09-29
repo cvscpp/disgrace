@@ -226,6 +226,16 @@ std::vector<std::string> plugin_scan_paths()
     };
 }
 
+// Channel selection to use for in-place sample edits: the waveform view's
+// selected stereo channel(s), or both channels when there is no selection
+// (whole-sample operations always affect both channels).
+uint8_t edit_channels_for(const disgrace_ns::WaveformView* wf)
+{
+    if (!wf) return disgrace_ns::CH_BOTH;
+    if (wf->selection_start() == wf->selection_end()) return disgrace_ns::CH_BOTH;
+    return wf->selection_channels();
+}
+
 } // namespace
 
 namespace disgrace_ns {
@@ -2168,7 +2178,7 @@ void InstrumentPanel::on_silence(wxCommandEvent& event) {
             size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
             if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
             else if (s1 > s2) std::swap(s1, s2);
-            sample.data->silence(s1, s2);
+            sample.data->silence(s1, s2, edit_channels_for(m_waveform_view));
             update_editor();
         }
     }
@@ -2205,7 +2215,7 @@ void InstrumentPanel::on_fade_in_lin(wxCommandEvent& event) {
             size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
             if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
             else if (s1 > s2) std::swap(s1, s2);
-            sample.data->fade_in(s1, s2, false);
+            sample.data->fade_in(s1, s2, false, edit_channels_for(m_waveform_view));
             update_editor();
         }
     }
@@ -2221,7 +2231,7 @@ void InstrumentPanel::on_fade_in_log(wxCommandEvent& event) {
             size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
             if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
             else if (s1 > s2) std::swap(s1, s2);
-            sample.data->fade_in(s1, s2, true);
+            sample.data->fade_in(s1, s2, true, edit_channels_for(m_waveform_view));
             update_editor();
         }
     }
@@ -2237,7 +2247,7 @@ void InstrumentPanel::on_fade_out_lin(wxCommandEvent& event) {
             size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
             if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
             else if (s1 > s2) std::swap(s1, s2);
-            sample.data->fade_out(s1, s2, false);
+            sample.data->fade_out(s1, s2, false, edit_channels_for(m_waveform_view));
             update_editor();
         }
     }
@@ -2253,7 +2263,7 @@ void InstrumentPanel::on_fade_out_log(wxCommandEvent& event) {
             size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
             if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
             else if (s1 > s2) std::swap(s1, s2);
-            sample.data->fade_out(s1, s2, true);
+            sample.data->fade_out(s1, s2, true, edit_channels_for(m_waveform_view));
             update_editor();
         }
     }
@@ -2269,7 +2279,7 @@ void InstrumentPanel::on_normalize(wxCommandEvent& event) {
                 size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
                 if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
                 else if (s1 > s2) std::swap(s1, s2);
-                sample.data->normalize(s1, s2);
+                sample.data->normalize(s1, s2, edit_channels_for(m_waveform_view));
                 update_editor();
             }
         }
@@ -2287,7 +2297,7 @@ void InstrumentPanel::on_adjust_vol(wxCommandEvent& event) {
                 size_t s1 = m_waveform_view->selection_start(), s2 = m_waveform_view->selection_end();
                 if (s1 == s2) { s1 = 0; s2 = sample.data->left.size(); }
                 else if (s1 > s2) std::swap(s1, s2);
-                sample.data->adjust_volume(s1, s2, (float)val);
+                sample.data->adjust_volume(s1, s2, (float)val, edit_channels_for(m_waveform_view));
                 update_editor();
             }
         }
@@ -2514,6 +2524,13 @@ void InstrumentPanel::on_plugin_select(wxCommandEvent& event) {
         if (inst.type() == InstrumentType::Plugin) {
             if (static_cast<DSSIInstrument*>(&inst)->load_plugin(info.path, info.index)) {
                 update_editor();
+            } else {
+                wxMessageBox(
+                    wxString::Format("Could not start the DSSI sandbox for:\n%s\n\n"
+                                     "Make sure the 'dssi_sandbox' helper is installed "
+                                     "next to the disgrace executable.",
+                                     wxString::FromUTF8(info.path)),
+                    "Plugin load failed", wxOK | wxICON_ERROR, this);
             }
         }
     }

@@ -9,6 +9,18 @@
 
 namespace disgrace_ns {
 
+namespace {
+// Height of the top time-scale strip (px), shared with hit-testing.
+constexpr int kTimeScaleHeight = 20;
+
+// Combine two (single-channel) anchors into the inclusive channel range.
+uint8_t channel_span(uint8_t a, uint8_t b) {
+    if (a == CH_BOTH || b == CH_BOTH) return CH_BOTH;
+    if (a == b) return a;
+    return CH_BOTH;
+}
+} // namespace
+
 wxBEGIN_EVENT_TABLE(WaveformView, wxPanel)
     EVT_PAINT(WaveformView::OnPaint)
     EVT_LEFT_DOWN(WaveformView::OnMouseDown)
@@ -37,6 +49,7 @@ void WaveformView::set_sample(std::shared_ptr<SampleData> s, size_t visible_leng
 
     if (changed) {
         m_sel_start = m_sel_end = 0;
+        m_sel_channels = CH_BOTH;
         m_offset = 0;
         m_zoom = 1.0;
         m_playback_pos = -1;
@@ -56,6 +69,23 @@ void WaveformView::set_sample(std::shared_ptr<SampleData> s, size_t visible_leng
 
 size_t WaveformView::sample_length() const {
     return m_sample ? std::min(m_visible_length, m_sample->left.size()) : 0;
+}
+
+bool WaveformView::is_stereo() const {
+    return m_sample && !m_sample->right.empty() &&
+           std::min(m_sample->right.size(), sample_length()) > 0;
+}
+
+uint8_t WaveformView::channel_at_y(int y) const {
+    if (!is_stereo()) return CH_LEFT;
+    if (m_mode == ChannelMode::Left)  return CH_LEFT;
+    if (m_mode == ChannelMode::Right) return CH_RIGHT;
+    // Both-mode (stacked L over R): pick by vertical half.  A press inside the
+    // ruler strip above the waveform selects all channels.
+    const int H  = GetClientSize().GetHeight();
+    const int WH = H - kTimeScaleHeight;
+    if (WH <= 0 || y < kTimeScaleHeight) return CH_BOTH;
+    return (y < kTimeScaleHeight + WH / 2) ? CH_LEFT : CH_RIGHT;
 }
 
 void WaveformView::get_view_range(size_t& start, size_t& end) {
@@ -107,7 +137,7 @@ void WaveformView::OnPaint(wxPaintEvent&) {
     const int W = size.GetWidth(), H = size.GetHeight();
     if (W <= 0 || H <= 0) return;
 
-    const int TSH = 20; // time-scale strip height (top)
+    const int TSH = kTimeScaleHeight; // time-scale strip height (top)
     const int WH  = H - TSH;
 
     // Background
@@ -196,9 +226,8 @@ void WaveformView::OnPaint(wxPaintEvent&) {
         }
     };
 
-    bool stereo   = !m_sample->right.empty() &&
-                    std::min(m_sample->right.size(), sample_length()) > 0;
-    bool both     = (m_mode == ChannelMode::Both) && stereo;
+    const bool stereo = is_stereo();
+    const bool both   = (m_mode == ChannelMode::Both) && stereo;
     if (both) {
         draw_channel(m_sample->left,  TSH,          WH / 2, "L");
         draw_channel(m_sample->right, TSH + WH / 2, WH / 2, "R");
@@ -210,20 +239,30 @@ void WaveformView::OnPaint(wxPaintEvent&) {
         draw_channel(m_sample->left,  TSH, WH, stereo ? "L" : "M");
     }
 
-    // Selection overlay — only in wave area
+    // Selection overlay — only in wave area, and only over the selected
+    // channel(s) so that single-channel selections are visually distinct.
     if (m_sel_start != m_sel_end) {
         size_t s = std::min(m_sel_start, m_sel_end);
         size_t e = std::max(m_sel_start, m_sel_end);
         if (e > view_start && s < view_end) {
             int x1 = sample_to_x(std::max(s, view_start), view_start, view_end, W);
             int x2 = sample_to_x(std::min(e, view_end),   view_start, view_end, W);
-            dc.SetBrush(wxBrush(wxColour(255, 255, 255, 60)));
-            dc.SetPen(*wxTRANSPARENT_PEN);
-            dc.DrawRectangle(x1, TSH, x2 - x1, WH);
-            // Edge handles
-            dc.SetPen(wxPen(wxColour(255, 255, 180), 2));
-            dc.DrawLine(x1, TSH, x1, H);
-            dc.DrawLine(x2, TSH, x2, H);
+            auto draw_sel_band = [&](int y, int h) {
+                dc.SetBrush(wxBrush(wxColour(255, 255, 255, 60)));
+                dc.SetPen(*wxTRANSPARENT_PEN);
+                dc.DrawRectangle(x1, y, x2 - x1, h);
+                // Edge handles
+                dc.SetPen(wxPen(wxColour(255, 255, 180), 2));
+                dc.DrawLine(x1, y, x1, y + h);
+                dc.DrawLine(x2, y, x2, y + h);
+            };
+            if (both) {
+                if (m_sel_channels & CH_LEFT)  draw_sel_band(TSH, WH / 2);
+                if (m_sel_channels & CH_RIGHT) draw_sel_band(TSH + WH / 2, WH - WH / 2);
+            } else {
+                // Single-channel (or mono) view: the whole wave area is one channel.
+                draw_sel_band(TSH, WH);
+            }
         }
     }
 
@@ -274,6 +313,8 @@ void WaveformView::OnMouseDown(wxMouseEvent& event) {
 
     // Start a new selection
     m_sel_start = m_sel_end = pos;
+    m_sel_anchor_ch = channel_at_y(event.GetY());
+    m_sel_channels  = m_sel_anchor_ch;
     m_drag_mode = DragMode::NewSel;
     CaptureMouse();
     Refresh();
@@ -311,7 +352,12 @@ void WaveformView::OnMouseDrag(wxMouseEvent& event) {
 
     if      (m_drag_mode == DragMode::DragStart) m_sel_start = pos;
     else if (m_drag_mode == DragMode::DragEnd)   m_sel_end   = pos;
-    else /* NewSel */                             m_sel_end   = pos;
+    else /* NewSel */ {
+        m_sel_end = pos;
+        // Dragging vertically across the channel boundary extends the
+        // selection to cover the spanned channel(s).
+        m_sel_channels = channel_span(m_sel_anchor_ch, channel_at_y(event.GetY()));
+    }
 
     Refresh();
 }

@@ -31,16 +31,45 @@
 #include <signal.h>
 #include <time.h>
 
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#endif
+
 namespace disgrace_ns {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Resolve the absolute path of the running executable.  Portable across the
+// platforms Disgrace supports:
+//   Linux   → /proc/self/exe
+//   FreeBSD → kern.proc.pathname (readlink("/proc/self/exe") does not exist
+//             unless the native procfs is mounted, which it usually is not)
+// Returns an empty string if the path cannot be determined.
+static std::string current_executable_path()
+{
+#if defined(__linux__)
+    char buf[4096] = {};
+    ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (n > 0)
+        return std::string(buf, (size_t)n);
+#elif defined(__FreeBSD__) || defined(__DragonFly__)
+    int    mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, (int)getpid() };
+    char   buf[4096] = {};
+    size_t len = sizeof(buf);
+    if (sysctl(mib, 4, buf, &len, nullptr, 0) == 0 && len > 0)
+        return std::string(buf);
+#endif
+    return {};
+}
+
 std::string DSSIInstrument::find_sandbox_binary()
 {
-    char exe_buf[4096] = {};
-    ssize_t n = readlink("/proc/self/exe", exe_buf, sizeof(exe_buf) - 1);
-    if (n > 0) {
-        std::string exe(exe_buf, (size_t)n);
+    // The dssi_sandbox helper is installed next to the main executable, so
+    // derive its location from the running binary rather than relying on
+    // $PATH (the shell PATH is not guaranteed to contain the install dir).
+    std::string exe = current_executable_path();
+    if (!exe.empty()) {
         auto slash = exe.rfind('/');
         if (slash != std::string::npos) {
             std::string candidate = exe.substr(0, slash + 1) + "dssi_sandbox";
@@ -48,6 +77,7 @@ std::string DSSIInstrument::find_sandbox_binary()
                 return candidate;
         }
     }
+    // Last resort: let execvp() search $PATH for the bare name.
     return "dssi_sandbox";
 }
 

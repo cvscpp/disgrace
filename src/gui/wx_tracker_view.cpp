@@ -647,6 +647,7 @@ void TrackerView::OnKeyDown(wxKeyEvent& event) {
         }
     }
 
+    sync_record_track();
     ensure_cursor_visible();
     Refresh();
 }
@@ -712,6 +713,7 @@ void TrackerView::OnMouseDown(wxMouseEvent& event) {
             m_sel_end = {m_cursor_track, m_cursor_row, field};
         }
         
+        sync_record_track();
         ensure_cursor_visible();
         Refresh();
     }
@@ -801,6 +803,15 @@ void TrackerView::clamp_cursor() {
         if (m_cursor_track < 0) m_cursor_track = 0;
         if (m_cursor_track >= (int)m_engine.track_count()) m_cursor_track = (int)m_engine.track_count() - 1;
     }
+    sync_record_track();
+}
+
+void TrackerView::sync_record_track() {
+    if (m_engine.track_count() == 0) return;
+    int t = m_cursor_track;
+    if (t < 0) t = 0;
+    if (t >= (int)m_engine.track_count()) t = (int)m_engine.track_count() - 1;
+    m_engine.set_record_track((size_t)t);
 }
 
 void TrackerView::insert_note(uint8_t note) {
@@ -946,6 +957,7 @@ bool TrackerView::handle_action(Action action) {
                 if (m_cursor_track >= (int)m_engine.track_count()) m_cursor_track = 0;
             }
             m_cursor_field = 0;
+            sync_record_track();
             ensure_cursor_visible(); Refresh(); return true;
         }
         case Action::JumpToPrevColumn: {
@@ -956,6 +968,7 @@ bool TrackerView::handle_action(Action action) {
                 m_cursor_col = (int)m_pattern->column_count(m_cursor_track) - 1;
             }
             m_cursor_field = 0;
+            sync_record_track();
             ensure_cursor_visible(); Refresh(); return true;
         }
 
@@ -1203,6 +1216,7 @@ void TrackerView::OnRightClick(wxMouseEvent& event) {
             m_cursor_col = 0;
             m_cursor_field = 3 + (field - num_cols * 3);
         }
+        sync_record_track();
         Refresh();
     }
 

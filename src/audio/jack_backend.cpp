@@ -209,11 +209,18 @@ int JackBackend::process(jack_nframes_t nframes)
 
         for (size_t i = 0; i < midi_message_count; ++i) {
             const MidiMessage& out_msg = midi_messages[i];
-            unsigned char* buf = jack_midi_event_reserve(midi_buf, 0, 3);
+            // Skip system messages (0xF0+) which have variable/undefined length here.
+            if (out_msg.status >= 0xF0) continue;
+            // Program Change (0xC0) and Channel Aftertouch (0xD0) are 2-byte
+            // messages; everything else we emit is 3 bytes. Reserving 3 bytes for
+            // a 2-byte message would inject a spurious trailing 0x00.
+            size_t len = ((out_msg.status & 0xF0) == 0xC0 ||
+                          (out_msg.status & 0xF0) == 0xD0) ? 2 : 3;
+            unsigned char* buf = jack_midi_event_reserve(midi_buf, 0, len);
             if (buf) {
                 buf[0] = out_msg.status;
                 buf[1] = out_msg.data1;
-                buf[2] = out_msg.data2;
+                if (len == 3) buf[2] = out_msg.data2;
             }
         }
     }

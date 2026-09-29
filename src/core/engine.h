@@ -216,7 +216,10 @@ public:
     disgrace_ns::MidiInput m_midi;
 
     ::std::atomic<bool> m_record_enabled{false};
-    size_t m_record_track{0};
+    // Track that live MIDI input records into and (when the Instrument tab is
+    // inactive) plays through. Kept in sync with the tracker's cursor track by
+    // the GUI thread; read lock-free by the audio thread.
+    ::std::atomic<size_t> m_record_track{0};
 
     // Focused instrument for instrument-panel preview
     ::std::atomic<int> m_focused_instrument{-1};

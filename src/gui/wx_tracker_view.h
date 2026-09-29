@@ -73,6 +73,9 @@ private:
     int get_field_x(int track, int abs_field, int& width);
     void delete_current_field();
     void clamp_cursor();
+    // Push the current cursor track to the engine so live MIDI input plays
+    // through (and records into) the selected track.
+    void sync_record_track();
     void insert_note(uint8_t note);
     int get_center_row_y();
 

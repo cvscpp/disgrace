@@ -26,10 +26,12 @@ namespace disgrace_ns {
  {
     if (!m_engine) return;
     
-    // Stop last note on same column
+    // Stop last note on same column (if one is still sounding)
     note_off(column_index);
 
-    m_last_note[column_index % 16] = note;
+    const size_t col = column_index % 16;
+    m_last_note[col] = note;
+    m_note_active[col] = true;
 
     MidiMessage msg;
     msg.status = 0x90 | (m_channel & 0x0F);
@@ -41,15 +43,22 @@ namespace disgrace_ns {
 void MidiInstrument::note_off(size_t column_index) {
     if (!m_engine) return;
 
+    const size_t col = column_index % 16;
+    // Nothing sounding on this column => nothing to stop. Emitting a note-off
+    // here would send a spurious note-off for note 0 (m_last_note defaults to 0).
+    if (!m_note_active[col]) return;
+    m_note_active[col] = false;
+
     MidiMessage msg;
     msg.status = 0x80 | (m_channel & 0x0F);
-    msg.data1 = m_last_note[column_index % 16] & 0x7F;
+    msg.data1 = m_last_note[col] & 0x7F;
     msg.data2 = 0;
     m_engine->m_midi_out_queue.push(msg);
 }
 
 void MidiInstrument::panic() {
     if (!m_engine) return;
+    for (bool& active : m_note_active) active = false;
     MidiMessage msg;
     msg.status = 0xB0 | (m_channel & 0x0F);
     msg.data1 = 123; // All Notes Off

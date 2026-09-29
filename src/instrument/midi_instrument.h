@@ -52,6 +52,9 @@ private:
     int m_channel;
     int m_program;
     uint8_t m_last_note[16] = {0};
+    // Tracks which columns currently have a sounding note, so we never emit a
+    // note-off for a note that was never started (which would be note 0).
+    bool m_note_active[16] = {false};
     
     // Audio Input
     int m_audio_input_l = -1;

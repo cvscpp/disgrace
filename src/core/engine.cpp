@@ -466,8 +466,9 @@ void Engine::record_note(uint8_t note, size_t column)
 {
     size_t row = current_row();
     Pattern& current_pattern = pattern();
-    if (m_record_track < current_pattern.track_count()) {
-        current_pattern.event(m_record_track, row, column).note = note;
+    const size_t rec_track = m_record_track.load(std::memory_order_relaxed);
+    if (rec_track < current_pattern.track_count()) {
+        current_pattern.event(rec_track, row, column).note = note;
     }
 }
 
@@ -475,8 +476,9 @@ void Engine::record_note_off(size_t column)
 {
     size_t row = current_row();
     Pattern& current_pattern = pattern();
-    if (m_record_track < current_pattern.track_count()) {
-        current_pattern.event(m_record_track, row, column).note = 254;
+    const size_t rec_track = m_record_track.load(std::memory_order_relaxed);
+    if (rec_track < current_pattern.track_count()) {
+        current_pattern.event(rec_track, row, column).note = 254;
     }
 }
 
@@ -568,9 +570,15 @@ void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float*
 
     MidiMessage msg;
     while (m_midi_queue.pop(msg)) {
+        if (m_tracks.empty()) break;
         uint8_t status = msg.status & 0xF0;
-        // Route MIDI to focused instrument when instrument tab is active
-        size_t target_track = m_record_track;
+
+        // Playback target: the selected (cursor) track, i.e. its instrument.
+        // When the Instrument tab is active, audition the instrument selected
+        // there instead (which may live on a different track). Recording always
+        // lands on the selected track (record_note uses m_record_track).
+        size_t target_track = m_record_track.load(std::memory_order_relaxed);
+        if (target_track >= m_tracks.size()) target_track = m_tracks.size() - 1;
         if (m_instrument_tab_active.load()) {
             int fi = m_focused_instrument.load();
             if (fi >= 0) {
@@ -578,6 +586,7 @@ void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float*
                 if (t >= 0) target_track = (size_t)t;
             }
         }
+
         if (status == 0x90 && msg.data2 != 0) {
             m_tracks[target_track].note_on(msg.data1, msg.data2);
             if (m_record_enabled && transport().is_playing()) record_note(msg.data1);
@@ -1405,6 +1414,14 @@ void Engine::set_loop(bool e) { transport().set_loop(e); }
 
 void Engine::set_current_instrument(int index) {
     m_focused_instrument.store(index);
+}
+
+void Engine::set_record_track(size_t t) {
+    if (m_tracks.empty()) {
+        m_record_track.store(0, std::memory_order_relaxed);
+        return;
+    }
+    m_record_track.store(std::min(t, m_tracks.size() - 1), std::memory_order_relaxed);
 }
 
 int Engine::find_track_for_instrument(size_t inst_index) const {

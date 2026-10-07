@@ -38,6 +38,9 @@
 #include <set>
 #include <vector>
 #include <algorithm>
+#include <charconv>
+#include <cctype>
+#include <limits>
 
 namespace fs = std::filesystem;
 
@@ -74,6 +77,15 @@ static std::string get_node_content(xmlNodePtr node) {
     return s;
 }
 
+static std::string get_descendant_content(xmlNodePtr node, const char* name) {
+    for (xmlNodePtr child = node->children; child; child = child->next) {
+        if (xmlStrEqual(child->name, (const xmlChar*)name)) return get_node_content(child);
+        std::string content = get_descendant_content(child, name);
+        if (!content.empty()) return content;
+    }
+    return {};
+}
+
 static uint8_t parse_renoise_note(const std::string& note_str) {
     if (note_str == "OFF") return 254;
     if (note_str == "---" || note_str.empty() || note_str == "..") return 255;
@@ -102,6 +114,54 @@ static uint8_t parse_renoise_note(const std::string& note_str) {
     }
 
     return note_num + (octave + 1) * 12;
+}
+
+static bool parse_indexed_name(const std::string& name, const char* prefix, size_t& index) {
+    const std::string prefix_str(prefix);
+    if (name.compare(0, prefix_str.size(), prefix_str) != 0) return false;
+
+    size_t digits_end = prefix_str.size();
+    while (digits_end < name.size() &&
+           std::isdigit(static_cast<unsigned char>(name[digits_end]))) {
+        ++digits_end;
+    }
+    if (digits_end == prefix_str.size()) return false;
+
+    const char* digits_begin = name.data() + prefix_str.size();
+    const char* digits_limit = name.data() + digits_end;
+    const auto [parsed_end, error] = std::from_chars(digits_begin, digits_limit, index);
+    return error == std::errc{} && parsed_end == digits_limit;
+}
+
+using RenoiseSampleFiles = std::map<std::pair<size_t, size_t>, std::vector<fs::path>>;
+
+static RenoiseSampleFiles find_renoise_sample_files(const fs::path& extracted_dir) {
+    RenoiseSampleFiles files;
+    const fs::path sample_data_dir = extracted_dir / "SampleData";
+    if (!fs::exists(sample_data_dir)) return files;
+
+    for (const auto& entry : fs::recursive_directory_iterator(sample_data_dir)) {
+        if (!entry.is_regular_file()) continue;
+
+        size_t instrument_index = 0;
+        bool has_instrument_index = false;
+        for (const auto& component : entry.path().parent_path()) {
+            if (parse_indexed_name(component.string(), "Instrument", instrument_index)) {
+                has_instrument_index = true;
+                break;
+            }
+        }
+        size_t sample_index = 0;
+        if (has_instrument_index &&
+            parse_indexed_name(entry.path().stem().string(), "Sample", sample_index)) {
+            files[{instrument_index, sample_index}].push_back(entry.path());
+        }
+    }
+
+    for (auto& [key, paths] : files) {
+        std::sort(paths.begin(), paths.end());
+    }
+    return files;
 }
 
 bool XrnsImporter::import(Engine& engine, const std::string& path) {
@@ -142,31 +202,55 @@ bool XrnsImporter::extract_zip(const std::string& zip_path, const std::string& d
         return false;
     }
     
+    bool extraction_ok = true;
     struct archive_entry* entry;
-    while (archive_read_next_header(a, &entry) == ARCHIVE_OK) {
+    int header_status = ARCHIVE_OK;
+    while ((header_status = archive_read_next_header(a, &entry)) == ARCHIVE_OK) {
         std::string pathname = archive_entry_pathname(entry);
-        
-        if (pathname == "Song.xml" || 
+
+        const bool should_extract = pathname == "Song.xml" ||
             pathname.rfind("Samples/", 0) == 0 ||
-            pathname.rfind("PluginData/", 0) == 0) {
-            
-            std::string dest_path = dest_dir + "/" + pathname;
-            fs::path parent = fs::path(dest_path).parent_path();
+            pathname.rfind("SampleData/", 0) == 0 ||
+            pathname.rfind("PluginData/", 0) == 0;
+        if (should_extract) {
+            if (archive_entry_filetype(entry) != AE_IFREG) {
+                archive_read_data_skip(a);
+                continue;
+            }
+
+            const fs::path relative_path(pathname);
+            const bool unsafe_path = relative_path.is_absolute() ||
+                std::any_of(relative_path.begin(), relative_path.end(),
+                            [](const fs::path& component) { return component == ".."; });
+            if (unsafe_path) {
+                std::cerr << "Skipping unsafe XRNS archive path: " << pathname << std::endl;
+                archive_read_data_skip(a);
+                continue;
+            }
+
+            fs::path dest_path = fs::path(dest_dir) / relative_path;
+            fs::path parent = dest_path.parent_path();
             if (!fs::exists(parent)) fs::create_directories(parent);
             
-            if (pathname.back() != '/') {
-                archive_entry_set_pathname(entry, dest_path.c_str());
+            if (!pathname.empty() && pathname.back() != '/') {
+                const std::string dest_path_str = dest_path.string();
+                archive_entry_set_pathname(entry, dest_path_str.c_str());
                 int ret = archive_read_extract(a, entry, 0);
                 if (ret != ARCHIVE_OK) {
                     std::cerr << "Failed to extract: " << pathname << " Error: " << archive_error_string(a) << std::endl;
+                    extraction_ok = false;
                 }
             }
         }
         archive_read_data_skip(a);
     }
-    
+
+    if (header_status != ARCHIVE_EOF) {
+        std::cerr << "Failed while reading XRNS archive: " << archive_error_string(a) << std::endl;
+        extraction_ok = false;
+    }
     archive_read_free(a);
-    return true;
+    return extraction_ok;
 }
 
 bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_dir) {
@@ -196,15 +280,12 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
                     RenoiseInstrument inst; inst.type = "Sampler";
                     for (xmlNodePtr child = inst_node->children; child; child = child->next) {
                         if (xmlStrEqual(child->name, (const xmlChar*)"Name")) inst.name = get_node_content(child);
-                        else if (xmlStrEqual(child->name, (const xmlChar*)"PluginProperties")) {
-                            for (xmlNodePtr pchild = child->children; pchild; pchild = pchild->next) {
-                                if (xmlStrEqual(pchild->name, (const xmlChar*)"PluginIdentifier")) {
-                                    std::string id = get_node_content(pchild);
-                                    if (!id.empty()) {
-                                        inst.type = "Plugin";
-                                        if (id.find("SoundFont") != std::string::npos || id.find(".sf2") != std::string::npos) inst.type = "SoundFont";
-                                    }
-                                }
+                        else if (xmlStrEqual(child->name, (const xmlChar*)"PluginProperties") ||
+                                 xmlStrEqual(child->name, (const xmlChar*)"PluginGenerator")) {
+                            std::string id = get_descendant_content(child, "PluginIdentifier");
+                            if (!id.empty()) {
+                                inst.type = "Plugin";
+                                if (id.find("SoundFont") != std::string::npos || id.find(".sf2") != std::string::npos) inst.type = "SoundFont";
                             }
                         } else if (xmlStrEqual(child->name, (const xmlChar*)"SampleList")) {
                             for (xmlNodePtr sample_node = child->children; sample_node; sample_node = sample_node->next) {
@@ -219,6 +300,24 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
                                         }
                                     }
                                     if (!s_path.empty()) inst.samples.push_back({s_name, s_path});
+                                }
+                            }
+                        } else if (xmlStrEqual(child->name, (const xmlChar*)"SampleGenerator")) {
+                            for (xmlNodePtr generator_child = child->children;
+                                 generator_child; generator_child = generator_child->next) {
+                                if (!xmlStrEqual(generator_child->name, (const xmlChar*)"Samples")) continue;
+                                for (xmlNodePtr sample_node = generator_child->children;
+                                     sample_node; sample_node = sample_node->next) {
+                                    if (!xmlStrEqual(sample_node->name, (const xmlChar*)"Sample")) continue;
+                                    std::string sample_name;
+                                    for (xmlNodePtr sample_child = sample_node->children;
+                                         sample_child; sample_child = sample_child->next) {
+                                        if (xmlStrEqual(sample_child->name, (const xmlChar*)"Name")) {
+                                            sample_name = get_node_content(sample_child);
+                                            break;
+                                        }
+                                    }
+                                    inst.samples.push_back({sample_name, ""});
                                 }
                             }
                         }
@@ -271,7 +370,18 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
                                                                     for (xmlNodePtr ncc = nc_node->children; ncc; ncc = ncc->next) {
                                                                         if (xmlStrEqual(ncc->name, (const xmlChar*)"Note")) rn.note = parse_renoise_note(get_node_content(ncc));
                                                                         else if (xmlStrEqual(ncc->name, (const xmlChar*)"Instrument")) {
-                                                                            std::string s = get_node_content(ncc); if (s != ".." && !s.empty()) rn.instrument = std::atoi(s.c_str());
+                                                                            std::string s = get_node_content(ncc);
+                                                                            if (s != ".." && !s.empty()) {
+                                                                                unsigned int instrument_index = 0;
+                                                                                const auto [parsed_end, error] = std::from_chars(
+                                                                                    s.data(), s.data() + s.size(), instrument_index, 16);
+                                                                                if (error == std::errc{} &&
+                                                                                    parsed_end == s.data() + s.size() &&
+                                                                                    instrument_index <= std::numeric_limits<uint8_t>::max() &&
+                                                                                    instrument_index < ri_list.size()) {
+                                                                                    rn.instrument = static_cast<uint8_t>(instrument_index);
+                                                                                }
+                                                                            }
                                                                         } else if (xmlStrEqual(ncc->name, (const xmlChar*)"Volume")) {
                                                                             std::string s = get_node_content(ncc); if (s != ".." && !s.empty()) { rn.volume = (uint8_t)std::strtol(s.c_str(), nullptr, 16); if (rn.volume > 127) rn.volume = 127; }
                                                                         }
@@ -326,6 +436,20 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
     }
     xmlFreeDoc(doc); xmlCleanupParser();
 
+    const RenoiseSampleFiles sample_files = find_renoise_sample_files(extracted_dir);
+    for (size_t instrument_index = 0; instrument_index < ri_list.size(); ++instrument_index) {
+        auto& instrument = ri_list[instrument_index];
+        for (size_t sample_index = 0; sample_index < instrument.samples.size(); ++sample_index) {
+            auto& sample_path = instrument.samples[sample_index].second;
+            if (!sample_path.empty()) continue;
+
+            auto files = sample_files.find({instrument_index, sample_index});
+            if (files != sample_files.end() && !files->second.empty()) {
+                sample_path = files->second.front().string();
+            }
+        }
+    }
+
     // CLEAR ENGINE
     engine.m_tracks.clear();
     engine.m_buses.clear();
@@ -379,17 +503,25 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
             sampler->set_type(InstrumentType::Sampler);
             uint8_t next_s_idx = 1;
             for (uint8_t ri_idx : used_samplers) {
-                sampler_inst_to_sample_idx[rt][ri_idx] = next_s_idx;
                 const auto& ri = ri_list[ri_idx];
+                bool sample_loaded = false;
                 for (const auto& s : ri.samples) {
-                    std::string full_path = extracted_dir + "/" + s.second;
+                    if (s.second.empty()) continue;
+                    fs::path sample_path(s.second);
+                    if (sample_path.is_relative()) sample_path = fs::path(extracted_dir) / sample_path;
                     auto data = std::make_shared<SampleData>(); std::vector<float> l, r; uint32_t sr;
-                    if (AudioFile::load_audio(full_path, l, r, sr)) {
+                    if (AudioFile::load_audio(sample_path.string(), l, r, sr)) {
                         data->left = l; data->right = r; data->sample_rate = sr;
-                        sampler->add_sample(ri.name, data); break; 
+                        sampler->add_sample(s.first.empty() ? ri.name : s.first, data);
+                        sampler_inst_to_sample_idx[rt][ri_idx] = next_s_idx++;
+                        sample_loaded = true;
+                        break;
                     }
                 }
-                next_s_idx++;
+                if (!sample_loaded && !ri.samples.empty()) {
+                    std::cerr << "Could not load a sample for Renoise instrument "
+                              << ri.name << " on track " << rt_list[rt].name << std::endl;
+                }
             }
             engine.track(dt).set_instrument(sampler.get());
             engine.track(dt).set_name(rt_list[rt].name + " (Sampler)");
@@ -439,11 +571,14 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
                     const auto& rn = line[col];
                     if (rn.instrument != 255 && rn.instrument < ri_list.size()) {
                         if (ri_list[rn.instrument].type == "Sampler") {
-                            size_t dt = sampler_track_map[rt];
-                            size_t write_col = col < MAX_COLS ? col : MAX_COLS - 1;
-                            TrackEvent& ev = pat.event(dt, row, write_col);
-                            ev.note = rn.note; ev.volume = rn.volume; ev.sample_idx = sampler_inst_to_sample_idx[rt][rn.instrument];
-                            max_cols_used[dt] = std::max(max_cols_used[dt], write_col + 1);
+                            auto sample_it = sampler_inst_to_sample_idx[rt].find(rn.instrument);
+                            if (sample_it != sampler_inst_to_sample_idx[rt].end()) {
+                                size_t dt = sampler_track_map[rt];
+                                size_t write_col = col < MAX_COLS ? col : MAX_COLS - 1;
+                                TrackEvent& ev = pat.event(dt, row, write_col);
+                                ev.note = rn.note; ev.volume = rn.volume; ev.sample_idx = sample_it->second;
+                                max_cols_used[dt] = std::max(max_cols_used[dt], write_col + 1);
+                            }
                         } else {
                             auto itm = plugin_track_map.find({rt, rn.instrument});
                             if (itm != plugin_track_map.end()) {

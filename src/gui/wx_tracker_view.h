@@ -46,6 +46,9 @@ public:
     void do_transpose(int semitones);
     void do_transpose_pattern(int semitones);
     void do_transpose_song(int semitones);
+    // Merge the cursor track's subtracks into the adjacent track in the
+    // given direction (-1: previous, +1: next) and delete the cursor track.
+    void do_join_track(int direction);
 
     void set_current_row(int row);
     int get_cursor_row() const { return m_cursor_row; }

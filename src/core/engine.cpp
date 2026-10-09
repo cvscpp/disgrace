@@ -1278,7 +1278,82 @@ void Engine::add_track() {
     }
     mark_dirty();
 }
-void Engine::remove_track(size_t index) { if (index < m_tracks.size()) { m_tracks.erase(m_tracks.begin() + index); mark_dirty(); } }
+void Engine::remove_track(size_t index) {
+    if (index >= m_tracks.size()) return;
+    m_tracks.erase(m_tracks.begin() + index);
+    for (auto& pat : m_patterns) {
+        if (pat) pat->remove_track(index);
+    }
+    mark_dirty();
+}
+bool Engine::join_track(size_t src, size_t dst, std::string* error) {
+    if (src >= m_tracks.size() || dst >= m_tracks.size() || src == dst ||
+        (dst + 1 != src && dst != src + 1)) {
+        if (error) *error = "Join needs a track with a previous or next neighbour.";
+        return false;
+    }
+    // Columns are appended when joining to the previous track and prepended
+    // when joining to the next track, preserving the left-to-right order.
+    const bool prepend = (dst > src);
+
+    // Validation pass: bail out before touching anything when any pattern
+    // would exceed the per-track column limit.
+    for (size_t p = 0; p < m_patterns.size(); ++p) {
+        const Pattern* pat = m_patterns[p].get();
+        if (!pat) continue;
+        if (src >= pat->track_count() || dst >= pat->track_count()) {
+            if (error) *error = "Track data is missing in pattern " + std::to_string(p + 1) + ".";
+            return false;
+        }
+        if (pat->column_count(dst) + pat->column_count(src) > MAX_COLS) {
+            if (error) *error = "Join would exceed the 16 subtrack limit in pattern " +
+                                std::to_string(p + 1) + ".";
+            return false;
+        }
+    }
+
+    for (auto& pat_ptr : m_patterns) {
+        if (!pat_ptr) continue;
+        Pattern& pat = *pat_ptr;
+        const size_t dst_cols = pat.column_count(dst);
+        const size_t src_cols = pat.column_count(src);
+        const size_t rows = pat.row_count();
+
+        for (size_t r = 0; r < rows; ++r) {
+            // Track-row effects live in the column-0 event; remember both so
+            // the merged track keeps the target's effects (falling back to
+            // the source's when the target row has none).
+            const TrackEvent dst_fx = pat.event(dst, r, 0);
+            const TrackEvent src_fx = pat.event(src, r, 0);
+
+            if (prepend) {
+                for (size_t c = dst_cols; c > 0; --c) {
+                    pat.event(dst, r, c + src_cols - 1) = pat.event(dst, r, c - 1);
+                }
+                for (size_t c = 0; c < src_cols; ++c) {
+                    pat.event(dst, r, c) = pat.event(src, r, c);
+                }
+            } else {
+                for (size_t c = 0; c < src_cols; ++c) {
+                    pat.event(dst, r, dst_cols + c) = pat.event(src, r, c);
+                }
+            }
+
+            const bool keep_dst_fx = (dst_fx.effect1 != 0 || dst_fx.effect2 != 0) ||
+                                 (src_fx.effect1 == 0 && src_fx.effect2 == 0);
+            const TrackEvent& fx = keep_dst_fx ? dst_fx : src_fx;
+            TrackEvent& merged = pat.event(dst, r, 0);
+            merged.effect1 = fx.effect1;
+            merged.param1 = fx.param1;
+            merged.effect2 = fx.effect2;
+            merged.param2 = fx.param2;
+        }
+        pat.set_column_count(dst, dst_cols + src_cols);
+    }
+
+    remove_track(src);
+    return true;
+}
 void Engine::move_track(size_t from, size_t to) {
     if (from < m_tracks.size() && to < m_tracks.size()) { std::swap(m_tracks[from], m_tracks[to]); mark_dirty(); }
 }

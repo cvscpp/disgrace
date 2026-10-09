@@ -298,6 +298,14 @@ public:
     void add_track();
     void remove_track(size_t index);
     void move_track(size_t from, size_t to);
+    // Merge every subtrack (note column) of track `src` into the adjacent
+    // track `dst` (must be `src - 1` or `src + 1`) across all patterns, then
+    // delete `src`. Joining to the previous track appends the columns;
+    // joining to the next track prepends them so the left-to-right order is
+    // preserved. Returns false (leaving everything untouched) when the
+    // indices are invalid or the merged columns would exceed the per-track
+    // column limit; `error` receives the reason when non-null.
+    bool join_track(size_t src, size_t dst, std::string* error = nullptr);
 
     size_t bus_count() const;
     disgrace_ns::MixerBus& bus(size_t index);

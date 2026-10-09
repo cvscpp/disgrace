@@ -89,6 +89,11 @@ public:
         m_tracks.resize(new_tracks, TrackData(1));
     }
 
+    void remove_track(size_t track) {
+        if (track >= m_tracks.size()) return;
+        m_tracks.erase(m_tracks.begin() + track);
+    }
+
     void insert_row(size_t row);
     void delete_row(size_t row);
     void insert_row_track(size_t row, size_t track);

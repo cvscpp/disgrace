@@ -18,6 +18,7 @@
 
 #include "wx_tracker_view.h"
 #include "theme.h"
+#include "wx_main_window.h"
 #include "../core/engine.h"
 #include "../edit/cmd_edit_block.h"
 #include "../instrument/voice_instrument.h"
@@ -92,6 +93,9 @@ namespace {
         ID_TRANS_SONG_DOWN12,
         ID_SEL_SUBCOLUMN,
         ID_SEL_TRACK,
+        // Join the cursor track into an adjacent track as extra subtracks
+        ID_JOIN_PREV,
+        ID_JOIN_NEXT,
     };
 }
 
@@ -1254,6 +1258,14 @@ void TrackerView::OnRightClick(wxMouseEvent& event) {
     sel_menu->Append(ID_SEL_TRACK,     wxT("Select Entire Track"));
     menu.AppendSubMenu(sel_menu, wxT("Select"));
 
+    // Join sub-menu: merge this track's subtracks into a neighbour track
+    wxMenu* join_menu = new wxMenu;
+    join_menu->Append(ID_JOIN_PREV, wxT("Join to Previous Track"));
+    join_menu->Append(ID_JOIN_NEXT, wxT("Join to Next Track"));
+    join_menu->Enable(ID_JOIN_PREV, m_cursor_track > 0);
+    join_menu->Enable(ID_JOIN_NEXT, (size_t)(m_cursor_track + 1) < m_engine.track_count());
+    menu.AppendSubMenu(join_menu, wxT("Join Track"));
+
     // Bind handlers
     menu.Bind(wxEVT_MENU, [&](wxCommandEvent& ev) {
         int id = ev.GetId();
@@ -1301,6 +1313,8 @@ void TrackerView::OnRightClick(wxMouseEvent& event) {
             m_sel_end   = {m_cursor_track, (int)m_pattern->row_count() - 1, end_f};
             m_sel_active = true;
             Refresh();
+        } else if (id == ID_JOIN_PREV || id == ID_JOIN_NEXT) {
+            do_join_track(id == ID_JOIN_PREV ? -1 : +1);
         } else if (ev.GetId() == ID_SEL_TRACK) {
             // Select all rows and all fields of the current track
             int num_cols_st = (int)m_pattern->column_count(m_cursor_track);
@@ -1410,6 +1424,40 @@ void TrackerView::do_transpose_song(int semitones) {
         }
     }
     if (any) Refresh();
+}
+
+void TrackerView::do_join_track(int direction) {
+    if (!m_pattern) return;
+    if (direction != -1 && direction != 1) return;
+
+    int src_i = m_cursor_track;
+    int dst_i = src_i + direction;
+    size_t count = m_engine.track_count();
+    if (src_i < 0 || (size_t)src_i >= count) return;
+    if (dst_i < 0 || (size_t)dst_i >= count) return;
+
+    std::string error;
+    if (!m_engine.join_track((size_t)src_i, (size_t)dst_i, &error)) {
+        wxMessageBox(wxString::FromUTF8(error.empty() ? "Could not join tracks." : error.c_str()),
+                     "Join Track", wxOK | wxICON_WARNING);
+        return;
+    }
+
+    // The merged track sits at `dst`, shifted down by one when the deleted
+    // source was before it (joining to the next track).
+    m_cursor_track = (direction > 0) ? src_i : dst_i;
+    m_cursor_col = 0;
+    m_cursor_field = 0;
+    m_sel_active = false;
+    clamp_cursor();
+    sync_record_track();
+    recalculate_size();
+    ensure_cursor_visible();
+    Refresh();
+
+    if (auto* main_window = dynamic_cast<WxMainWindow*>(wxGetTopLevelParent(this))) {
+        main_window->update_all_uis();
+    }
 }
 
 } // namespace disgrace_ns

@@ -257,7 +257,7 @@ void HelpPanel::load_documentation() {
 <p>When closing a project with unsaved changes, Disgrace will prompt you to save.</p>
 
 <hr>
-<p><i>Disgrace v0.1.0 &mdash; Built with wxWidgets, JACK and OSS support</i></p>
+<p><i>Disgrace v0.1.1 &mdash; Built with wxWidgets, JACK and OSS support</i></p>
 </body>
 </html>
 )";

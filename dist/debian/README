@@ -7,9 +7,9 @@ non-native source package using the 3.0 (quilt) format. To build:
 1. Produce the upstream tarball and use it as the .orig tarball:
 
        make dist
-       cp disgrace-0.1.0.tar.gz ../disgrace_0.1.0.orig.tar.gz
-       tar xzf disgrace-0.1.0.tar.gz
-       cd disgrace-0.1.0
+       cp disgrace-0.1.1.tar.gz ../disgrace_0.1.1.orig.tar.gz
+       tar xzf disgrace-0.1.1.tar.gz
+       cd disgrace-0.1.1
 
 2. Copy this directory into place and build:
 

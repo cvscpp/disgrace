@@ -1463,6 +1463,13 @@ void InstrumentPanel::update_midi_input_choice() {
 
 
 void InstrumentPanel::update_instrument_list() {
+    // Track deletions (e.g. tracker "join") can garbage-collect an
+    // instrument behind our back; drop a selection that no longer exists
+    // instead of highlighting/operating on a shifted row.
+    if (m_selected_instrument < 0 || m_selected_instrument >= (int)m_engine.instrument_count()) {
+        m_selected_instrument = -1;
+        m_selected_sample = -1;
+    }
     if (m_inst_scroll->GetSizer()) {
         m_inst_scroll->GetSizer()->Clear(true);
     }

@@ -307,4 +307,4 @@ queue.push_command(cmd);              // Lock-free operation
 ---
 
 **Last Updated:** 2026-04-02  
-**Current Version:** 0.1.0 (Early Development)
+**Current Version:** 0.1.1 (Early Development)

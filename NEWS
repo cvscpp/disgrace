@@ -1,6 +1,13 @@
 Disgrace news
 =============
 
+0.1.1
+-----
+- Deleting a track (including the tracker Join to Previous/Next) now also
+  removes its instrument when no other track uses it.
+- Joining hands the source instrument over to the target track when the
+  target has none, so joined notes stay audible.
+
 0.1.0
 -----
 Initial public release.

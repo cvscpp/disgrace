@@ -6,8 +6,8 @@ media-sound/disgrace ebuild. To use it with emerge:
 
 1. Push the release tag the ebuild points at (SRC_URI), e.g.:
 
-       git tag v0.1.0
-       git push public v0.1.0
+       git tag v0.1.1
+       git push public v0.1.1
 
    The tag must exist on GitHub before the distfile can be fetched.
 
@@ -19,7 +19,7 @@ media-sound/disgrace ebuild. To use it with emerge:
 
 3. Generate the Manifest and install:
 
-       ebuild media-sound/disgrace/disgrace-0.1.0.ebuild manifest
+       ebuild media-sound/disgrace/disgrace-0.1.1.ebuild manifest
        emerge -av media-sound/disgrace
 
 Notes:

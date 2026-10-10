@@ -1,3 +1,10 @@
+disgrace (0.1.1-1) unstable; urgency=medium
+
+  * Track deletion garbage-collects the instrument when unused; joining
+    hands the source instrument to the target track when it has none.
+
+ -- Miroslav Shaltev <miroslav.shaltev@shaltev.de>  Sat, 10 Oct 2026 14:00:00 +0000
+
 disgrace (0.1.0-1) unstable; urgency=medium
 
   * Initial Debian packaging, targeting Debian 13 (trixie).

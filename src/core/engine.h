@@ -175,6 +175,11 @@ public:
     void add_instrument(::std::unique_ptr<disgrace_ns::Instrument> inst);
     size_t add_track_with_instrument(InstrumentType type, const std::string& base_name = "");
     void remove_instrument(size_t index);
+    // Erase `inst` from the instrument pool, but only when no remaining
+    // track references it. Used after track deletion so the instrument
+    // list contracts instead of accumulating orphans; shared instruments
+    // are kept. Null-safe no-op for nullptr or unknown pointers.
+    void remove_instrument_if_unused(Instrument* inst);
     void set_instrument_type(size_t index, InstrumentType type);
     bool convert_sampler_track_to_notation_track(size_t source_track, InstrumentType dest_type,
                                                  const TrackConversionOptions& options,

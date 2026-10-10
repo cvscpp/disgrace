@@ -1280,11 +1280,21 @@ void Engine::add_track() {
 }
 void Engine::remove_track(size_t index) {
     if (index >= m_tracks.size()) return;
+    Instrument* orphan = m_tracks[index].instrument();
     m_tracks.erase(m_tracks.begin() + index);
     for (auto& pat : m_patterns) {
         if (pat) pat->remove_track(index);
     }
+    remove_instrument_if_unused(orphan);
     mark_dirty();
+}
+void Engine::remove_instrument_if_unused(Instrument* inst) {
+    if (!inst) return;
+    for (auto& track : m_tracks) {
+        if (track.instrument() == inst) return; // still referenced: keep it
+    }
+    int idx = get_instrument_index(inst);
+    if (idx >= 0) m_instruments.erase(m_instruments.begin() + idx);
 }
 bool Engine::join_track(size_t src, size_t dst, std::string* error) {
     if (src >= m_tracks.size() || dst >= m_tracks.size() || src == dst ||
@@ -1349,6 +1359,14 @@ bool Engine::join_track(size_t src, size_t dst, std::string* error) {
             merged.param2 = fx.param2;
         }
         pat.set_column_count(dst, dst_cols + src_cols);
+    }
+
+    // The merged notes play through the target track: hand over the source
+    // instrument when the target has none, so joined notes stay audible
+    // instead of going silent. Afterwards remove_track() garbage-collects
+    // the source instrument when nothing references it anymore.
+    if (!m_tracks[dst].instrument() && m_tracks[src].instrument()) {
+        m_tracks[dst].set_instrument(m_tracks[src].instrument());
     }
 
     remove_track(src);

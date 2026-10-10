@@ -1,0 +1,8 @@
+Disgrace is a minimalist tracker-style digital audio workstation focused
+on fast keyboard-driven composition, clear structure, and real-time-safe
+audio design.
+
+It is built around JACK for audio and MIDI I/O, wxWidgets for the desktop
+UI, a pattern-based tracker workflow with up to 16 subtracks per track,
+and a compact built-in mixer and DSP chain instead of a large plugin-first
+design.

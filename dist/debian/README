@@ -1,0 +1,29 @@
+Debian packaging staging area for disgrace (targets Debian 13/trixie)
+============================================================================
+
+This directory mirrors the content of the `debian/` directory of a
+non-native source package using the 3.0 (quilt) format. To build:
+
+1. Produce the upstream tarball and use it as the .orig tarball:
+
+       make dist
+       cp disgrace-0.1.0.tar.gz ../disgrace_0.1.0.orig.tar.gz
+       tar xzf disgrace-0.1.0.tar.gz
+       cd disgrace-0.1.0
+
+2. Copy this directory into place and build:
+
+       cp -R /path/to/dist/debian debian
+       dpkg-buildpackage -us -uc
+
+   (or `debuild -us -uc`). The build needs the Build-Depends from
+   `control` installed; `sbuild`/`pbuilder`/`cowbuilder` handle that
+   automatically.
+
+Notes:
+
+- The man page (`disgrace.1`) is installed via debhelper's automatic
+  manpage handling.
+- Festival and Piper TTS support auto-detects at configure time and
+  stays off in a clean build environment, since those development
+  packages are intentionally not in Build-Depends.

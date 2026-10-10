@@ -1,0 +1,5 @@
+disgrace (0.1.0-1) unstable; urgency=medium
+
+  * Initial Debian packaging, targeting Debian 13 (trixie).
+
+ -- Miroslav Shaltev <miroslav.shaltev@shaltev.de>  Sat, 10 Oct 2026 12:00:00 +0000

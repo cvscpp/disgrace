@@ -1,0 +1,37 @@
+Source: disgrace
+Section: sound
+Priority: optional
+Maintainer: Miroslav Shaltev <miroslav.shaltev@shaltev.de>
+Build-Depends: debhelper-compat (= 13),
+               dh-autoreconf,
+               autoconf,
+               automake,
+               pkgconf,
+               libjack-jackd2-dev,
+               libwxgtk3.2-dev,
+               libsndfile1-dev,
+               libsamplerate0-dev,
+               libespeak-ng-dev,
+               libfftw3-dev,
+               libarchive-dev,
+               libfluidsynth-dev,
+               libxml2-dev,
+               libsoundtouch-dev,
+               nlohmann-json3-dev,
+               libasound2-dev
+Standards-Version: 4.7.0
+Homepage: https://github.com/cvscpp/disgrace
+Rules-Requires-Root: no
+
+Package: disgrace
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Minimalist tracker-style digital audio workstation
+ Disgrace is a minimalist tracker-style digital audio workstation focused
+ on fast keyboard-driven composition, clear structure, and real-time-safe
+ audio design.
+ .
+ It is built around JACK for audio and MIDI I/O, wxWidgets for the desktop
+ UI, a pattern-based tracker workflow with up to 16 subtracks per track,
+ and a compact built-in mixer and DSP chain instead of a large plugin-first
+ design.

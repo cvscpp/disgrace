@@ -10,34 +10,40 @@
 *.Po
 *.Tpo
 
-# Executables
-disgrace
-src/disgrace
+# Build executables (anchored to the repo root so packaging directories
+# such as dist/gentoo/media-sound/disgrace/ are never matched)
+/disgrace
+/src/disgrace
+/dssi_sandbox
+/src/dssi_sandbox
 test_includes
 
-# Autotools artifacts
-Makefile
-Makefile.in
-aclocal.m4
-autom4te.cache/
-compile
-config.h
-config.h.in
-config.log
-config.status
-configure
-depcomp
-install-sh
-missing
-stamp-h1
-libtool
-ltmain.sh
-ar-lib
-m4/libtool.m4
-m4/ltoptions.m4
-m4/ltsugar.m4
-m4/ltversion.m4
-m4/lt~obsolete.m4
+# Autotools artifacts (anchored: generated only at the top level and src/)
+/Makefile
+/src/Makefile
+/Makefile.in
+/src/Makefile.in
+/aclocal.m4
+/autom4te.cache/
+/compile
+/config.h
+/config.h.in
+/config.log
+/config.status
+/configure
+/depcomp
+/install-sh
+/missing
+/stamp-h1
+/libtool
+/ltmain.sh
+/ar-lib
+/src/.deps/
+/m4/libtool.m4
+/m4/ltoptions.m4
+/m4/ltsugar.m4
+/m4/ltversion.m4
+/m4/lt~obsolete.m4
 
 # Temporary and editor files
 *~

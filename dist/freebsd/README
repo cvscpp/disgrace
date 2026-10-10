@@ -1,0 +1,37 @@
+FreeBSD port staging area for disgrace
+=====================================
+
+This directory holds the port skeleton (approach 1.B: fetch the release
+tag straight from GitHub with USE_GITHUB, rebuild configure via
+autoreconf). Copy its contents to audio/disgrace in the ports tree:
+
+    cp -R dist/freebsd /usr/ports/audio/disgrace
+
+Prerequisites and finishing steps:
+
+1. Push the release tag the port points at (GH_TAGNAME), e.g.:
+
+       git tag v0.1.0
+       git push public v0.1.0
+
+   The tag must exist on GitHub before the distfile can be fetched.
+
+2. Regenerate distinfo (the placeholder in this directory cannot be
+   used as-is):
+
+       cd /usr/ports/audio/disgrace && make makesum
+
+3. Lint and test-build:
+
+       portlint -A
+       poudriere testport -j <jail> -p <tree> audio/disgrace
+
+Notes:
+
+- Festival and Piper TTS support auto-detects at configure time and
+  stays off in a clean poudriere build, since those dependencies are
+  intentionally not declared.
+- ALSA (audio/alsa-lib) is optional on FreeBSD; configure only warns
+  when it is absent.
+- Sibling directories dist/debian and dist/gentoo hold the Debian and
+  Gentoo packaging files in the same staging fashion.

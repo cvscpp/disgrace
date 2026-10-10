@@ -1,0 +1,30 @@
+Gentoo overlay staging area for disgrace
+======================================
+
+This directory is a ready-to-use overlay root holding the
+media-sound/disgrace ebuild. To use it with emerge:
+
+1. Push the release tag the ebuild points at (SRC_URI), e.g.:
+
+       git tag v0.1.0
+       git push public v0.1.0
+
+   The tag must exist on GitHub before the distfile can be fetched.
+
+2. Register the overlay (as root), e.g. via a repos.conf entry:
+
+       mkdir -p /etc/portage/repos.conf
+       printf '[disgrace]\nlocation = /path/to/dist/gentoo\n' \
+           > /etc/portage/repos.conf/disgrace.conf
+
+3. Generate the Manifest and install:
+
+       ebuild media-sound/disgrace/disgrace-0.1.0.ebuild manifest
+       emerge -av media-sound/disgrace
+
+Notes:
+
+- New ebuilds carry testing keywords (~amd64); stabilize only after
+  the package is verified on Gentoo.
+- Festival and Piper TTS support auto-detects at configure time and
+  stays off unless the corresponding libraries are installed.

@@ -232,18 +232,21 @@ void TransportBar::update() {
     double seconds = total_seconds - (minutes * 60);
 
     m_clock_str.Printf("%02d:%06.3f", minutes, seconds);
-    m_clock->SetLabel(m_clock_str);
+    if (m_clock_str != m_last_clock_str) {
+        m_clock->SetLabel(m_clock_str);
+        m_last_clock_str = m_clock_str;
+    }
 
     if (m_meter_l) m_meter_l->level(m_engine.master_meter_l());
     if (m_meter_r) m_meter_r->level(m_engine.master_meter_r());
 
-    if (m_engine.is_playing() && m_engine.m_samples_until_next_beat < 1000) {
-        m_metro_visual->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_cursor));
-    } else {
-        m_metro_visual->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_bg));
+    bool beat = m_engine.is_playing() && m_engine.m_samples_until_next_beat < 1000;
+    if (beat != m_last_beat) {
+        m_last_beat = beat;
+        m_metro_visual->SetBackgroundColour(ThemeManager::toWxColour(
+            beat ? m_engine.m_tracker_cursor : m_engine.m_tracker_bg));
+        m_metro_visual->Refresh(false);
     }
-
-    Refresh();
 }
 
 void TransportBar::resize(int w, int h) {

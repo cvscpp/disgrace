@@ -65,6 +65,7 @@ void disgrace_ns::DSPChain::process(float* l,
                        float* r,
                        size_t nframes)
 {
+    if (m_active_count == 0) return;
     for (size_t i = 0; i < MAX_INSERTS; ++i)
     {
         if (m_enabled[i] && m_effects[i])
@@ -74,14 +75,18 @@ void disgrace_ns::DSPChain::process(float* l,
 
 void disgrace_ns::DSPChain::set(size_t index, ::std::unique_ptr<disgrace_ns::DSP> dsp)
 {
-    if (index < MAX_INSERTS)
+    if (index < MAX_INSERTS) {
         m_effects[index] = std::move(dsp);
+        recount_active();
+    }
 }
 
 void disgrace_ns::DSPChain::enable(size_t index, bool en)
 {
-    if (index < MAX_INSERTS)
+    if (index < MAX_INSERTS) {
         m_enabled[index] = en;
+        recount_active();
+    }
 }
 
 void disgrace_ns::DSPChain::move_up(size_t index)
@@ -105,6 +110,7 @@ void disgrace_ns::DSPChain::remove(size_t index)
     if (index < MAX_INSERTS) {
         m_effects[index].reset();
         m_enabled[index] = false;
+        recount_active();
     }
 }
 
@@ -161,6 +167,7 @@ void disgrace_ns::DSPChain::from_json(const void* j_ptr) {
                 }
             }
         }
+        recount_active();
     }
 }
 

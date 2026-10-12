@@ -1,6 +1,21 @@
 Disgrace news
 =============
 
+0.1.2
+-----
+- Fix off-by-one orphan instrument: new projects start with the default
+  track using the default instrument, and XRNS import drops unreferenced
+  shared instruments, so repeated track joins no longer leave the
+  instrument list one entry longer than necessary.
+- Audio engine: lock-free thread-pool fan-out without per-block
+  allocations, non-blocking DSSI sandbox handoff, allocation-free
+  SFZ/XRNI voice recycling, TTS synthesis kept off the realtime thread,
+  cheaper per-sample DSP (cached ADSR/envelope steps, hoisted filter and
+  compressor constants, fused copy/gain passes).
+- GUI stays responsive on large songs: mixer meters throttled and gated to
+  the visible tab, transport bar avoids redundant relayouts, order-list
+  copies removed from per-frame drawing, list rebuilds use Freeze/Thaw.
+
 0.1.1
 -----
 - Deleting a track (including the tracker Join to Previous/Next) now also

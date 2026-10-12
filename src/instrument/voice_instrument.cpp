@@ -207,23 +207,27 @@ void VoiceInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_inde
             m_playback_increment = 1.0;
             m_playing = true;
         } else {
-            // NOT IN CACHE - synthesis here will block audio thread!
-            // But we must do it if we want sound now. 
-            // The "Render" button is supposed to avoid this.
-            if (synthesize_text(text, note_freq, true)) {
-                m_current_pitch = pitch_factor; // Store the pitch factor of the cached audio
-                m_playback_pos = 0.0;
-                m_playback_increment = 1.0;
-                m_playing = true;
+            // NOT IN CACHE — never synthesize synchronously here: this runs
+            // in the RT thread (process_tick) and synthesis forks/execs TTS,
+            // does file I/O and takes locks (unbounded block → dropout).
+            // Hand the phrase to the background worker when one is running;
+            // otherwise record it so the GUI pre-render pass can pick it up.
+            // This note stays silent; later notes hit the cache.
+            if (m_worker && m_worker->is_running()) {
+                m_worker->queue_synthesis(text, note_freq, false);
+            } else {
+                std::lock_guard<std::mutex> plock(m_pending_mutex);
+                m_pending_text = text;
+                m_pending_freq = note_freq;
+                m_synth_requested.store(true, std::memory_order_release);
             }
+            m_playing = false;
         }
     } else if (!m_current_text.empty() && m_playing) {
-        // No text: pitch shift the current phrase to this note
-        // (This still might trigger synthesis/pitch-shift if not cached)
-        if (synthesize_text(m_current_text, note_freq, true)) {
-            m_playback_pos = 0.0;
-            m_playback_increment = 1.0;
-        }
+        // No text: pitch shift the current phrase to this note.
+        // RT-safe: pure resampling-factor update, no synthesis/file I/O.
+        m_playback_pos = 0.0;
+        m_playback_increment = 1.0;
     }
 }
 
@@ -268,6 +272,16 @@ void VoiceInstrument::set_text(const std::string& text, uint8_t phrase_index) {
 
 std::string VoiceInstrument::get_text(uint8_t phrase_index) const {
     return m_phrases[phrase_index];
+}
+
+bool VoiceInstrument::consume_synth_request(std::string& out_text, float& out_freq) {
+    if (!m_synth_requested.load(std::memory_order_acquire)) return false;
+    std::lock_guard<std::mutex> plock(m_pending_mutex);
+    if (!m_synth_requested.load(std::memory_order_relaxed)) return false;
+    out_text = m_pending_text;
+    out_freq = m_pending_freq;
+    m_synth_requested.store(false, std::memory_order_release);
+    return true;
 }
 
 void VoiceInstrument::process(float* l, float* r, size_t nframes) {

@@ -136,6 +136,14 @@ public:
 
     ::std::vector<size_t> order_list() const;
     void set_order(const ::std::vector<size_t>&);
+    // Allocation-free order access for per-frame GUI polling (draw loops,
+    // tick totals). order_list() copies the vector (heap alloc per call);
+    // prefer these in any code that runs at 60 Hz.
+    size_t order_size() const { return m_order.size(); }
+    static constexpr size_t order_npos = static_cast<size_t>(-1);
+    size_t order_entry(size_t pos) const {
+        return pos < m_order.size() ? m_order[pos] : order_npos;
+    }
 
     size_t add_pattern_to_order();
     void remove_pattern_from_order(size_t order_pos);

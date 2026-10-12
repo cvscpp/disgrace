@@ -48,6 +48,8 @@ public:
 
     const ::std::array<::std::unique_ptr<disgrace_ns::DSP>, MAX_INSERTS>& effects() const { return m_effects; }
     bool is_enabled(size_t index) const { return index < MAX_INSERTS && m_enabled[index]; }
+    // Cached count of (enabled && present) slots; process() early-outs.
+    bool has_enabled() const { return m_active_count > 0; }
 
     void save_chain(const std::string& path);
     void load_chain(const std::string& path);
@@ -56,8 +58,16 @@ public:
     void from_json(const void* j_ptr); // j_ptr is const nlohmann::json*
 
 private:
+    void recount_active() {
+        size_t n = 0;
+        for (size_t i = 0; i < MAX_INSERTS; ++i)
+            if (m_enabled[i] && m_effects[i]) ++n;
+        m_active_count = n;
+    }
+
     ::std::array<::std::unique_ptr<disgrace_ns::DSP>, MAX_INSERTS> m_effects{};
     ::std::array<bool, MAX_INSERTS> m_enabled{};
+    size_t m_active_count{0};
 };
 
 } // namespace disgrace_ns

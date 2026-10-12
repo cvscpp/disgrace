@@ -323,9 +323,18 @@ bool DSSIInstrument::load_plugin(const std::string& path, int index)
 
 bool DSSIInstrument::is_alive() const
 {
-    if (!m_alive.load()) return false;
-    if (m_child_pid > 0 && kill(m_child_pid, 0) == -1 && errno == ESRCH) {
-        m_alive.store(false);
+    if (!m_alive.load(std::memory_order_relaxed)) return false;
+    if (m_child_pid <= 0) return true;
+    // Throttle the kill() probe: monotonic clock, at most ~2 checks/sec.
+    // clock_gettime is vDSO (no syscall); kill() is not.
+    struct timespec now_ts;
+    clock_gettime(CLOCK_MONOTONIC, &now_ts);
+    const int64_t now_ms = (int64_t)now_ts.tv_sec * 1000 + now_ts.tv_nsec / 1000000;
+    const int64_t last = m_last_alive_check_ms.load(std::memory_order_relaxed);
+    if (now_ms - last < 500) return true;
+    m_last_alive_check_ms.store(now_ms, std::memory_order_relaxed);
+    if (kill(m_child_pid, 0) == -1 && errno == ESRCH) {
+        m_alive.store(false, std::memory_order_relaxed);
         return false;
     }
     return true;
@@ -371,6 +380,10 @@ void DSSIInstrument::note_on(uint8_t note, uint8_t velocity,
 {
     const size_t chan = column_index % 16;
     if (m_last_note[chan] != -1) note_off(column_index);
+    // RT-safe: never grow the staging vector in the audio thread.
+    // Staging is flushed every block in process(); if a burst overflows
+    // the shm slot budget, drop the newest event instead of reallocating.
+    if (m_pending_midi.size() >= DSB_MAX_MIDI) return;
     m_pending_midi.push_back({0x90, (uint8_t)chan, note, velocity});
     m_last_note[chan] = note;
 }
@@ -379,12 +392,16 @@ void DSSIInstrument::note_off(size_t column_index)
 {
     const size_t chan = column_index % 16;
     if (m_last_note[chan] == -1) return;
+    if (m_pending_midi.size() >= DSB_MAX_MIDI) { m_last_note[chan] = -1; return; }
     m_pending_midi.push_back({0x80, (uint8_t)chan, (uint8_t)m_last_note[chan], 0});
     m_last_note[chan] = -1;
 }
 
 void DSSIInstrument::panic()
 {
+    // Panic can stage up to 16 events; make room instead of reallocating.
+    if (m_pending_midi.size() + 16 > DSB_MAX_MIDI)
+        m_pending_midi.clear();
     for (size_t chan = 0; chan < 16; ++chan) {
         m_pending_midi.push_back({0xB0, (uint8_t)chan, 123, 0});
         m_last_note[chan] = -1;
@@ -423,7 +440,7 @@ void DSSIInstrument::process(float* l, float* r, size_t nframes)
 
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_nsec += 10000000L; // 10 ms deadline
+    ts.tv_nsec += 5000000L; // 5 ms deadline: dropout instead of a 10 ms RT stall
     if (ts.tv_nsec >= 1000000000L) { ts.tv_sec++; ts.tv_nsec -= 1000000000L; }
 
     if (sem_timedwait(&s->sem_done, &ts) == -1) {
@@ -432,12 +449,19 @@ void DSSIInstrument::process(float* l, float* r, size_t nframes)
         return;
     }
 
-    memcpy(l, s->audio_l, nframes * sizeof(float));
-    memcpy(r, s->audio_r, nframes * sizeof(float));
-
-    for (size_t i = 0; i < nframes; ++i) {
-        l[i] *= m_volume;
-        r[i] *= m_volume;
+    // Fused copy+gain: one pass instead of memcpy + a second gain loop.
+    // Skip the multiply entirely at unity gain.
+    if (m_volume == 1.0f) {
+        memcpy(l, s->audio_l, nframes * sizeof(float));
+        memcpy(r, s->audio_r, nframes * sizeof(float));
+    } else {
+        const float vol = m_volume;
+        const float* sl = s->audio_l;
+        const float* sr = s->audio_r;
+        for (size_t i = 0; i < nframes; ++i) {
+            l[i] = sl[i] * vol;
+            r[i] = sr[i] * vol;
+        }
     }
 }
 

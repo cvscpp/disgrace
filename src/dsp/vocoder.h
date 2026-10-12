@@ -20,6 +20,7 @@
 #include "dsp.h"
 #include <nlohmann/json.hpp>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 #include <algorithm>
 #include <cstdlib>
@@ -102,7 +103,11 @@ public:
                 m_saw_phase += 110.0f / sr; // Fixed 110Hz for robot
                 if (m_saw_phase > 1.0f) m_saw_phase -= 1.0f;
             } else if (carrier_type < 1.5f) { // Noise
-                car_in = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
+                // Lock-free xorshift: rand() is not RT-safe (global lock).
+                m_noise_state ^= m_noise_state << 13;
+                m_noise_state ^= m_noise_state >> 17;
+                m_noise_state ^= m_noise_state << 5;
+                car_in = ((float)(m_noise_state >> 9) / 8388608.0f) * 2.0f - 1.0f;
             } else { // External (L=Mod, R=Car)
                 mod_in = l[i];
                 car_in = r[i];
@@ -193,6 +198,7 @@ private:
     Band m_bands[NUM_BANDS];
     float m_saw_phase = 0;
     float m_sample_rate = 44100.0f;
+    uint32_t m_noise_state = 0x12345678u;
 };
 
 } // namespace disgrace_ns

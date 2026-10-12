@@ -117,42 +117,79 @@ namespace disgrace_ns
                 return;
             }
 
-            for (size_t i = 0; i < frames; ++i)
-            {
-                if (m_position >= (double)effective_end)
+            const float vol = m_volume;
+            // Split mono/stereo kernels so the common stereo path pays no
+            // per-sample empty() branch; hoist buffer pointers/sizes.
+            if (m_sample->right.empty()) {
+                const float* sl = m_sample->left.data();
+                for (size_t i = 0; i < frames; ++i)
                 {
-                    if (m_loop_enabled) {
-                        m_position = (double)std::min(m_loop_start, effective_end - 1);
-                    } else {
-                        m_active = false;
-                        return;
+                    if (m_position >= (double)effective_end)
+                    {
+                        if (m_loop_enabled) {
+                            m_position = (double)std::min(m_loop_start, effective_end - 1);
+                        } else {
+                            m_active = false;
+                            return;
+                        }
                     }
+
+                    size_t idx = std::min(size_t(m_position), effective_end - 1);
+                    float frac = float(m_position - idx);
+
+                    // Linear interpolation
+                    float l0 = sl[idx];
+                    size_t next = (idx + 1 < sample_size) ? idx + 1 : sample_size - 1;
+                    float l1 = sl[next];
+                    float l  = l0 + (l1 - l0) * frac;
+
+                    float env = m_env.process();
+
+                    const float g = vol * env;
+                    out_l[i] += l * g;
+                    out_r[i] += l * g;
+
+                    m_position += m_increment;
                 }
+            } else {
+                const float* sl = m_sample->left.data();
+                const float* sr = m_sample->right.data();
+                const size_t rsize = m_sample->right.size();
+                for (size_t i = 0; i < frames; ++i)
+                {
+                    if (m_position >= (double)effective_end)
+                    {
+                        if (m_loop_enabled) {
+                            m_position = (double)std::min(m_loop_start, effective_end - 1);
+                        } else {
+                            m_active = false;
+                            return;
+                        }
+                    }
 
-                size_t idx = std::min(size_t(m_position), effective_end - 1);
-                float frac = float(m_position - idx);
+                    size_t idx = std::min(size_t(m_position), effective_end - 1);
+                    float frac = float(m_position - idx);
 
-                // Linear interpolation
-                float l0 = m_sample->left[idx];
-                size_t next = std::min(idx + 1, sample_size - 1);
-                float l1 = m_sample->left[next];
-                float l  = l0 + (l1 - l0) * frac;
+                    // Linear interpolation
+                    float l0 = sl[idx];
+                    size_t next = (idx + 1 < sample_size) ? idx + 1 : sample_size - 1;
+                    float l1 = sl[next];
+                    float l  = l0 + (l1 - l0) * frac;
 
-            float r = l;
-            if (!m_sample->right.empty())
-            {
-                float r0 = m_sample->right[idx];
-                float r1 = m_sample->right[std::min(next, m_sample->right.size() - 1)];
-                r = r0 + (r1 - r0) * frac;
+                    size_t rnext = (next < rsize) ? next : rsize - 1;
+                    float r0 = sr[idx < rsize ? idx : rsize - 1];
+                    float r1 = sr[rnext];
+                    float r = r0 + (r1 - r0) * frac;
+
+                    float env = m_env.process();
+
+                    const float g = vol * env;
+                    out_l[i] += l * g;
+                    out_r[i] += r * g;
+
+                    m_position += m_increment;
+                }
             }
-
-            float env = m_env.process();
-
-            out_l[i] += l * m_volume * env;
-            out_r[i] += r * m_volume * env;
-
-            m_position += m_increment;
-        }
 
         if (!m_env.active())
             m_active = false;

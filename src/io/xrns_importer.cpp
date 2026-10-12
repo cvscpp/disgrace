@@ -553,6 +553,21 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
         }
     }
 
+    // Shared Plugin/SoundFont instruments were created for every Renoise
+    // instrument up front, but only those actually referenced by a pattern
+    // got a track. Drop the unreferenced ones so the pool holds no orphan
+    // entries; otherwise later track joins appear off by one (track list
+    // contracts while the instrument list keeps one more than necessary).
+    // Backwards iteration keeps indices valid while erasing.
+    for (int i = (int)engine.instrument_count() - 1; i >= 0; --i) {
+        Instrument* inst = &engine.instrument((size_t)i);
+        bool used = false;
+        for (size_t t = 0; t < engine.track_count(); ++t) {
+            if (engine.track(t).instrument() == inst) { used = true; break; }
+        }
+        if (!used) engine.remove_instrument((size_t)i);
+    }
+
     if (sequence.empty()) { for (size_t i = 0; i < rp_list.size(); i++) sequence.push_back(i); }
 
     for (size_t i = 0; i < rp_list.size(); ++i) {

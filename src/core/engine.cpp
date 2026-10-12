@@ -244,8 +244,14 @@ void Engine::new_project() {
     // Add one default instrument
     add_instrument();
     
-    // Add one default track
+    // Add one default track using the default instrument, so the pools
+    // start 1:1 with no orphan entry. Otherwise the unused default
+    // instrument lingers through later joins/deletions and the instrument
+    // list ends up one longer than necessary.
     add_track();
+    if (!m_tracks.empty() && !m_instruments.empty()) {
+        m_tracks.back().set_instrument(m_instruments.back().get());
+    }
     
     // Add one default pattern
     create_pattern();
@@ -780,7 +786,8 @@ void Engine::render_block_multi(float** out_bufs, uint32_t num_outs, size_t fram
     // Muted (or non-solo) tracks skip audio rendering to save CPU, but still
     // drain their pending note queue so events don't back up.
     auto process_track = [&](size_t t) {
-        m_tracks[t].fire_pending_notes(frames);
+        if (m_tracks[t].has_pending_notes())
+            m_tracks[t].fire_pending_notes(frames);
         bool audible = any_solo ? m_tracks[t].solo() : !m_tracks[t].muted();
         if (audible) {
             m_tracks[t].process(m_track_l[t], m_track_r[t], frames, in_bufs, num_ins);
@@ -1453,7 +1460,9 @@ void Engine::process_commands() {
                 m_current_row = 0;
                 m_current_tick = 0;
                 transport().set_loop(true);
-                auto_seek();
+                // No auto_seek() here: at row 0 the backward scan is a proven
+                // no-op, and process_commands() runs in the RT thread where
+                // the O(tracks*cols*rows) scan + note_on burst doesn't belong.
                 transport().play();
                 break;
             case EngineCommandType::ResizePattern:

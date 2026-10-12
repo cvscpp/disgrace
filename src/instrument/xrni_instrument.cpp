@@ -143,6 +143,8 @@ XrniInstrument::XrniInstrument(double sample_rate)
     : m_sample_rate(sample_rate)
 {
     set_type(InstrumentType::XRNI);
+    m_voices.reserve(MAX_VOICES + 1);
+    m_free.reserve(MAX_VOICES + 1);
 }
 
 bool XrniInstrument::load_xrni(const std::string& path)
@@ -353,7 +355,16 @@ void XrniInstrument::note_on(uint8_t note, uint8_t velocity,
 
         float gain = std::pow(10.0f, reg.volume / 20.0f) * m_volume * vel_f;
 
-        auto sv = std::make_unique<SampleVoice>(reg.data, m_sample_rate);
+        // Recycled voice objects: no heap allocation in steady state (see SFZ).
+        std::unique_ptr<SampleVoice> sv;
+        if (!m_free.empty()) {
+            sv = std::move(m_free.back().voice);
+            m_free.pop_back();
+            sv->set_sample(reg.data);
+            sv->set_engine_rate(m_sample_rate);
+        } else {
+            sv = std::make_unique<SampleVoice>(reg.data, m_sample_rate);
+        }
         sv->set_adsr(reg.ampeg_attack, reg.ampeg_decay, reg.ampeg_sustain, reg.ampeg_release);
         sv->set_volume(gain);
 
@@ -365,6 +376,8 @@ void XrniInstrument::note_on(uint8_t note, uint8_t velocity,
             auto it = std::find_if(m_voices.begin(), m_voices.end(),
                 [](const SfzVoice& v){ return !v.voice->active(); });
             if (it == m_voices.end()) it = m_voices.begin();
+            it->voice->panic();
+            m_free.push_back({ std::move(it->voice), -1, 0 });
             m_voices.erase(it);
         }
 
@@ -380,7 +393,11 @@ void XrniInstrument::note_off(size_t column_index)
 
 void XrniInstrument::panic()
 {
-    for (auto& sv : m_voices) sv.voice->panic();
+    for (auto& sv : m_voices) {
+        sv.voice->panic();
+        if (m_free.size() < MAX_VOICES + 1)
+            m_free.push_back({ std::move(sv.voice), -1, 0 });
+    }
     m_voices.clear();
 }
 
@@ -393,10 +410,16 @@ void XrniInstrument::process(float* l, float* r, size_t nframes)
     for (auto& sv : m_voices)
         if (sv.voice->active()) sv.voice->process(l, r, nframes);
 
-    m_voices.erase(
-        std::remove_if(m_voices.begin(), m_voices.end(),
-                       [](const SfzVoice& v){ return !v.voice->active(); }),
-        m_voices.end());
+    // Recycle finished voices (swap-remove, no memmove of live voices).
+    for (size_t i = m_voices.size(); i-- > 0;) {
+        if (!m_voices[i].voice->active()) {
+            if (m_free.size() < MAX_VOICES + 1)
+                m_free.push_back({ std::move(m_voices[i].voice), -1, 0 });
+            if (i + 1 < m_voices.size())
+                m_voices[i] = std::move(m_voices.back());
+            m_voices.pop_back();
+        }
+    }
 }
 
 } // namespace disgrace_ns

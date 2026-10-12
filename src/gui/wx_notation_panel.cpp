@@ -238,9 +238,12 @@ void NotationView::on_preview_track(wxCommandEvent& event) {
 }
 
 int NotationView::get_total_ticks() {
-    auto order = m_engine.order_list();
+    // Allocation-free (see TracksView::get_total_ticks).
     int total_rows = 0;
-    for (auto pat_idx : order) {
+    const size_t n = m_engine.order_size();
+    for (size_t i = 0; i < n; ++i) {
+        size_t pat_idx = m_engine.order_entry(i);
+        if (pat_idx == Engine::order_npos || pat_idx >= m_engine.pattern_count()) continue;
         total_rows += (int)m_engine.pattern(pat_idx).row_count();
     }
     return total_rows;
@@ -530,7 +533,7 @@ void NotationView::draw(wxDC& dc) {
     dc.DrawRectangle(0, 0, vsz.GetWidth(), vsz.GetHeight());
 
     int num_tracks = (int)m_engine.track_count();
-    auto order     = m_engine.order_list();
+    const size_t order_n = m_engine.order_size();
     int total_rows = get_total_ticks();
     int full_tw    = tick_to_x(total_rows);
 
@@ -595,7 +598,9 @@ void NotationView::draw(wxDC& dc) {
         // Notes per pattern, with bar lines between patterns
         int rows_done = 0;
         bool first_pat = true;
-        for (auto pat_idx : order) {
+        for (size_t oi = 0; oi < order_n; ++oi) {
+            size_t pat_idx = m_engine.order_entry(oi);
+            if (pat_idx == Engine::order_npos || pat_idx >= m_engine.pattern_count()) continue;
             auto& pat = m_engine.pattern(pat_idx);
             int pat_rows = (int)pat.row_count();
             int pat_px   = notes_x0 + tick_to_x(rows_done);

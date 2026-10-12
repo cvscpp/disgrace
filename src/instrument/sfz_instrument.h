@@ -105,6 +105,9 @@ private:
     int m_selected_group = -1;  // -1 = all groups
 
     std::vector<SfzVoice> m_voices; // active polyphonic voices
+    // Recycled voice objects: note_on reuses these instead of
+    // make_unique per note, so steady-state playback never mallocs in RT.
+    std::vector<SfzVoice> m_free;
     static constexpr size_t MAX_VOICES = 48;
 
     float m_volume = 1.0f;

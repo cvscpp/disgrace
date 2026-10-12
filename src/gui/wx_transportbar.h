@@ -71,6 +71,11 @@ private:
     class VUMeter* m_meter_r;
 
     wxString m_clock_str;
+    // Throttle state: the bar updates at ~60 Hz but the clock text only
+    // changes per centisecond and the metronome blink is binary. Skipping
+    // redundant SetLabel/Refresh avoids a full-bar relayout+repaint storm.
+    wxString m_last_clock_str;
+    bool m_last_beat = false;
 
     wxDECLARE_EVENT_TABLE();
 };

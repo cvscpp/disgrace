@@ -247,9 +247,13 @@ void TracksView::OnSize(wxSizeEvent& event) {
 }
 
 int TracksView::get_total_ticks() {
-    auto order = m_engine.order_list();
+    // Allocation-free: order_list() copies the vector (heap alloc) and this
+    // runs on the UI timer path.
     int total_rows = 0;
-    for (auto pat_idx : order) {
+    const size_t n = m_engine.order_size();
+    for (size_t i = 0; i < n; ++i) {
+        size_t pat_idx = m_engine.order_entry(i);
+        if (pat_idx == Engine::order_npos || pat_idx >= m_engine.pattern_count()) continue;
         total_rows += (int)m_engine.pattern(pat_idx).row_count();
     }
     return total_rows;
@@ -318,7 +322,7 @@ void TracksView::draw(wxDC& dc) {
     int track_h = 80;
     int header_w = 120;
     int num_tracks = (int)m_engine.track_count();
-    auto order = m_engine.order_list();
+    const size_t order_n = m_engine.order_size();
     uint32_t lpb = m_engine.lpb();
 
     // Draw Time Scale (Header)
@@ -334,8 +338,10 @@ void TracksView::draw(wxDC& dc) {
     size_t current_pos = m_engine.current_order_pos();
     int play_tick = 0;
 
-    for (size_t i = 0; i < order.size(); ++i) {
-        auto& pat = m_engine.pattern(order[i]);
+    for (size_t i = 0; i < order_n; ++i) {
+        size_t pat_idx = m_engine.order_entry(i);
+        if (pat_idx == Engine::order_npos || pat_idx >= m_engine.pattern_count()) continue;
+        auto& pat = m_engine.pattern(pat_idx);
         int pat_rows = (int)pat.row_count();
         int px = header_w + tick_to_x(total_rows);
 
@@ -352,7 +358,7 @@ void TracksView::draw(wxDC& dc) {
 
         // Pattern label
         wxString buf;
-        buf.Printf("POS %zu (PAT %zu)", i, order[i]);
+        buf.Printf("POS %zu (PAT %zu)", i, pat_idx);
         dc.SetTextForeground(ThemeManager::toWxColour(m_engine.m_tracker_text));
         dc.DrawText(buf, px + 5, 2);
 
@@ -414,6 +420,11 @@ void TracksView::draw(wxDC& dc) {
         dc.DrawText(name, 30, ty + 5);
 
         Instrument* inst = track_obj.instrument();
+        // Hoisted out of the per-note loop below: overlap detection
+        // allocates a vector per call (was: once per drawn note).
+        std::vector<AudioRegion> track_overlaps;
+        if (inst && inst->type() == InstrumentType::Sampler && !track_obj.is_minimized())
+            track_overlaps = detect_overlaps(static_cast<SampleInstrument*>(inst));
 
         // Instrument Info (only shown when not minimized)
         if (!track_obj.is_minimized()) {
@@ -438,8 +449,10 @@ void TracksView::draw(wxDC& dc) {
         // Track Content Area (only shown when not minimized)
         if (!track_obj.is_minimized()) {
             int rows_done = 0;
-            for (auto pat_idx : order) {
-                auto& pat = m_engine.pattern(pat_idx);
+            for (size_t oi = 0; oi < order_n; ++oi) {
+                size_t o_pat = m_engine.order_entry(oi);
+                if (o_pat == Engine::order_npos || o_pat >= m_engine.pattern_count()) continue;
+                auto& pat = m_engine.pattern(o_pat);
                 int pat_rows = (int)pat.row_count();
                 int px = header_w + tick_to_x(rows_done);
 
@@ -482,8 +495,7 @@ void TracksView::draw(wxDC& dc) {
                                             samples_to_draw = std::min(samples_to_draw, sample.data->left.size());
 
                                             // Detect overlaps
-                                            auto overlaps = detect_overlaps(sampler);
-                                            bool is_overlapping = (s_idx < overlaps.size()) && overlaps[s_idx].is_overlapping;
+                                            bool is_overlapping = (s_idx < track_overlaps.size()) && track_overlaps[s_idx].is_overlapping;
                                             
                                             // Draw sample background
                                             if (is_overlapping) {

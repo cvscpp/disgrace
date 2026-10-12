@@ -88,6 +88,8 @@ namespace disgrace_ns
     {
         for (size_t i = 0; i < frames; ++i) { out_l[i] = 0.f; out_r[i] = 0.f; }
         for (auto& v : m_voices) if (v && v->active()) v->process(out_l, out_r, frames);
+        // Skip the third pass entirely at unity gain (default).
+        if (m_volume == 1.0f) return;
         for (size_t i = 0; i < frames; ++i) {
             out_l[i] *= m_volume;
             out_r[i] *= m_volume;

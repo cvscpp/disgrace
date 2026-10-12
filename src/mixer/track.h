@@ -129,6 +129,8 @@ public:
 
     // Called at the start of every audio block to fire any pending delayed notes.
     void fire_pending_notes(size_t frames);
+    // True when any delay slot is active; lets the engine skip the scan.
+    bool has_pending_notes() const { return m_has_pending; }
 
     // Track minimization
     void set_minimized(bool min) { m_minimized = min; }
@@ -192,6 +194,8 @@ private:
     };
     static constexpr size_t MAX_PENDING = 16;
     PendingNote m_pending[MAX_PENDING]{};
+    // Set when any slot is active; see has_pending_notes().
+    bool m_has_pending = false;
 
     // Tiny xorshift RNG — lock-free, no heap, safe for the RT thread.
     mutable uint32_t m_rng_state = 0x12345678u;

@@ -37,15 +37,32 @@ disgrace_ns::Track::Track(Track&& other) noexcept
       m_volume(other.m_volume),
       m_mute(other.m_mute),
       m_solo(other.m_solo),
+      m_minimized(other.m_minimized),
       m_notation(other.m_notation),
       m_output_bus(other.m_output_bus),
       m_name(std::move(other.m_name)),
       m_instrument(other.m_instrument),
       m_chain(std::move(other.m_chain)),
+      m_audio_input_l(other.m_audio_input_l),
+      m_audio_input_r(other.m_audio_input_r),
+      m_input_delay_ms(other.m_input_delay_ms),
+      m_input_delay_samples(other.m_input_delay_samples),
+      m_delay_buf_l(std::move(other.m_delay_buf_l)),
+      m_delay_buf_r(std::move(other.m_delay_buf_r)),
+      m_delay_ptr(other.m_delay_ptr),
+      m_humanize_vel(other.m_humanize_vel),
+      m_humanize_timing(other.m_humanize_timing),
+      m_has_pending(other.m_has_pending),
+      m_rng_state(other.m_rng_state),
       m_meter_l(other.m_meter_l.load()),
       m_meter_r(other.m_meter_r.load()),
-      m_current_freq(other.m_current_freq)
+      m_current_freq(other.m_current_freq),
+      m_last_note(other.m_last_note),
+      m_last_velocity(other.m_last_velocity),
+      m_last_column(other.m_last_column),
+      m_last_sample_index(other.m_last_sample_index)
 {
+    for (size_t s = 0; s < MAX_PENDING; ++s) m_pending[s] = other.m_pending[s];
 }
 
 Track& disgrace_ns::Track::operator=(Track&& other) noexcept
@@ -58,14 +75,31 @@ Track& disgrace_ns::Track::operator=(Track&& other) noexcept
         m_volume = other.m_volume;
         m_mute = other.m_mute;
         m_solo = other.m_solo;
+        m_minimized = other.m_minimized;
         m_notation = other.m_notation;
         m_output_bus = other.m_output_bus;
         m_name = std::move(other.m_name);
         m_instrument = other.m_instrument;
         m_chain = std::move(other.m_chain);
+        m_audio_input_l = other.m_audio_input_l;
+        m_audio_input_r = other.m_audio_input_r;
+        m_input_delay_ms = other.m_input_delay_ms;
+        m_input_delay_samples = other.m_input_delay_samples;
+        m_delay_buf_l = std::move(other.m_delay_buf_l);
+        m_delay_buf_r = std::move(other.m_delay_buf_r);
+        m_delay_ptr = other.m_delay_ptr;
+        m_humanize_vel = other.m_humanize_vel;
+        m_humanize_timing = other.m_humanize_timing;
+        m_has_pending = other.m_has_pending;
+        for (size_t s = 0; s < MAX_PENDING; ++s) m_pending[s] = other.m_pending[s];
+        m_rng_state = other.m_rng_state;
         m_meter_l.store(other.m_meter_l.load());
         m_meter_r.store(other.m_meter_r.load());
         m_current_freq = other.m_current_freq;
+        m_last_note = other.m_last_note;
+        m_last_velocity = other.m_last_velocity;
+        m_last_column = other.m_last_column;
+        m_last_sample_index = other.m_last_sample_index;
     }
     return *this;
 }
@@ -128,17 +162,21 @@ void disgrace_ns::Track::process(float* out_l,
             : in_l;
 
         if (m_input_delay_samples > 0 && !m_delay_buf_l.empty()) {
-            size_t max_delay = m_delay_buf_l.size();
+            const size_t max_delay = m_delay_buf_l.size();
+            const size_t delay = m_input_delay_samples < max_delay ? m_input_delay_samples : max_delay - 1;
+            size_t wptr = m_delay_ptr;
             for (size_t i = 0; i < nframes; ++i) {
-                m_delay_buf_l[m_delay_ptr] = in_l[i];
-                m_delay_buf_r[m_delay_ptr] = in_r[i];
+                m_delay_buf_l[wptr] = in_l[i];
+                m_delay_buf_r[wptr] = in_r[i];
 
-                size_t read_ptr = (m_delay_ptr + max_delay - m_input_delay_samples) % max_delay;
+                // Branch instead of two `% max_delay` divisions per sample.
+                size_t read_ptr = (wptr >= delay) ? (wptr - delay) : (wptr + max_delay - delay);
                 out_l[i] += m_delay_buf_l[read_ptr];
                 out_r[i] += m_delay_buf_r[read_ptr];
 
-                m_delay_ptr = (m_delay_ptr + 1) % max_delay;
+                if (++wptr >= max_delay) wptr = 0;
             }
+            m_delay_ptr = wptr;
         } else {
             for (size_t i = 0; i < nframes; ++i) {
                 out_l[i] += in_l[i];
@@ -478,6 +516,7 @@ void disgrace_ns::Track::schedule_note_on(uint8_t note, uint8_t velocity,
     for (size_t s = 0; s < MAX_PENDING; ++s) {
         if (!m_pending[s].active) {
             m_pending[s] = {true, note, (uint8_t)vel, sample_idx, column, delay};
+            m_has_pending = true;
             return;
         }
     }
@@ -487,6 +526,8 @@ void disgrace_ns::Track::schedule_note_on(uint8_t note, uint8_t velocity,
 
 void disgrace_ns::Track::fire_pending_notes(size_t frames)
 {
+    if (!m_has_pending) return;
+    bool any_left = false;
     for (size_t s = 0; s < MAX_PENDING; ++s) {
         if (!m_pending[s].active) continue;
         m_pending[s].delay_samples -= (int32_t)frames;
@@ -494,17 +535,24 @@ void disgrace_ns::Track::fire_pending_notes(size_t frames)
             note_on(m_pending[s].note, m_pending[s].velocity,
                     m_pending[s].column, 0, m_pending[s].sample_idx);
             m_pending[s].active = false;
+        } else {
+            any_left = true;
         }
     }
+    m_has_pending = any_left;
 }
 
 void disgrace_ns::Track::cancel_pending_notes(size_t column)
 {
+    bool any_left = false;
     for (size_t s = 0; s < MAX_PENDING; ++s) {
         if (m_pending[s].active && m_pending[s].column == column) {
             m_pending[s].active = false;
+        } else if (m_pending[s].active) {
+            any_left = true;
         }
     }
+    m_has_pending = any_left;
 }
 
 } // namespace disgrace_ns

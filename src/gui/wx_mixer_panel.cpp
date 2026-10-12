@@ -311,6 +311,7 @@ void MixerPanel::update_mastering_panel() {
 }
 
 void MixerPanel::update_mixer_ui() {
+    Freeze();
     m_track_group->DestroyChildren();
     m_track_meters.clear();
     m_bus_meters.clear();
@@ -494,6 +495,8 @@ void MixerPanel::update_mixer_ui() {
 
     m_track_group->SetSizer(tracks_sizer);
     m_track_group->FitInside(); // Update scrollbars
+    m_track_group->Layout();
+    Thaw();
 }
 
 void MixerPanel::update_meters() {

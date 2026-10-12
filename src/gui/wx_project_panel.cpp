@@ -158,6 +158,7 @@ void ProjectPanel::update_metadata() {
 }
 
 void ProjectPanel::update_track_list() {
+    Freeze();
     m_track_container->DestroyChildren();
 
     wxFlexGridSizer* grid_sizer = new wxFlexGridSizer(0, 10, 5, 5);
@@ -427,6 +428,7 @@ void ProjectPanel::update_track_list() {
     // Update scrolled window virtual size
     wxSize best_size = grid_sizer->GetMinSize();
     m_track_scroll->SetVirtualSize(best_size);
+    Thaw();
 }
 
 void ProjectPanel::on_new(wxCommandEvent& event) {

@@ -59,6 +59,10 @@ public:
     void process(float* l, float* r, size_t nframes) override
     {
         if (m_bypassed) return;
+        // Hoisted out of the per-sample loop (were recomputed per sample).
+        const float feedback = room_size * 0.9f;
+        const float dry = 1.0f - mix;
+        const float wet = mix * 0.25f;
         for (size_t i = 0; i < nframes; ++i)
         {
             float in_l = l[i];
@@ -66,7 +70,6 @@ public:
             float out_l = 0, out_r = 0;
 
             // Parallel Comb Filters
-            float feedback = room_size * 0.9f;
             for(int j=0; j<4; ++j) {
                 out_l += process_comb(m_combs_l[j], in_l, feedback);
                 out_r += process_comb(m_combs_r[j], in_r, feedback);
@@ -78,8 +81,8 @@ public:
                 out_r = process_allpass(m_allpass_r[j], out_r);
             }
 
-            l[i] = in_l * (1.0f - mix) + out_l * mix * 0.25f;
-            r[i] = in_r * (1.0f - mix) + out_r * mix * 0.25f;
+            l[i] = in_l * dry + out_l * wet;
+            r[i] = in_r * dry + out_r * wet;
         }
     }
 

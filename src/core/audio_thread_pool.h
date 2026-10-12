@@ -7,6 +7,7 @@
 #include <functional>
 #include <mutex>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 namespace disgrace_ns {
@@ -42,18 +43,30 @@ public:
     }
 
     // Execute fn(i) for i in [0, count) in parallel.
-    // Blocks until all items are processed, then returns.
-    void parallel_for(size_t count, const std::function<void(size_t)>& fn) {
+    // Template (no std::function type-erasure): avoids a heap allocation
+    // per audio block when the caller passes a lambda. The callable must
+    // stay alive until parallel_for returns (it always does — we join).
+    // Small fan-outs run serially: mutex + wakeups + atomics cost more
+    // than the work for a handful of tracks. Never blocks the RT thread
+    // longer than a few ms (dropout instead of a 20 ms stall).
+    template <typename Fn>
+    void parallel_for(size_t count, Fn&& fn) {
         if (count == 0) return;
-        if (m_workers.empty()) {
+        if (m_workers.empty() || count <= 4) {
             for (size_t i = 0; i < count; ++i) fn(i);
             return;
         }
 
+        using FnDecay = typename std::decay<Fn>::type;
+        struct Helper {
+            static void call(void* p, size_t i) { (*static_cast<FnDecay*>(p))(i); }
+        };
+
         // Publish new work under the mutex so workers see consistent state.
         {
             std::lock_guard<std::mutex> lk(m_mu);
-            m_fn    = &fn;
+            m_tramp = &Helper::call;
+            m_ctx   = static_cast<void*>(&fn);
             m_total = count;
             m_next.store(0, std::memory_order_relaxed);
             m_done.store(0, std::memory_order_relaxed);
@@ -62,27 +75,42 @@ public:
         m_work_cv.notify_all();
 
         // RT thread drains as many items as it can.
-        drain(count, fn);
+        drain_direct(count, fn);
 
         // Fast path: all items done by the RT thread, no wait needed.
         if (m_done.load(std::memory_order_acquire) >= count)
             return;
 
-        // Slow path: some items were taken by workers; wait for completion.
-        // Short timeout so a stuck worker never freezes the JACK callback.
+        // Slow path: some items were taken by workers; wait briefly.
+        // Short timeout so a stuck worker causes a dropout, never a freeze.
         std::unique_lock<std::mutex> lk(m_mu);
-        m_done_cv.wait_for(lk, std::chrono::milliseconds(20), [&] {
+        m_done_cv.wait_for(lk, std::chrono::milliseconds(5), [&] {
             return m_done.load(std::memory_order_relaxed) >= count;
         });
     }
 
 private:
-    // Process items from the shared queue and increment m_done per item.
-    void drain(size_t total, const std::function<void(size_t)>& fn) {
+    // RT-side drain calling the local callable directly (no indirection).
+    template <typename Fn>
+    void drain_direct(size_t total, Fn&& fn) {
         for (;;) {
             size_t idx = m_next.fetch_add(1, std::memory_order_relaxed);
             if (idx >= total) break;
             fn(idx);
+            // Signal if this was the last item.
+            if (m_done.fetch_add(1, std::memory_order_acq_rel) + 1 >= total)
+                m_done_cv.notify_one();
+        }
+    }
+
+    // Worker-side drain via the type-erased trampoline.
+    void drain_tramp(size_t total) {
+        Trampoline tramp = m_tramp;
+        void* ctx = m_ctx;
+        for (;;) {
+            size_t idx = m_next.fetch_add(1, std::memory_order_relaxed);
+            if (idx >= total) break;
+            tramp(ctx, idx);
             // Signal if this was the last item.
             if (m_done.fetch_add(1, std::memory_order_acq_rel) + 1 >= total)
                 m_done_cv.notify_one();
@@ -126,19 +154,12 @@ private:
                 if (m_stop) return;
                 seen_epoch = m_epoch;
             }
-            // m_total and m_fn are stable for this epoch (written before
+            // m_total/tramp/ctx are stable for this epoch (written before
             // ++m_epoch under the same lock, visible after acquiring above).
             const size_t total = m_total;
-            const auto*  fn    = m_fn;
 
             // Drain: process whatever items remain, one m_done++ per item.
-            for (;;) {
-                size_t idx = m_next.fetch_add(1, std::memory_order_relaxed);
-                if (idx >= total) break;
-                (*fn)(idx);
-                if (m_done.fetch_add(1, std::memory_order_acq_rel) + 1 >= total)
-                    m_done_cv.notify_one();
-            }
+            drain_tramp(total);
             // No per-worker done signal needed — only per-item counts.
         }
     }
@@ -149,10 +170,13 @@ private:
     std::condition_variable             m_done_cv;
     bool                                m_stop{false};
     int                                 m_epoch{0};
-    const std::function<void(size_t)>*  m_fn{nullptr};
+    using Trampoline = void(*)(void*, size_t);
+    Trampoline                          m_tramp{nullptr};
+    void*                               m_ctx{nullptr};
     size_t                              m_total{0};
-    std::atomic<size_t>                 m_next{0};
-    std::atomic<size_t>                 m_done{0};
+    // Padded: RT thread and workers hammer these concurrently.
+    alignas(64) std::atomic<size_t>     m_next{0};
+    alignas(64) std::atomic<size_t>     m_done{0};
 };
 
 } // namespace disgrace_ns

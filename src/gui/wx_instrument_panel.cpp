@@ -1463,6 +1463,7 @@ void InstrumentPanel::update_midi_input_choice() {
 
 
 void InstrumentPanel::update_instrument_list() {
+    Freeze();
     // Track deletions (e.g. tracker "join") can garbage-collect an
     // instrument behind our back; drop a selection that no longer exists
     // instead of highlighting/operating on a shifted row.
@@ -1538,6 +1539,7 @@ void InstrumentPanel::update_instrument_list() {
     }
     m_inst_scroll->Layout();
     m_inst_scroll->FitInside();
+    Thaw();
 }
 
 void InstrumentPanel::on_inst_select_idx(int idx) {

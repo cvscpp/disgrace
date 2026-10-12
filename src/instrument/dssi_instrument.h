@@ -22,6 +22,8 @@
 #include <vector>
 #include <string>
 #include <atomic>
+#include <chrono>
+#include <cstdint>
 #include <unistd.h>
 
 namespace disgrace_ns {
@@ -106,7 +108,10 @@ private:
     int m_last_note[16]{-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
 
     // ── crash state ──────────────────────────────────────────────────
+    // kill() is a syscall: throttle the liveness probe so the RT thread
+    // only pays it ~2x/sec instead of once per audio block.
     mutable std::atomic<bool> m_alive{false};
+    mutable std::atomic<int64_t> m_last_alive_check_ms{0};
 };
 
 } // namespace disgrace_ns

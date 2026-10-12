@@ -220,12 +220,17 @@ int WxMainWindow::get_cursor_row() const {
 
 void WxMainWindow::OnTimer(wxTimerEvent& event) {
     if (m_transport) m_transport->update();
-    if (m_mixer_panel) m_mixer_panel->update_meters();
+    int current_tab = m_tabs ? m_tabs->GetSelection() : -1;
+    // Mixer meters drive one repaint per VU strip: throttle to ~30 Hz and
+    // only when the mixer tab is actually visible (tab 5). The transport
+    // bar has its own VU pair in the always-visible header.
+    static int meter_div = 0;
+    if (m_mixer_panel && current_tab == 5 && ((meter_div++ & 1) == 0))
+        m_mixer_panel->update_meters();
     if (m_tracker_panel && m_engine.transport_state() != TransportState::Stopped) {
         m_tracker_panel->update();
     }
 
-    int current_tab = m_tabs->GetSelection();
     if (m_tracks_panel && (m_engine.transport_state() != TransportState::Stopped || current_tab == 2)) {
         m_tracks_panel->update();
     }

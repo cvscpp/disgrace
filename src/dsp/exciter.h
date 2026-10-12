@@ -38,7 +38,10 @@ public:
     void process(float* l, float* r, size_t nframes) override
     {
         if (m_bypassed) return;
-        float alpha = freq * 0.9f; // Simple HPF coefficient
+        if (amount == 0.0f) return; // pure passthrough, skip HPF+tanh entirely
+        const float alpha = freq * 0.9f; // Simple HPF coefficient
+        const float drive = amount * 5.0f;
+        const float mix_amt = amount;
 
         for (size_t i = 0; i < nframes; ++i)
         {
@@ -52,11 +55,11 @@ public:
             m_prev_r = in_r;
 
             // Saturate high frequencies
-            float sat_l = std::tanh(m_hpf_l * amount * 5.0f);
-            float sat_r = std::tanh(m_hpf_r * amount * 5.0f);
+            float sat_l = std::tanh(m_hpf_l * drive);
+            float sat_r = std::tanh(m_hpf_r * drive);
 
-            l[i] = in_l + sat_l * amount;
-            r[i] = in_r + sat_r * amount;
+            l[i] = in_l + sat_l * mix_amt;
+            r[i] = in_r + sat_r * mix_amt;
         }
     }
 

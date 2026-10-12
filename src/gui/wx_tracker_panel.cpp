@@ -300,9 +300,10 @@ void TrackerPanel::on_detach(wxCommandEvent& event) {
 }
 
 void TrackerPanel::update_pattern_list() {
+    Freeze();
     m_tracker->set_pattern(m_engine.pattern());
-    const auto& order = m_engine.order_list();
-    m_last_order_size = order.size();
+    const size_t order_n = m_engine.order_size();
+    m_last_order_size = order_n;
     m_last_pattern_count = m_engine.pattern_count();
 
     m_pattern_list_container->DestroyChildren();
@@ -315,7 +316,9 @@ void TrackerPanel::update_pattern_list() {
     int start_x = 0;
     int start_y = 0;
 
-    for (size_t i = 0; i < order.size(); ++i) {
+    for (size_t i = 0; i < order_n; ++i) {
+        size_t pat_idx = m_engine.order_entry(i);
+        if (pat_idx == Engine::order_npos || pat_idx >= m_engine.pattern_count()) continue;
         int cur_y = start_y + (int)(i * row_h);
 
         wxString pos_str;
@@ -330,14 +333,14 @@ void TrackerPanel::update_pattern_list() {
         }
         b->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent& ev) {
             auto& eng = this->m_engine;
-            auto ord = eng.order_list();
-            if (i < ord.size()) {
+            if (i < eng.order_size()) {
+                size_t entry = eng.order_entry(i);
                 eng.m_edit_order_pos.store(i);
                 this->m_selected_order_idx = (int)i;
                 if (eng.is_playing()) {
                     eng.set_play_position(i, 0);
-                } else {
-                    eng.set_active_pattern(ord[i]);
+                } else if (entry != Engine::order_npos) {
+                    eng.set_active_pattern(entry);
                 }
                 this->m_tracker->set_pattern(eng.pattern());
                 this->update_pattern_list();
@@ -346,11 +349,10 @@ void TrackerPanel::update_pattern_list() {
         m_order_buttons[i] = b;
 
         wxString pat_str;
-        pat_str.Printf("%02zu", order[i]);
+        pat_str.Printf("%02zu", pat_idx);
         wxStaticText* p = new wxStaticText(m_pattern_list_container, wxID_ANY, pat_str, wxPoint(start_x + 40, cur_y + 5), wxSize(25, row_h - 5));
         p->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_tracker_note));
 
-        int pat_idx = order[i];
         size_t len = m_engine.pattern(pat_idx).row_count();
         wxString len_str;
         len_str.Printf("%zu", len);
@@ -383,10 +385,12 @@ void TrackerPanel::update_pattern_list() {
         m_pattern_length_inputs[pat_idx] = len_inp;
     }
 
-    m_pattern_list_container->SetSize(wxSize(120, (int)(order.size() * row_h)));
-    m_pattern_scroll->SetVirtualSize(120, (int)(order.size() * row_h));
+    m_pattern_list_container->SetSize(wxSize(120, (int)(order_n * row_h)));
+    m_pattern_scroll->SetVirtualSize(120, (int)(order_n * row_h));
 
+    m_pattern_list_container->Layout();
     m_pattern_scroll->Refresh();
+    Thaw();
 }
 
 void TrackerPanel::update() {
@@ -400,7 +404,9 @@ void TrackerPanel::update() {
             size_t engine_order_pos = m_engine.m_order_pos.load();
             if (m_engine.m_edit_order_pos.load() != engine_order_pos) {
                 m_engine.m_edit_order_pos.store(engine_order_pos);
-                m_engine.set_active_pattern(m_engine.m_order[engine_order_pos]);
+                size_t entry = m_engine.order_entry(engine_order_pos);
+                if (entry != Engine::order_npos)
+                    m_engine.set_active_pattern(entry);
                 m_tracker->set_pattern(m_engine.pattern());
                 tracker_changed = true;
             }
@@ -416,7 +422,7 @@ void TrackerPanel::update() {
         }
 
         size_t current_edit_pos = m_engine.m_edit_order_pos.load();
-        size_t current_order_size = m_engine.order_list().size();
+        size_t current_order_size = m_engine.order_size();
         size_t current_pattern_count = m_engine.pattern_count();
 
         if ((int)current_edit_pos != m_selected_order_idx ||

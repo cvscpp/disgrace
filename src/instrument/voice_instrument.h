@@ -18,6 +18,7 @@
 
 #pragma once
 #include "instrument.h"
+#include <atomic>
 #include <map>
 #include <vector>
 #include <memory>
@@ -87,6 +88,15 @@ public:
     void clear_cache();
     size_t cache_size();
     size_t get_memory_used();
+
+    // RT-safe miss path: note_on() never synthesizes synchronously. When a
+    // phrase is missing from the cache it records a background request here
+    // (serviced by VoiceSynthesisWorker / the pre-render dialog) and stays
+    // silent for this note instead of blocking the audio thread on
+    // fork+exec+file I/O. GUI may poll these to show "not rendered yet".
+    bool has_pending_synth_request() const { return m_synth_requested.load(std::memory_order_acquire); }
+    // Returns false when nothing is pending.
+    bool consume_synth_request(std::string& out_text, float& out_freq);
     
     // Memory limit with LRU eviction
     void set_memory_limit(size_t bytes) { m_memory_limit = bytes; }
@@ -191,6 +201,11 @@ private:
     double m_playback_pos = 0.0;
     double m_playback_increment = 1.0;
     bool m_playing = false;
+    // Pending uncached phrase (written by RT note_on, read by GUI/worker).
+    std::atomic<bool> m_synth_requested{false};
+    std::string m_pending_text;
+    float m_pending_freq = 440.0f;
+    mutable std::mutex m_pending_mutex;
     int m_last_note[16]{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
     std::string m_cache_dir;  // Disk cache directory
     

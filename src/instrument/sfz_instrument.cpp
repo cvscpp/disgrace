@@ -84,6 +84,8 @@ SfzInstrument::SfzInstrument(double sample_rate)
     : m_sample_rate(sample_rate)
 {
     m_type = InstrumentType::SFZ;
+    m_voices.reserve(MAX_VOICES + 1);
+    m_free.reserve(MAX_VOICES + 1);
 }
 
 bool SfzInstrument::load_sfz(const std::string& path)
@@ -336,7 +338,17 @@ void SfzInstrument::note_on(uint8_t note, uint8_t velocity,
         // Gain from volume opcode (dB)
         float gain = std::pow(10.0f, reg.volume / 20.0f) * m_volume * vel_f;
 
-        auto sv = std::make_unique<SampleVoice>(reg.data, m_sample_rate);
+        // Reuse a recycled voice when available: steady-state playback
+        // then performs zero heap allocations in the RT thread.
+        std::unique_ptr<SampleVoice> sv;
+        if (!m_free.empty()) {
+            sv = std::move(m_free.back().voice);
+            m_free.pop_back();
+            sv->set_sample(reg.data);
+            sv->set_engine_rate(m_sample_rate);
+        } else {
+            sv = std::make_unique<SampleVoice>(reg.data, m_sample_rate);
+        }
         sv->set_adsr(reg.ampeg_attack, reg.ampeg_decay, reg.ampeg_sustain, reg.ampeg_release);
         sv->set_volume(gain);
 
@@ -344,12 +356,13 @@ void SfzInstrument::note_on(uint8_t note, uint8_t velocity,
         sv->set_region(end_pos, reg.loop_enabled, (size_t)reg.loop_start);
         sv->start(note, velocity, start_freq, offset_samples);
 
-        // Voice-steal if at limit
+        // Voice-steal if at limit (victim object is recycled, not freed)
         if (m_voices.size() >= MAX_VOICES) {
-            // Remove oldest inactive voice, or the oldest active one
             auto it = std::find_if(m_voices.begin(), m_voices.end(),
                 [](const SfzVoice& v){ return !v.voice->active(); });
             if (it == m_voices.end()) it = m_voices.begin();
+            it->voice->panic();
+            m_free.push_back({ std::move(it->voice), -1, 0 });
             m_voices.erase(it);
         }
 
@@ -366,7 +379,11 @@ void SfzInstrument::note_off(size_t column_index)
 
 void SfzInstrument::panic()
 {
-    for (auto& sv : m_voices) sv.voice->panic();
+    for (auto& sv : m_voices) {
+        sv.voice->panic();
+        if (m_free.size() < MAX_VOICES + 1)
+            m_free.push_back({ std::move(sv.voice), -1, 0 });
+    }
     m_voices.clear();
 }
 
@@ -382,11 +399,17 @@ void SfzInstrument::process(float* l, float* r, size_t nframes)
             sv.voice->process(l, r, nframes);
         }
     }
-    // Prune finished voices
-    m_voices.erase(
-        std::remove_if(m_voices.begin(), m_voices.end(),
-                       [](const SfzVoice& v){ return !v.voice->active(); }),
-        m_voices.end());
+    // Prune finished voices, recycling their objects instead of freeing.
+    // Swap-remove keeps this O(finished) with no memmove of live voices.
+    for (size_t i = m_voices.size(); i-- > 0;) {
+        if (!m_voices[i].voice->active()) {
+            if (m_free.size() < MAX_VOICES + 1)
+                m_free.push_back({ std::move(m_voices[i].voice), -1, 0 });
+            if (i + 1 < m_voices.size())
+                m_voices[i] = std::move(m_voices.back());
+            m_voices.pop_back();
+        }
+    }
 }
 
 } // namespace disgrace_ns

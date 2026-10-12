@@ -65,6 +65,9 @@ private:
     std::vector<std::string> m_sample_names;
 
     std::vector<SfzVoice> m_voices;
+    // Recycled voice objects (see SfzInstrument): steady-state note_on
+    // reuses these instead of make_unique per note.
+    std::vector<SfzVoice> m_free;
     static constexpr size_t MAX_VOICES = 48;
 
     float m_volume = 1.0f;

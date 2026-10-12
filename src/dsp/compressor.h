@@ -46,6 +46,9 @@ public:
 
         float attack_coeff = std::exp(-1.0f / (attack * m_sample_rate));
         float release_coeff = std::exp(-1.0f / (release * m_sample_rate));
+        // Threshold in dB is constant for the block (was log10 per sample).
+        const float target_db = 20.0f * std::log10(std::max(threshold, 1e-5f));
+        const float inv_ratio = 1.0f / std::max(ratio, 1e-5f);
 
         for (size_t i = 0; i < nframes; ++i)
         {
@@ -60,9 +63,8 @@ public:
 
             float gain = 1.0f;
             if (m_envelope > threshold && m_envelope > 0.00001f) {
-                float target_db = 20.0f * std::log10(threshold);
                 float env_db = 20.0f * std::log10(m_envelope);
-                float compressed_db = target_db + (env_db - target_db) / ratio;
+                float compressed_db = target_db + (env_db - target_db) * inv_ratio;
                 gain = std::pow(10.0f, (compressed_db - env_db) / 20.0f);
             }
 

@@ -22,7 +22,9 @@
 #include <wx/panel.h>
 #include <wx/scrolwin.h>
 #include <wx/textctrl.h>
+#include <wx/bitmap.h>
 #include <vector>
+#include <cstdint>
 
 #include "../sequencer/pattern.h"
 #include "../core/key_bindings.h"
@@ -81,6 +83,24 @@ private:
     void sync_record_track();
     void insert_note(uint8_t note);
     int get_center_row_y();
+
+    struct GridColours {
+        wxColour bg, text, note, sample, sample_dim, effect, volume, lpb, cursor;
+    };
+    struct RowCache {
+        wxBitmap bmp;
+        uint64_t stamp = 0;
+        uint32_t style = 0;
+        int width = 0;
+    };
+    void clear_row_cache();
+    uint32_t compute_style_stamp(const GridColours& col, uint32_t lpb) const;
+    uint64_t compute_row_stamp(int row) const;
+    bool row_is_hot(int row, int playing_row, bool is_playing) const;
+    void draw_track_cells(wxDC& dc, int track, int row, int ry, bool overlay_only, const GridColours& col);
+    void ensure_row_cache(int row, int width, const GridColours& col, uint32_t style, uint32_t lpb);
+
+    std::vector<RowCache> m_row_cache;
 
     Engine& m_engine;
     Pattern* m_pattern;

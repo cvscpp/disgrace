@@ -106,6 +106,10 @@ private:
     struct StagedMidi { uint8_t type, channel, note, value; };
     std::vector<StagedMidi> m_pending_midi;
     int m_last_note[16]{-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
+    // Audio thread only. The sandbox runs one block behind so process()
+    // never waits on the plugin.
+    bool m_request_pending = false;
+    uint32_t m_pending_frames = 0;
 
     // ── crash state ──────────────────────────────────────────────────
     // kill() is a syscall: throttle the liveness probe so the RT thread

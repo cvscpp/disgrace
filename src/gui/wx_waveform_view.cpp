@@ -4,6 +4,7 @@
 
 #include <wx/dcbuffer.h>
 #include <wx/dcclient.h>
+#include <wx/dcmemory.h>
 #include <algorithm>
 #include <cmath>
 
@@ -137,6 +138,65 @@ void WaveformView::OnPaint(wxPaintEvent&) {
     const int W = size.GetWidth(), H = size.GetHeight();
     if (W <= 0 || H <= 0) return;
 
+    float probe = 0.f;
+    const void* sample_ptr = m_sample.get();
+    size_t length = m_sample ? sample_length() : 0;
+    if (m_sample && !m_sample->left.empty()) {
+        const auto& left = m_sample->left;
+        probe = left.front() + left[left.size() / 2] + left.back();
+    }
+    const bool cache_hit = m_wave_cache.IsOk()
+        && m_cache_w == W && m_cache_h == H
+        && m_cache_mode == (int)m_mode
+        && m_cache_color == m_color
+        && m_cache_bg == m_engine.m_tracker_bg
+        && m_cache_zoom == m_zoom
+        && m_cache_offset == m_offset
+        && m_cache_length == length
+        && m_cache_visible == m_visible_length
+        && m_cache_sel_s == m_sel_start
+        && m_cache_sel_e == m_sel_end
+        && m_cache_sel_ch == m_sel_channels
+        && m_cache_sample == sample_ptr
+        && m_cache_probe == probe;
+    if (!cache_hit) {
+        m_wave_cache = wxBitmap(W, H);
+        wxMemoryDC mdc(m_wave_cache);
+        m_painting_cache = true;
+        paint_wave(mdc);
+        m_painting_cache = false;
+        m_cache_w = W;
+        m_cache_h = H;
+        m_cache_mode = (int)m_mode;
+        m_cache_color = m_color;
+        m_cache_bg = m_engine.m_tracker_bg;
+        m_cache_zoom = m_zoom;
+        m_cache_offset = m_offset;
+        m_cache_length = length;
+        m_cache_visible = m_visible_length;
+        m_cache_sel_s = m_sel_start;
+        m_cache_sel_e = m_sel_end;
+        m_cache_sel_ch = m_sel_channels;
+        m_cache_sample = sample_ptr;
+        m_cache_probe = probe;
+    }
+    dc.DrawBitmap(m_wave_cache, 0, 0, false);
+    if (m_playback_pos >= 0 && m_sample && length > 0) {
+        size_t vstart, vend;
+        get_view_range(vstart, vend);
+        int px = sample_to_x((size_t)m_playback_pos, vstart, vend, W);
+        if (px >= 0 && px < W) {
+            dc.SetPen(wxPen(wxColour(255, 220, 0), 2));
+            dc.DrawLine(px, kTimeScaleHeight, px, H);
+        }
+    }
+}
+
+void WaveformView::paint_wave(wxDC& dc) {
+    wxSize size = GetClientSize();
+    const int W = size.GetWidth(), H = size.GetHeight();
+    if (W <= 0 || H <= 0) return;
+
     const int TSH = kTimeScaleHeight; // time-scale strip height (top)
     const int WH  = H - TSH;
 
@@ -266,8 +326,9 @@ void WaveformView::OnPaint(wxPaintEvent&) {
         }
     }
 
-    // Playback position cursor line
-    if (m_playback_pos >= 0) {
+    // Playback cursor is overlaid by OnPaint so scrubbing does not
+    // rebuild the min/max scan.
+    if (!m_painting_cache && m_playback_pos >= 0) {
         size_t vstart, vend;
         get_view_range(vstart, vend);
         int px = sample_to_x((size_t)m_playback_pos, vstart, vend, W);

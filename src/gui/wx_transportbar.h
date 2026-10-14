@@ -76,6 +76,11 @@ private:
     // redundant SetLabel/Refresh avoids a full-bar relayout+repaint storm.
     wxString m_last_clock_str;
     bool m_last_beat = false;
+    int m_last_tempo = -1;
+    int m_last_lpb = -1;
+    int m_last_octave = -1;
+    int m_last_step = -1;
+    bool m_last_record = false;
 
     wxDECLARE_EVENT_TABLE();
 };

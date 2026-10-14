@@ -17,11 +17,14 @@ public:
     void OnPaint(wxPaintEvent& event);
 
 private:
+    void paint_meter(wxDC& dc);
     Engine& m_engine;
     float m_level = 0.0f;
     float m_peak_hold = 0.0f;
     int m_peak_timer = 0;
     bool m_horizontal = false;
+    int m_last_level_px = -1;
+    int m_last_peak_px = -1;
 
     DECLARE_EVENT_TABLE()
 };

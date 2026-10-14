@@ -438,6 +438,18 @@ private:
 
     disgrace_ns::RingBuffer<disgrace_ns::EngineCommand, 128> m_cmd_queue;
 
+    // Keyboard preview is queued from the GUI thread and applied on the
+    // audio thread so note_on never runs under a JACK callback and a
+    // wxWidgets handler at the same time.
+    struct PreviewEvent {
+        uint16_t track = 0;
+        uint16_t column = 0;
+        uint8_t note = 255; // 255 = note-off (stop_preview)
+        uint8_t _pad = 0;
+    };
+    disgrace_ns::RingBuffer<PreviewEvent, 64> m_preview_queue;
+    void drain_preview_events();
+
     ::std::vector<::std::unique_ptr<disgrace_ns::Pattern>> m_patterns;
     ::std::atomic<size_t>  m_active_pattern{0};
 

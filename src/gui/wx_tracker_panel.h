@@ -93,6 +93,8 @@ private:
 
     wxTextCtrl* m_voice_text_field;  // For Voice instrument text editing
     uint8_t m_last_voice_idx = 255;  // Track which phrase index was last displayed
+    bool m_voice_widgets_shown = false;
+    wxString m_last_voice_text;
     
     wxButton* m_voice_copy_btn;
     wxButton* m_voice_paste_btn;
@@ -101,6 +103,7 @@ private:
     std::string m_voice_clipboard;   // Clipboard for voice text
     std::string m_voice_search_term; // Current search term
 
+    int m_last_play_row = -1;
     int m_selected_order_idx = 0;
     int m_tab_index = -1;
     size_t m_last_order_size = 0;

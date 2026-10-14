@@ -638,6 +638,7 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     // Keep input meters responsive enough to feel continuous while recording.
     m_vu_timer = new wxTimer(this);
     Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
+        if (!IsShownOnScreen()) return;
         if (m_input_vu_l && m_input_vu_r) {
             int sel = m_rec_input_ch ? m_rec_input_ch->GetSelection() : 0;
             if (sel < 0) sel = 0;

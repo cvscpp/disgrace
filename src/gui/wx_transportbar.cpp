@@ -209,11 +209,32 @@ void TransportBar::on_metro_vol(wxCommandEvent& event) {
 }
 
 void TransportBar::update() {
-    if (!m_tempo_spin->HasFocus()) m_tempo_spin->SetValue((int)m_engine.tempo());
-    if (!m_lpb_spin->HasFocus()) m_lpb_spin->SetValue((int)m_engine.lpb());
-    if (!m_octave_spin->HasFocus()) m_octave_spin->SetValue(m_engine.base_octave());
-    if (!m_step_spin->HasFocus()) m_step_spin->SetValue((int)m_engine.step_size());
-    m_record->SetValue(m_engine.m_record_enabled);
+    // wxSpinCtrl::SetValue posts a GTK update even when the number is unchanged.
+    const int tempo = (int)m_engine.tempo();
+    const int lpb = (int)m_engine.lpb();
+    const int octave = m_engine.base_octave();
+    const int step = (int)m_engine.step_size();
+    if (!m_tempo_spin->HasFocus() && tempo != m_last_tempo) {
+        m_tempo_spin->SetValue(tempo);
+        m_last_tempo = tempo;
+    }
+    if (!m_lpb_spin->HasFocus() && lpb != m_last_lpb) {
+        m_lpb_spin->SetValue(lpb);
+        m_last_lpb = lpb;
+    }
+    if (!m_octave_spin->HasFocus() && octave != m_last_octave) {
+        m_octave_spin->SetValue(octave);
+        m_last_octave = octave;
+    }
+    if (!m_step_spin->HasFocus() && step != m_last_step) {
+        m_step_spin->SetValue(step);
+        m_last_step = step;
+    }
+    const bool recording = m_engine.m_record_enabled.load();
+    if (recording != m_last_record) {
+        m_record->SetValue(recording);
+        m_last_record = recording;
+    }
 
     auto state = m_engine.transport_state();
     double total_seconds = 0;

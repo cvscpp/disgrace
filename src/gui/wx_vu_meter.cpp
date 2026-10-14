@@ -3,7 +3,6 @@
 #include "../core/engine.h"
 
 #include <wx/dcbuffer.h>
-#include <wx/dcclient.h>
 #include <algorithm>
 #include <cmath>
 
@@ -50,12 +49,34 @@ void VUMeter::level(float l) {
         std::fabs(previous_peak - m_peak_hold) < 0.0001f) {
         return;
     }
+    if (!IsShownOnScreen()) return;
 
+    wxSize size = GetClientSize();
+    int span = m_horizontal ? size.GetWidth() : size.GetHeight();
+    if (span < 1) return;
+    auto pixels = [span](float v) {
+        float db = 20.0f * std::log10(v + 0.00001f);
+        float norm = (db - -60.0f) / 60.0f;
+        norm = std::max(0.0f, std::min(1.0f, norm));
+        return (int)(norm * span);
+    };
+    int level_px = pixels(m_level);
+    int peak_px = pixels(m_peak_hold);
+    if (level_px == m_last_level_px && peak_px == m_last_peak_px) return;
+    m_last_level_px = level_px;
+    m_last_peak_px = peak_px;
+
+    // wxClientDC does not show on wxGTK. Refresh only when the bar moves
+    // a pixel so a desk of strips does not repaint every tick.
     Refresh(false);
 }
 
 void VUMeter::OnPaint(wxPaintEvent& event) {
     wxAutoBufferedPaintDC dc(this);
+    paint_meter(dc);
+}
+
+void VUMeter::paint_meter(wxDC& dc) {
     wxSize size = GetClientSize();
 
     dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_bg)));

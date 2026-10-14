@@ -25,9 +25,11 @@
 
 #include <wx/dcbuffer.h>
 #include <wx/dcclient.h>
+#include <wx/dcmemory.h>
 #include <wx/menu.h>
 #include <wx/msgdlg.h>
 #include <wx/settings.h>
+#include <algorithm>
 
 namespace disgrace_ns {
 
@@ -105,7 +107,6 @@ TrackerView::TrackerView(wxWindow* parent, wxWindowID id, Pattern& pattern, Engi
     : wxScrolledWindow(parent, id), m_engine(engine), m_pattern(&pattern)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
-    SetDoubleBuffered(true);
     // wxWANTS_CHARS ensures Tab and other special keys reach OnKeyDown
     SetWindowStyle(GetWindowStyle() | wxWANTS_CHARS);
     // Use a fixed-width font for the grid
@@ -114,6 +115,7 @@ TrackerView::TrackerView(wxWindow* parent, wxWindowID id, Pattern& pattern, Engi
 }
 
 void TrackerView::recalculate_size() {
+    clear_row_cache();
     if (!m_pattern) return;
 
     int track_count = (int)m_engine.track_count();
@@ -197,275 +199,332 @@ void TrackerView::OnPaint(wxPaintEvent& event) {
     draw(dc);
 }
 
+static const wxString& tracker_note_text(uint8_t note) {
+    static wxString empty("---");
+    static wxString off("OFF");
+    static wxString labels[128];
+    static bool ready = false;
+    if (!ready) {
+        for (int n = 0; n < 128; ++n)
+            labels[n].Printf("%s%d", note_names[n % 12], note_display_octave((uint8_t)n));
+        ready = true;
+    }
+    if (note == 255) return empty;
+    if (note == 254) return off;
+    if (note < 128) return labels[note];
+    return empty;
+}
+
+static const wxString& tracker_hex2(unsigned v) {
+    static wxString table[256];
+    static bool ready = false;
+    if (!ready) {
+        for (int i = 0; i < 256; ++i) table[i].Printf("%02X", i);
+        ready = true;
+    }
+    return table[v & 255];
+}
+
+static const wxString& tracker_row3(int r) {
+    static wxString table[512];
+    static wxString extra;
+    static bool ready = false;
+    if (!ready) {
+        for (int i = 0; i < 512; ++i) table[i].Printf("%03d", i);
+        ready = true;
+    }
+    if (r >= 0 && r < 512) return table[r];
+    extra.Printf("%03d", r);
+    return extra;
+}
+
+static const wxString& tracker_dots() {
+    static wxString dots("..");
+    return dots;
+}
+
+void TrackerView::clear_row_cache() {
+    m_row_cache.clear();
+}
+
+uint32_t TrackerView::compute_style_stamp(const GridColours& col, uint32_t lpb) const {
+    auto pack = [](const wxColour& c) -> uint32_t {
+        return ((uint32_t)c.Red() << 16) | ((uint32_t)c.Green() << 8) | c.Blue();
+    };
+    return pack(col.bg) ^ (pack(col.text) << 1) ^ (pack(col.note) << 2)
+        ^ (pack(col.sample) << 3) ^ (pack(col.effect) << 4) ^ (pack(col.volume) << 5)
+        ^ (pack(col.lpb) << 6) ^ (lpb * 0x9E3779B9u);
+}
+
+uint64_t TrackerView::compute_row_stamp(int row) const {
+    uint64_t stamp = 14695981039346656037ull;
+    auto mix = [&](uint64_t v) {
+        stamp ^= v;
+        stamp *= 1099511628211ull;
+    };
+    if (!m_pattern) return stamp;
+    int track_count = (int)m_engine.track_count();
+    mix((uint64_t)track_count);
+    for (int t = 0; t < track_count; ++t) {
+        auto* inst = m_engine.track(t).instrument();
+        mix(inst ? (uint64_t)inst->type() : 0);
+        bool is_voice = inst && inst->type() == InstrumentType::Voice;
+        VoiceInstrument* voice = is_voice ? static_cast<VoiceInstrument*>(inst) : nullptr;
+        int cols = (int)m_pattern->column_count(t);
+        mix((uint64_t)cols);
+        for (int c = 0; c < cols; ++c) {
+            const auto& ev = m_pattern->event(t, (size_t)row, (size_t)c);
+            mix(ev.note);
+            mix(ev.sample_idx);
+            mix(ev.volume);
+            if (c == 0) {
+                mix(ev.effect1);
+                mix(ev.param1);
+                mix(ev.effect2);
+                mix(ev.param2);
+            }
+            if (voice) {
+                std::string text = voice->get_text(ev.sample_idx);
+                mix(text.size());
+                for (unsigned char ch : text) mix(ch);
+            }
+        }
+    }
+    return stamp;
+}
+
+bool TrackerView::row_is_hot(int row, int playing_row, bool is_playing) const {
+    if (row == m_cursor_row) return true;
+    if (is_playing && row == playing_row) return true;
+    if (!m_sel_active) return false;
+    int min_r = std::min(m_sel_start.row, m_sel_end.row);
+    int max_r = std::max(m_sel_start.row, m_sel_end.row);
+    return row >= min_r && row <= max_r;
+}
+
+void TrackerView::draw_track_cells(wxDC& dc, int t, int r, int ry, bool overlay_only, const GridColours& col) {
+    if (!m_pattern || t < 0 || t >= (int)m_track_ui.size()) return;
+    auto& track_obj = m_engine.track(t);
+    bool is_sampler = track_obj.instrument() && track_obj.instrument()->type() == InstrumentType::Sampler;
+    bool is_voice = track_obj.instrument() && track_obj.instrument()->type() == InstrumentType::Voice;
+    VoiceInstrument* voice = is_voice ? static_cast<VoiceInstrument*>(track_obj.instrument()) : nullptr;
+    int num_cols = (int)m_pattern->column_count(t);
+    const int row_h = 18;
+
+    auto selected = [&](int field) {
+        if (!m_sel_active) return false;
+        auto start = std::make_pair(m_sel_start.track, m_sel_start.field);
+        auto end = std::make_pair(m_sel_end.track, m_sel_end.field);
+        if (start > end) std::swap(start, end);
+        int min_r = std::min(m_sel_start.row, m_sel_end.row);
+        int max_r = std::max(m_sel_start.row, m_sel_end.row);
+        auto pos = std::make_pair(t, field);
+        return r >= min_r && r <= max_r && pos >= start && pos <= end;
+    };
+
+    auto paint_cell = [&](int field, int cursor_field, bool cursor_col_match, const wxString& text, const wxColour& normal) {
+        int f_w = 0;
+        int f_x = get_field_x(t, field, f_w);
+        bool sel = selected(field);
+        bool cur = cursor_col_match && r == m_cursor_row && t == m_cursor_track && m_cursor_field == cursor_field;
+        if (overlay_only) {
+            if (!sel && !cur) return;
+            if (sel) {
+                dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
+                dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
+                dc.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT));
+            } else {
+                dc.SetBrush(wxBrush(col.cursor));
+                dc.SetPen(wxPen(col.cursor));
+                dc.SetTextForeground(col.bg);
+            }
+            dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
+        } else {
+            dc.SetTextForeground(normal);
+        }
+        dc.DrawText(text, f_x, ry + 2);
+    };
+
+    for (int c = 0; c < num_cols; ++c) {
+        const auto& ev = m_pattern->event(t, (size_t)r, (size_t)c);
+        bool col_match = c == m_cursor_col;
+        paint_cell(c * 3 + 0, 0, col_match, tracker_note_text(ev.note),
+                   ev.note == 255 ? col.lpb : col.note);
+
+        wxString sample_text = tracker_dots();
+        wxColour sample_col = is_sampler ? col.sample : col.sample_dim;
+        if (is_voice && voice) {
+            wxString display = wxString::FromUTF8(voice->get_text(ev.sample_idx));
+            if (display.empty()) display = "...";
+            while (display.length() > 4)
+                display = display.SubString(0, display.length() - 2);
+            sample_text = display;
+        } else if (ev.sample_idx != 0) {
+            sample_text = tracker_hex2(ev.sample_idx);
+        }
+        paint_cell(c * 3 + 1, 1, col_match, sample_text, sample_col);
+
+        paint_cell(c * 3 + 2, 2, col_match,
+                   ev.volume == 255 ? tracker_dots() : tracker_hex2(ev.volume),
+                   col.volume);
+    }
+
+    const auto& row_ev = m_pattern->event(t, (size_t)r, 0);
+    int fx_base = num_cols * 3;
+    paint_cell(fx_base + 0, 3, true, tracker_hex2(row_ev.effect1), col.effect);
+    paint_cell(fx_base + 1, 4, true, tracker_hex2(row_ev.param1), col.effect);
+    paint_cell(fx_base + 2, 5, true, tracker_hex2(row_ev.effect2), col.effect);
+    paint_cell(fx_base + 3, 6, true, tracker_hex2(row_ev.param2), col.effect);
+}
+
+void TrackerView::ensure_row_cache(int row, int width, const GridColours& col, uint32_t style, uint32_t lpb) {
+    if (row < 0 || !m_pattern || width < 1) return;
+    if ((size_t)row >= m_row_cache.size()) m_row_cache.resize((size_t)row + 1);
+    uint64_t stamp = compute_row_stamp(row);
+    auto& entry = m_row_cache[(size_t)row];
+    if (entry.bmp.IsOk() && entry.width == width && entry.stamp == stamp && entry.style == style)
+        return;
+    const int row_h = 18;
+    entry.bmp = wxBitmap(width, row_h);
+    if (!entry.bmp.IsOk()) return;
+    wxMemoryDC mdc(entry.bmp);
+    mdc.SetFont(GetFont());
+    mdc.SetBackground(wxBrush(col.bg));
+    mdc.Clear();
+    if (lpb > 0 && row % (int)lpb == 0) {
+        mdc.SetPen(wxPen(col.lpb));
+        mdc.DrawLine(0, 0, width, 0);
+    }
+    mdc.SetTextForeground(col.text);
+    mdc.DrawText(tracker_row3(row), 2, 2);
+    int track_count = (int)m_engine.track_count();
+    for (int t = 0; t < track_count; ++t)
+        draw_track_cells(mdc, t, row, 0, false, col);
+    entry.stamp = stamp;
+    entry.style = style;
+    entry.width = width;
+}
+
 void TrackerView::draw(wxDC& dc) {
     if (!m_pattern) return;
 
     int track_count = (int)m_engine.track_count();
-    if (track_count != (int)m_track_ui.size()) {
+    if (track_count != (int)m_track_ui.size())
         recalculate_size();
-    }
 
-    // Cache all theme colours once to avoid repeated wxColour construction inside loops.
-    wxColour bg_col          = ThemeManager::toWxColour(m_engine.m_tracker_bg);
-    wxColour fg_col          = ThemeManager::toWxColour(m_engine.m_fg_color);
-    wxColour header_bg_col   = ThemeManager::toWxColour(m_engine.m_bg_color);
-    wxColour row_hl_col      = ThemeManager::toWxColour(m_engine.m_tracker_row_highlight);
-    wxColour lpb_hl_col      = ThemeManager::toWxColour(m_engine.m_tracker_lpb_highlight);
-    wxColour text_col        = ThemeManager::toWxColour(m_engine.m_tracker_text);
-    wxColour note_col        = ThemeManager::toWxColour(m_engine.m_tracker_note);
-    wxColour sample_col      = ThemeManager::toWxColour(m_engine.m_tracker_sample);
-    wxColour cursor_col      = ThemeManager::toWxColour(m_engine.m_tracker_cursor);
-    wxColour btn_col         = ThemeManager::toWxColour(m_engine.m_button_color);
-    wxColour sample_col_dim  = wxColour(sample_col.Red() / 3, sample_col.Green() / 3, sample_col.Blue() / 3);
-    wxColour cursor_row_dim  = wxColour(row_hl_col.Red() / 2, row_hl_col.Green() / 2, row_hl_col.Blue() / 2);
-    wxColour cursor_text_col = bg_col;
-    wxColour effect_col      = ThemeManager::toWxColour(m_engine.m_tracker_effect);
-    wxColour volume_col      = ThemeManager::toWxColour(m_engine.m_tracker_volume);
+    GridColours col;
+    col.bg = ThemeManager::toWxColour(m_engine.m_tracker_bg);
+    col.text = ThemeManager::toWxColour(m_engine.m_tracker_text);
+    col.note = ThemeManager::toWxColour(m_engine.m_tracker_note);
+    col.sample = ThemeManager::toWxColour(m_engine.m_tracker_sample);
+    col.sample_dim = wxColour(col.sample.Red() / 3, col.sample.Green() / 3, col.sample.Blue() / 3);
+    col.effect = ThemeManager::toWxColour(m_engine.m_tracker_effect);
+    col.volume = ThemeManager::toWxColour(m_engine.m_tracker_volume);
+    col.lpb = ThemeManager::toWxColour(m_engine.m_tracker_lpb_highlight);
+    col.cursor = ThemeManager::toWxColour(m_engine.m_tracker_cursor);
 
-    dc.SetBrush(wxBrush(bg_col));
-    dc.SetPen(wxPen(bg_col));
+    dc.SetFont(GetFont());
+    dc.SetBrush(wxBrush(col.bg));
+    dc.SetPen(wxPen(col.bg));
     wxSize client_size = GetClientSize();
     wxRect clip_box;
-    if (!dc.GetClippingBox(clip_box) || clip_box.IsEmpty()) {
+    if (!dc.GetClippingBox(clip_box) || clip_box.IsEmpty())
         clip_box = wxRect(0, 0, client_size.x, client_size.y);
-    }
     dc.DrawRectangle(clip_box.x, clip_box.y, clip_box.width, clip_box.height);
 
-    if (m_engine.track_count() == 0) {
+    if (track_count == 0) {
         dc.SetTextForeground(*wxWHITE);
         dc.DrawText("No tracks available. Add tracks in Project tab.", 50, 50);
         return;
     }
 
-    int char_w = 8;
-    int row_h = 18;
+    const int row_h = 18;
     int row_count = (int)m_pattern->row_count();
     int playing_row = (int)m_engine.current_row();
     bool is_playing = m_engine.transport_state() != TransportState::Stopped;
     int center_row = is_playing ? playing_row : m_cursor_row;
     int center_y = get_center_row_y();
+    uint32_t lpb = m_engine.lpb();
+    uint32_t style = compute_style_stamp(col, lpb);
 
-    // 1. Row Highlights
-    for (int r = 0; r < row_count; ++r) {
-        int ry = center_y + (r - center_row) * row_h;
-        if (ry < 20) continue;
-        if (ry > client_size.y + 100) break;
-
-        // LPB highlight
-        uint32_t lpb = m_engine.lpb();
-        if (lpb > 0 && r % lpb == 0) {
-            dc.SetPen(wxPen(lpb_hl_col));
-            dc.DrawLine(0, ry, 20000, ry);
-        }
-
-        // Playing row highlight
-        if (is_playing && r == playing_row) {
-            dc.SetBrush(wxBrush(row_hl_col));
-            dc.SetPen(wxPen(row_hl_col));
-            dc.DrawRectangle(0, ry, 20000, row_h);
-        }
-
-        // Cursor row highlight
-        if (r == m_cursor_row) {
-            const wxColour& cur_row_col = HasFocus() ? row_hl_col : cursor_row_dim;
-            dc.SetBrush(wxBrush(cur_row_col));
-            dc.SetPen(wxPen(cur_row_col));
-            dc.DrawRectangle(40, ry, 20000, row_h);
-        }
-
-        // Row number
-        dc.SetTextForeground(text_col);
-        dc.DrawText(wxString::Format("%03d", r), 2, ry + 2);
+    int content_w = 40;
+    if (!m_track_ui.empty()) {
+        const auto& last = m_track_ui.back();
+        content_w = last.x + last.w + 8;
     }
+    bool use_cache = content_w > 0 && content_w <= 8192;
+    int span_w = std::max(content_w, client_size.x);
 
-    // 2. Tracks
-    for (int t = 0; t < track_count; ++t) {
-        if (t >= (int)m_track_ui.size()) break;
+    wxColour header_bg = ThemeManager::toWxColour(m_engine.m_bg_color);
+    wxColour fg = ThemeManager::toWxColour(m_engine.m_fg_color);
+    wxColour btn = ThemeManager::toWxColour(m_engine.m_button_color);
+    wxColour row_hl = ThemeManager::toWxColour(m_engine.m_tracker_row_highlight);
+    wxColour cursor_row_dim(row_hl.Red() / 2, row_hl.Green() / 2, row_hl.Blue() / 2);
+
+    for (int t = 0; t < track_count && t < (int)m_track_ui.size(); ++t) {
         const auto& tui = m_track_ui[t];
         auto& track_obj = m_engine.track(t);
-        bool is_sampler = (track_obj.instrument() && track_obj.instrument()->type() == InstrumentType::Sampler);
-
-        // Header
-        dc.SetBrush(wxBrush(header_bg_col));
-        dc.SetPen(wxPen(fg_col));
+        dc.SetBrush(wxBrush(header_bg));
+        dc.SetPen(wxPen(fg));
         dc.DrawRectangle(tui.x, 0, tui.w, 20);
-        dc.SetTextForeground(fg_col);
+        dc.SetTextForeground(fg);
         dc.DrawText(track_obj.name().substr(0, 10), tui.x + 5, 2);
-
-        // +/- Buttons
-        dc.SetBrush(wxBrush(btn_col));
+        dc.SetBrush(wxBrush(btn));
         dc.DrawRectangle(tui.btn_minus_x, 2, 18, 16);
         dc.DrawRectangle(tui.btn_plus_x, 2, 18, 16);
         dc.DrawText("-", tui.btn_minus_x + 5, 2);
         dc.DrawText("+", tui.btn_plus_x + 5, 2);
+        dc.SetPen(wxPen(col.lpb));
+        dc.DrawLine(tui.x + tui.w + 5, 0, tui.x + tui.w + 5, client_size.y + 200);
+    }
 
-        int num_cols = (int)m_pattern->column_count(t);
-        for (int r = 0; r < row_count; ++r) {
-            int ry = center_y + (r - center_row) * row_h;
-            if (ry < 20) continue;
-            if (ry > client_size.y + 100) break;
+    int first = 0;
+    int last = row_count;
+    if (row_h > 0) {
+        first = center_row + (20 - center_y) / row_h - 1;
+        last = center_row + (client_size.y + row_h - center_y) / row_h + 1;
+        if (first < 0) first = 0;
+        if (last > row_count) last = row_count;
+    }
 
-            auto is_selected = [&](int field) {
-                if (!m_sel_active) return false;
-                auto start = std::make_pair(m_sel_start.track, m_sel_start.field);
-                auto end = std::make_pair(m_sel_end.track, m_sel_end.field);
-                if (start > end) std::swap(start, end);
-                auto pos = std::make_pair(t, field);
-                int min_r = std::min(m_sel_start.row, m_sel_end.row);
-                int max_r = std::max(m_sel_start.row, m_sel_end.row);
-                return r >= min_r && r <= max_r && pos >= start && pos <= end;
-            };
-
-            int col_x = tui.x + 2;
-            for (int c = 0; c < num_cols; ++c) {
-                const auto& ev = m_pattern->event(t, r, c);
-
-                // Note
-                int f_idx = c * 3 + 0;
-                int f_w = 0;
-                int f_x = get_field_x(t, f_idx, f_w);
-                if (is_selected(f_idx)) {
-                    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-                    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-                    dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
-                    dc.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT));
-                } else if (r == m_cursor_row && t == m_cursor_track && c == m_cursor_col && m_cursor_field == 0) {
-                    dc.SetBrush(wxBrush(cursor_col));
-                    dc.SetPen(wxPen(cursor_col));
-                    dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
-                    dc.SetTextForeground(bg_col);
-                } else {
-                    dc.SetTextForeground(ev.note == 255 ? lpb_hl_col : note_col);
-                }
-                if (ev.note == 255) dc.DrawText("---", f_x, ry + 2);
-                else if (ev.note == 254) dc.DrawText("OFF", f_x, ry + 2);
-                else dc.DrawText(wxString::Format("%s%d", note_names[ev.note % 12], note_display_octave(ev.note)), f_x, ry + 2);
-
-                // Sample / Text (for Voice instruments)
-                f_idx = c * 3 + 1;
-                f_x = get_field_x(t, f_idx, f_w);
-                if (is_selected(f_idx)) {
-                    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-                    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-                    dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
-                    dc.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT));
-                } else if (r == m_cursor_row && t == m_cursor_track && c == m_cursor_col && m_cursor_field == 1) {
-                    dc.SetBrush(wxBrush(cursor_col));
-                    dc.SetPen(wxPen(cursor_col));
-                    dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
-                    dc.SetTextForeground(bg_col);
-                } else {
-                    dc.SetTextForeground(is_sampler ? sample_col : sample_col_dim);
-                }
-                
-                // Check if this is a voice instrument track
-                bool is_voice = (track_obj.instrument() && track_obj.instrument()->type() == InstrumentType::Voice);
-                
-                if (is_voice) {
-                    // Display text for voice instruments using sample_idx as phrase index
-                    VoiceInstrument* voice = static_cast<VoiceInstrument*>(track_obj.instrument());
-                    std::string text = voice->get_text(ev.sample_idx);
-                    wxString display_text = wxString::FromUTF8(text);
-                    if (display_text.empty()) display_text = "...";
-                    // Truncate to fit field width
-                    while (display_text.length() > 4) {
-                        display_text = display_text.SubString(0, display_text.length() - 2);
-                    }
-                    dc.DrawText(display_text, f_x, ry + 2);
-                } else {
-                    // Display sample index for sampler instruments
-                    if (ev.sample_idx == 0) dc.DrawText("..", f_x, ry + 2);
-                    else dc.DrawText(wxString::Format("%02X", ev.sample_idx), f_x, ry + 2);
-                }
-
-                // Volume
-                f_idx = c * 3 + 2;
-                f_x = get_field_x(t, f_idx, f_w);
-                if (is_selected(f_idx)) {
-                    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-                    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-                    dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
-                    dc.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT));
-                } else if (r == m_cursor_row && t == m_cursor_track && c == m_cursor_col && m_cursor_field == 2) {
-                    dc.SetBrush(wxBrush(cursor_col));
-                    dc.SetPen(wxPen(cursor_col));
-                    dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
-                    dc.SetTextForeground(bg_col);
-                } else {
-                    dc.SetTextForeground(volume_col);
-                }
-                if (ev.volume == 255) dc.DrawText("..", f_x, ry + 2);
-                else dc.DrawText(wxString::Format("%02X", ev.volume), f_x, ry + 2);
-            }
-
-            const auto& row_ev = m_pattern->event(t, r, 0);
-            // FX1
-            int f_idx = num_cols * 3 + 0;
-            int f_w = 0;
-            int f_x = get_field_x(t, f_idx, f_w);
-            if (is_selected(f_idx)) {
-                dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-                dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-                dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
-                dc.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT));
-            } else if (r == m_cursor_row && t == m_cursor_track && m_cursor_field == 3) {
-                dc.SetBrush(wxBrush(cursor_col));
-                dc.SetPen(wxPen(cursor_col));
-                dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
-                dc.SetTextForeground(bg_col);
-            } else dc.SetTextForeground(effect_col);
-            dc.DrawText(wxString::Format("%02X", row_ev.effect1), f_x, ry + 2);
-
-            // P1
-            f_idx = num_cols * 3 + 1;
-            f_x = get_field_x(t, f_idx, f_w);
-            if (is_selected(f_idx)) {
-                dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-                dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-                dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
-                dc.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT));
-            } else if (r == m_cursor_row && t == m_cursor_track && m_cursor_field == 4) {
-                dc.SetBrush(wxBrush(cursor_col));
-                dc.SetPen(wxPen(cursor_col));
-                dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
-                dc.SetTextForeground(bg_col);
-            } else dc.SetTextForeground(effect_col);
-            dc.DrawText(wxString::Format("%02X", row_ev.param1), f_x, ry + 2);
-
-            // FX2
-            f_idx = num_cols * 3 + 2;
-            f_x = get_field_x(t, f_idx, f_w);
-            if (is_selected(f_idx)) {
-                dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-                dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-                dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
-                dc.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT));
-            } else if (r == m_cursor_row && t == m_cursor_track && m_cursor_field == 5) {
-                dc.SetBrush(wxBrush(cursor_col));
-                dc.SetPen(wxPen(cursor_col));
-                dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
-                dc.SetTextForeground(bg_col);
-            } else dc.SetTextForeground(effect_col);
-            dc.DrawText(wxString::Format("%02X", row_ev.effect2), f_x, ry + 2);
-
-            // P2
-            f_idx = num_cols * 3 + 3;
-            f_x = get_field_x(t, f_idx, f_w);
-            if (is_selected(f_idx)) {
-                dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-                dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-                dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
-                dc.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT));
-            } else if (r == m_cursor_row && t == m_cursor_track && m_cursor_field == 6) {
-                dc.SetBrush(wxBrush(cursor_col));
-                dc.SetPen(wxPen(cursor_col));
-                dc.DrawRectangle(f_x - 1, ry, f_w + 2, row_h);
-                dc.SetTextForeground(bg_col);
-            } else dc.SetTextForeground(effect_col);
-            dc.DrawText(wxString::Format("%02X", row_ev.param2), f_x, ry + 2);
+    for (int r = first; r < last; ++r) {
+        int ry = center_y + (r - center_row) * row_h;
+        if (ry + row_h <= 20) continue;
+        if (ry > client_size.y) break;
+        bool hot = row_is_hot(r, playing_row, is_playing);
+        if (use_cache)
+            ensure_row_cache(r, content_w, col, style, lpb);
+        if (use_cache && !hot && (size_t)r < m_row_cache.size() && m_row_cache[(size_t)r].bmp.IsOk()) {
+            dc.DrawBitmap(m_row_cache[(size_t)r].bmp, 0, ry, false);
+            continue;
         }
-        dc.SetPen(wxPen(lpb_hl_col));
-        dc.DrawLine(tui.x + tui.w + 5, 0, tui.x + tui.w + 5, 20000);
+
+        if (is_playing && r == playing_row) {
+            dc.SetBrush(wxBrush(row_hl));
+            dc.SetPen(wxPen(row_hl));
+            dc.DrawRectangle(0, ry, span_w, row_h);
+        }
+        if (r == m_cursor_row) {
+            const wxColour& cur_row_col = HasFocus() ? row_hl : cursor_row_dim;
+            dc.SetBrush(wxBrush(cur_row_col));
+            dc.SetPen(wxPen(cur_row_col));
+            dc.DrawRectangle(40, ry, span_w, row_h);
+        }
+        if (lpb > 0 && r % (int)lpb == 0) {
+            dc.SetPen(wxPen(col.lpb));
+            dc.DrawLine(0, ry, span_w, ry);
+        }
+        dc.SetTextForeground(col.text);
+        dc.DrawText(tracker_row3(r), 2, ry + 2);
+        for (int t = 0; t < track_count; ++t) {
+            draw_track_cells(dc, t, r, ry, false, col);
+            draw_track_cells(dc, t, r, ry, true, col);
+        }
+    }
+
+    for (int r = 0; r < (int)m_row_cache.size(); ++r) {
+        if (std::abs(r - center_row) > 80 && m_row_cache[(size_t)r].bmp.IsOk())
+            m_row_cache[(size_t)r] = RowCache();
     }
 }
 
@@ -763,6 +822,7 @@ void TrackerView::set_current_row(int row) {
 
 void TrackerView::set_pattern(Pattern& pattern) {
     m_pattern = &pattern;
+    clear_row_cache();
     recalculate_size();
     Refresh();
 }

@@ -18,7 +18,9 @@
 
 #include <wx/app.h>
 #include <wx/artprov.h>
+#include <wx/dcbuffer.h>
 #include <wx/dcclient.h>
+#include <wx/dcmemory.h>
 #include <wx/menu.h>
 #include <wx/msgdlg.h>
 #include "wx_tracks_panel.h"
@@ -308,16 +310,68 @@ bool TracksView::can_convert_selected_track() const {
 }
 
 void TracksView::OnPaint(wxPaintEvent& event) {
-    wxPaintDC dc(this);
-    PrepareDC(dc);
-    draw(dc);
+    wxAutoBufferedPaintDC pdc(this);
+    wxSize cs = GetClientSize();
+    if (cs.x < 1 || cs.y < 1) return;
+    int ox = 0, oy = 0;
+    CalcUnscrolledPosition(0, 0, &ox, &oy);
+
+    CacheKey key;
+    key.ox = ox;
+    key.oy = oy;
+    key.cw = cs.x;
+    key.ch = cs.y;
+    key.zoom_milli = (int)(m_zoom * 1000.0);
+    key.gen = m_engine.undo_stack().generation();
+    key.tracks = m_engine.track_count();
+    key.order = m_engine.order_size();
+    key.recording = m_engine.m_record_enabled.load() ? 1 : 0;
+    key.theme = m_engine.m_tracker_bg ^ (m_engine.m_tracker_note << 1)
+        ^ (m_engine.m_tracker_text << 2) ^ (m_engine.m_tracker_lpb_highlight << 3)
+        ^ m_engine.m_bg_color ^ (m_engine.m_fg_color << 4);
+    for (size_t t = 0; t < m_engine.track_count() && t < 64; ++t) {
+        if (m_engine.track(t).is_minimized()) key.minimized |= (1ull << t);
+        auto* inst = m_engine.track(t).instrument();
+        if (!inst || inst->type() != InstrumentType::Sampler) continue;
+        auto* sampler = static_cast<SampleInstrument*>(inst);
+        for (size_t i = 0; i < sampler->sample_count(); ++i) {
+            const auto& sample = sampler->get_sample(i);
+            if (!sample.data || sample.data->left.empty()) continue;
+            const auto& left = sample.data->left;
+            key.sample_probe ^= (uint32_t)left.size() * (uint32_t)(i + 1);
+            key.sample_probe ^= (uint32_t)(left.front() * 1.0e6f);
+            key.sample_probe ^= (uint32_t)(left[left.size() / 2] * 1.0e6f);
+        }
+    }
+
+    // Recording writes notes outside the undo stack, so the picture cannot
+    // be reused until record stops.
+    bool rebuild = key.recording || !m_cache_valid || !m_static_cache.IsOk() || !key.same(m_cache_key);
+    if (rebuild) {
+        m_static_cache = wxBitmap(cs.x, cs.y);
+        wxMemoryDC mdc(m_static_cache);
+        mdc.SetDeviceOrigin(-ox, -oy);
+        mdc.SetClippingRegion(ox, oy, cs.x, cs.y);
+        draw(mdc);
+        m_cache_key = key;
+        m_cache_valid = !key.recording;
+    }
+    pdc.DrawBitmap(m_static_cache, 0, 0, false);
+    pdc.SetDeviceOrigin(-ox, -oy);
+    draw_overlays(pdc);
 }
 
 void TracksView::draw(wxDC& dc) {
     dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_bg)));
     dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_bg)));
     wxSize virtual_size = GetVirtualSize();
-    dc.DrawRectangle(0, 0, virtual_size.GetWidth(), virtual_size.GetHeight());
+    int view_x = 0, view_y = 0;
+    CalcUnscrolledPosition(0, 0, &view_x, &view_y);
+    wxSize client = GetClientSize();
+    int view_w = std::max(1, client.GetWidth());
+    int view_h = std::max(1, client.GetHeight());
+    int view_x2 = view_x + view_w;
+    dc.DrawRectangle(view_x, view_y, view_w, view_h);
 
     int track_h = 80;
     int header_w = 120;
@@ -328,7 +382,8 @@ void TracksView::draw(wxDC& dc) {
     // Draw Time Scale (Header)
     dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_lpb_highlight)));
     dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_lpb_highlight)));
-    dc.DrawRectangle(header_w, 0, virtual_size.GetWidth() - header_w, 20);
+    int scale_x = std::max(header_w, view_x);
+    dc.DrawRectangle(scale_x, 0, std::max(1, view_x2 - scale_x), 20);
 
     dc.SetTextForeground(ThemeManager::toWxColour(m_engine.m_tracker_text));
     wxFont header_font(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
@@ -458,10 +513,15 @@ void TracksView::draw(wxDC& dc) {
 
                 size_t num_cols = pat.column_count(t);
                 for (int r = 0; r < pat_rows; ++r) {
+                    int nx_row = px + tick_to_x(r);
+                    if (nx_row > view_x2 + 4) break;
                     for (size_t c = 0; c < num_cols; ++c) {
                         const auto& ev = pat.event(t, r, c);
                         if (ev.note != 255) {
-                            int nx = px + tick_to_x(r);
+                            int nx = nx_row;
+                            int max_w = tick_to_x(std::max(1, pat_rows - r));
+                            if (max_w < 2) max_w = 2;
+                            if (nx + max_w < view_x) continue;
 
                             if (ev.note == 254) { // Note Off
                                 dc.SetPen(wxPen(wxColour(255, 100, 100)));
@@ -544,6 +604,23 @@ void TracksView::draw(wxDC& dc) {
         // Horizontal line between tracks
         dc.SetPen(wxPen(ThemeManager::toWxColour(m_engine.m_tracker_lpb_highlight)));
         dc.DrawLine(header_w, ty + track_h_actual - 1, header_w + tick_to_x(total_rows), ty + track_h_actual - 1);
+    }
+
+}
+
+void TracksView::draw_overlays(wxDC& dc) {
+    wxSize virtual_size = GetVirtualSize();
+    int header_w = 120;
+    int num_tracks = (int)m_engine.track_count();
+    const size_t order_n = m_engine.order_size();
+    int play_tick = 0;
+    size_t current_pos = m_engine.current_order_pos();
+    for (size_t i = 0; i < order_n; ++i) {
+        size_t pat_idx = m_engine.order_entry(i);
+        if (pat_idx == Engine::order_npos || pat_idx >= m_engine.pattern_count()) continue;
+        int pat_rows = (int)m_engine.pattern(pat_idx).row_count();
+        if (i < current_pos) play_tick += pat_rows;
+        else if (i == current_pos) play_tick += (int)m_engine.current_row();
     }
 
     // Current Playback Marker
@@ -686,6 +763,7 @@ void TracksView::view_selection() {
 }
 
 void TracksView::update_view() {
+    m_cache_valid = false;
     int num_tracks = (int)m_engine.track_count();
     int total_h = 30;
     for (int t = 0; t < num_tracks; ++t) {

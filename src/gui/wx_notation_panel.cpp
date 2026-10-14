@@ -18,7 +18,9 @@
 
 #include <wx/app.h>
 #include <wx/artprov.h>
+#include <wx/dcbuffer.h>
 #include <wx/dcclient.h>
+#include <wx/dcmemory.h>
 #include <wx/msgdlg.h>
 #include <wx/utils.h>
 #include "wx_notation_panel.h"
@@ -102,7 +104,14 @@ void NotationPanel::update() {
         m_last_track_count = m_engine.track_count();
         m_notation_view->update_view();
     }
-    m_notation_view->Refresh();
+    int row = (int)m_engine.current_row();
+    size_t gen = m_engine.undo_stack().generation();
+    bool playing = m_engine.transport_state() != TransportState::Stopped;
+    if ((playing && row != m_last_row) || gen != m_last_gen) {
+        m_last_row = row;
+        m_last_gen = gen;
+        m_notation_view->Refresh(false);
+    }
 }
 
 void NotationPanel::on_zoom_in(wxCommandEvent& event) { m_notation_view->zoom_in(); }
@@ -188,6 +197,7 @@ void NotationView::view_selection() {
 }
 
 void NotationView::update_view() {
+    m_cache_valid = false;
     int total_w = N_HEADER_W + N_CLEF_W + tick_to_x(get_total_ticks()) + 60;
     int total_h = 30 + (int)m_engine.track_count() * N_TRACK_H + 50;
     SetVirtualSize(total_w, total_h);
@@ -253,9 +263,39 @@ int NotationView::tick_to_x(int tick) { return (int)(tick * m_zoom); }
 int NotationView::x_to_tick(int x) { return (m_zoom > 0) ? (int)(x / m_zoom) : 0; }
 
 void NotationView::OnPaint(wxPaintEvent& event) {
-    wxPaintDC dc(this);
-    PrepareDC(dc);
-    draw(dc);
+    wxAutoBufferedPaintDC pdc(this);
+    wxSize cs = GetClientSize();
+    if (cs.x < 1 || cs.y < 1) return;
+    int ox = 0, oy = 0;
+    CalcUnscrolledPosition(0, 0, &ox, &oy);
+
+    CacheKey key;
+    key.ox = ox;
+    key.oy = oy;
+    key.cw = cs.x;
+    key.ch = cs.y;
+    key.zoom_milli = (int)(m_zoom * 1000.0);
+    key.gen = m_engine.undo_stack().generation();
+    key.tracks = m_engine.track_count();
+    key.order = m_engine.order_size();
+    key.recording = m_engine.m_record_enabled.load() ? 1 : 0;
+    key.theme = m_engine.m_tracker_bg ^ (m_engine.m_tracker_note << 1)
+        ^ (m_engine.m_tracker_text << 2) ^ (m_engine.m_tracker_cursor << 3)
+        ^ m_engine.m_bg_color ^ (m_engine.m_fg_color << 4);
+
+    bool rebuild = key.recording || !m_cache_valid || !m_static_cache.IsOk() || !key.same(m_cache_key);
+    if (rebuild) {
+        m_static_cache = wxBitmap(cs.x, cs.y);
+        wxMemoryDC mdc(m_static_cache);
+        mdc.SetDeviceOrigin(-ox, -oy);
+        mdc.SetClippingRegion(ox, oy, cs.x, cs.y);
+        draw(mdc);
+        m_cache_key = key;
+        m_cache_valid = !key.recording;
+    }
+    pdc.DrawBitmap(m_static_cache, 0, 0, false);
+    pdc.SetDeviceOrigin(-ox, -oy);
+    draw_overlays(pdc);
 }
 
 // ---------------------------------------------------------------------------
@@ -529,9 +569,15 @@ void NotationView::draw_note(wxDC& dc, int nx, int track_y, int note, int staff_
 
 void NotationView::draw(wxDC& dc) {
     wxSize vsz = GetVirtualSize();
+    int view_x = 0, view_y = 0;
+    CalcUnscrolledPosition(0, 0, &view_x, &view_y);
+    wxSize client = GetClientSize();
+    int view_w = std::max(1, client.GetWidth());
+    int view_h = std::max(1, client.GetHeight());
+    int view_x2 = view_x + view_w;
     dc.SetBrush(wxBrush(ThemeManager::toWxColour(m_engine.m_tracker_bg)));
     dc.SetPen(*wxTRANSPARENT_PEN);
-    dc.DrawRectangle(0, 0, vsz.GetWidth(), vsz.GetHeight());
+    dc.DrawRectangle(view_x, view_y, view_w, view_h);
 
     int num_tracks = (int)m_engine.track_count();
     const size_t order_n = m_engine.order_size();
@@ -617,10 +663,12 @@ void NotationView::draw(wxDC& dc) {
 
             size_t num_cols = pat.column_count(t);
             for (int r = 0; r < pat_rows; ++r) {
+                int nx = pat_px + tick_to_x(r);
+                if (nx > view_x2 + 24) break;
+                if (nx < view_x - 40) continue;
                 for (size_t c = 0; c < num_cols; ++c) {
                     const auto& ev = pat.event(t, r, c);
                     if (ev.note < 128) {
-                        int nx = pat_px + tick_to_x(r);
                         draw_note(dc, nx, ty, ev.note, staff_type);
                     }
                 }
@@ -633,6 +681,10 @@ void NotationView::draw(wxDC& dc) {
         dc.DrawLine(0, ty + N_TRACK_H - 1, vsz.GetWidth(), ty + N_TRACK_H - 1);
     }
 
+}
+
+void NotationView::draw_overlays(wxDC& dc) {
+    wxSize vsz = GetVirtualSize();
     // --- Playhead ---
     if (m_engine.transport_state() != TransportState::Stopped) {
         int play_x = N_HEADER_W + N_CLEF_W + tick_to_x((int)m_engine.m_current_row);

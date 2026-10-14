@@ -452,6 +452,19 @@ void TrackerPanel::update() {
         if (tracker_changed && !order_changed && !row_changed) {
             m_tracker->Refresh(false);
         }
+        // Follow used to get a free repaint from the voice-field Layout()
+        // every tick. Without that, refresh when the play row actually moves
+        // so the highlight scrolls even if the cursor did not.
+        if (is_playing) {
+            int play_row = (int)m_engine.current_row();
+            if (play_row != m_last_play_row) {
+                m_last_play_row = play_row;
+                if (!row_changed)
+                    m_tracker->Refresh(false);
+            }
+        } else {
+            m_last_play_row = -1;
+        }
         if (tracker_changed || is_playing) {
             update_voice_text_field();
         }
@@ -477,42 +490,49 @@ void TrackerPanel::handle_note_action(Action action) {
 
 void TrackerPanel::update_voice_text_field() {
     if (!m_tracker || !m_voice_text_field) return;
-    
+
+    auto hide_voice = [this]() {
+        if (!m_voice_widgets_shown) return;
+        m_voice_text_field->Hide();
+        m_voice_copy_btn->Hide();
+        m_voice_paste_btn->Hide();
+        m_voice_search_btn->Hide();
+        m_last_voice_idx = 255;
+        m_last_voice_text.clear();
+        m_voice_widgets_shown = false;
+        m_voice_text_field->GetParent()->Layout();
+    };
+
     size_t current_track = m_tracker->get_cursor_track();
     int cursor_row = m_tracker->get_cursor_row();
     int cursor_col = m_tracker->get_cursor_col();
-    
-    // Check if current track uses Voice instrument
+
     if (current_track < m_engine.track_count()) {
         auto* inst = m_engine.track(current_track).instrument();
         if (inst && inst->type() == InstrumentType::Voice) {
             VoiceInstrument* voice = static_cast<VoiceInstrument*>(inst);
-            
-            // Get phrase index from current tracker event's sample_idx
             const auto& ev = m_engine.pattern().event(current_track, cursor_row, cursor_col);
             uint8_t phrase_idx = ev.sample_idx;
-            
-            std::string text = voice->get_text(phrase_idx);
-            if (m_voice_text_field->GetValue() != wxString::FromUTF8(text)) {
-                m_voice_text_field->SetValue(wxString::FromUTF8(text));
+            wxString text = wxString::FromUTF8(voice->get_text(phrase_idx));
+            if (text != m_last_voice_text) {
+                if (m_voice_text_field->GetValue() != text)
+                    m_voice_text_field->SetValue(text);
+                m_last_voice_text = text;
             }
             m_last_voice_idx = phrase_idx;
-            m_voice_text_field->Show();
-            m_voice_copy_btn->Show();
-            m_voice_paste_btn->Show();
-            m_voice_search_btn->Show();
-            m_voice_text_field->GetParent()->Layout();
+            if (!m_voice_widgets_shown) {
+                m_voice_text_field->Show();
+                m_voice_copy_btn->Show();
+                m_voice_paste_btn->Show();
+                m_voice_search_btn->Show();
+                m_voice_widgets_shown = true;
+                m_voice_text_field->GetParent()->Layout();
+            }
             return;
         }
     }
-    
-    // Hide field and buttons if not a Voice track
-    m_voice_text_field->Hide();
-    m_voice_copy_btn->Hide();
-    m_voice_paste_btn->Hide();
-    m_voice_search_btn->Hide();
-    m_last_voice_idx = 255;
-    m_voice_text_field->GetParent()->Layout();
+
+    hide_voice();
 }
 
 } // namespace disgrace_ns

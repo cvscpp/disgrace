@@ -2,6 +2,7 @@
 
 #include <wx/wxprec.h>
 #include <wx/panel.h>
+#include <wx/bitmap.h>
 #include <memory>
 
 #include "../audio/sample_data.h"
@@ -26,6 +27,7 @@ public:
     void view_selection();
 
     void OnPaint(wxPaintEvent& event);
+    void paint_wave(wxDC& dc);
     void OnMouseDown(wxMouseEvent& event);
     void OnMouseDrag(wxMouseEvent& event);
     void OnMouseUp(wxMouseEvent& event);
@@ -37,8 +39,10 @@ public:
     uint8_t selection_channels() const { return m_sel_channels; }
     void set_channel_mode(ChannelMode mode) { m_mode = mode; Refresh(false); }
     void set_playback_pos(int64_t pos) {
-        m_playback_pos = pos < 0 ? -1 : pos;
-        Refresh(false);
+        int64_t next = pos < 0 ? -1 : pos;
+        if (next == m_playback_pos) return;
+        m_playback_pos = next;
+        if (IsShownOnScreen()) Refresh(false);
     }
 
 private:
@@ -69,6 +73,23 @@ private:
     ChannelMode m_mode = ChannelMode::Both;
 
     int64_t m_playback_pos = -1;
+    bool m_painting_cache = false;
+    wxBitmap m_wave_cache;
+    // Identity of the cached wave (everything except the playback cursor).
+    int m_cache_w = 0;
+    int m_cache_h = 0;
+    int m_cache_mode = -1;
+    unsigned m_cache_color = 0;
+    unsigned m_cache_bg = 0;
+    double m_cache_zoom = -1;
+    size_t m_cache_offset = (size_t)-1;
+    size_t m_cache_length = (size_t)-1;
+    size_t m_cache_visible = (size_t)-1;
+    size_t m_cache_sel_s = (size_t)-1;
+    size_t m_cache_sel_e = (size_t)-1;
+    uint8_t m_cache_sel_ch = 0;
+    const void* m_cache_sample = nullptr;
+    float m_cache_probe = 0;
 
     enum class DragMode { None, NewSel, DragStart, DragEnd };
     DragMode m_drag_mode = DragMode::None;

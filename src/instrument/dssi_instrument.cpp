@@ -416,10 +416,35 @@ void DSSIInstrument::process(float* l, float* r, size_t nframes)
 
     if (!is_alive()) {
         m_pending_midi.clear();
+        if (m_request_pending && m_shm_ptr)
+            sem_trywait(&shm()->sem_done);
+        m_request_pending = false;
         return;
     }
 
     DSSIBridgeShm* s = shm();
+
+    // One-block latency. Never block the JACK thread, and never post a
+    // second request while the sandbox is still rendering the previous one.
+    if (m_request_pending) {
+        if (sem_trywait(&s->sem_done) != 0)
+            return;
+        uint32_t frames = m_pending_frames;
+        if (frames > nframes) frames = (uint32_t)nframes;
+        if (m_volume == 1.0f) {
+            memcpy(l, s->audio_l, frames * sizeof(float));
+            memcpy(r, s->audio_r, frames * sizeof(float));
+        } else {
+            const float vol = m_volume;
+            const float* sl = s->audio_l;
+            const float* sr = s->audio_r;
+            for (uint32_t i = 0; i < frames; ++i) {
+                l[i] = sl[i] * vol;
+                r[i] = sr[i] * vol;
+            }
+        }
+        m_request_pending = false;
+    }
 
     s->nframes    = (uint32_t)nframes;
     s->volume     = m_volume;
@@ -436,33 +461,9 @@ void DSSIInstrument::process(float* l, float* r, size_t nframes)
     m_pending_midi.clear();
     s->shutdown = 0;
 
+    m_pending_frames = (uint32_t)nframes;
+    m_request_pending = true;
     sem_post(&s->sem_req);
-
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_nsec += 5000000L; // 5 ms deadline: dropout instead of a 10 ms RT stall
-    if (ts.tv_nsec >= 1000000000L) { ts.tv_sec++; ts.tv_nsec -= 1000000000L; }
-
-    if (sem_timedwait(&s->sem_done, &ts) == -1) {
-        if (!is_alive())
-            std::cerr << "[DSSIInstrument] sandbox died — silenced\n";
-        return;
-    }
-
-    // Fused copy+gain: one pass instead of memcpy + a second gain loop.
-    // Skip the multiply entirely at unity gain.
-    if (m_volume == 1.0f) {
-        memcpy(l, s->audio_l, nframes * sizeof(float));
-        memcpy(r, s->audio_r, nframes * sizeof(float));
-    } else {
-        const float vol = m_volume;
-        const float* sl = s->audio_l;
-        const float* sr = s->audio_r;
-        for (size_t i = 0; i < nframes; ++i) {
-            l[i] = sl[i] * vol;
-            r[i] = sr[i] * vol;
-        }
-    }
 }
 
 } // namespace disgrace_ns

@@ -23,6 +23,8 @@
 #include <wx/button.h>
 #include <wx/sizer.h>
 #include <wx/dc.h>
+#include <wx/bitmap.h>
+#include <cstdint>
 #include "../instrument/instrument.h"
 
 namespace disgrace_ns {
@@ -96,6 +98,7 @@ public:
     void OnSize(wxSizeEvent& event);
     void OnContextMenu(wxContextMenuEvent& event);
     void draw(wxDC& dc);
+    void draw_overlays(wxDC& dc);
     void do_cut();
     void do_copy();
     void do_paste();
@@ -124,6 +127,27 @@ private:
     int m_sel_end_tick = -1;
     int m_selected_track = -1;
     bool m_is_selecting = false;
+
+    struct CacheKey {
+        int ox = 0, oy = 0, cw = 0, ch = 0;
+        int zoom_milli = 0;
+        size_t gen = 0;
+        size_t tracks = 0;
+        size_t order = 0;
+        uint32_t theme = 0;
+        uint32_t sample_probe = 0;
+        uint64_t minimized = 0;
+        uint8_t recording = 0;
+        bool same(const CacheKey& o) const {
+            return ox == o.ox && oy == o.oy && cw == o.cw && ch == o.ch
+                && zoom_milli == o.zoom_milli && gen == o.gen && tracks == o.tracks
+                && order == o.order && theme == o.theme && minimized == o.minimized
+                && recording == o.recording && sample_probe == o.sample_probe;
+        }
+    };
+    wxBitmap m_static_cache;
+    CacheKey m_cache_key;
+    bool m_cache_valid = false;
 
     wxDECLARE_EVENT_TABLE();
 };

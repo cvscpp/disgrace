@@ -229,24 +229,20 @@ int WxMainWindow::get_cursor_row() const {
 
 void WxMainWindow::OnTimer(wxTimerEvent& event) {
     if (m_transport) m_transport->update();
-    int current_tab = m_tabs ? m_tabs->GetSelection() : -1;
-    // Mixer meters drive one repaint per VU strip: throttle to ~30 Hz and
-    // only when the mixer tab is actually visible (tab 5). The transport
-    // bar has its own VU pair in the always-visible header.
+    // Hidden notebook pages must not paint. IsShownOnScreen() is also true
+    // for a panel that has been reparented into a detached frame.
+    auto shown = [](wxWindow* w) { return w && w->IsShownOnScreen(); };
+    // Mixer meters are one window each. ~20 Hz is enough for a meter and
+    // keeps a 16-track desk from flooding the GUI thread.
     static int meter_div = 0;
-    if (m_mixer_panel && current_tab == 5 && ((meter_div++ & 1) == 0))
+    if (shown(m_mixer_panel) && ((++meter_div % 3) == 0))
         m_mixer_panel->update_meters();
-    if (m_tracker_panel && m_engine.transport_state() != TransportState::Stopped) {
+    if (shown(m_tracker_panel) && m_engine.transport_state() != TransportState::Stopped)
         m_tracker_panel->update();
-    }
-
-    if (m_tracks_panel && (m_engine.transport_state() != TransportState::Stopped || current_tab == 2)) {
+    if (shown(m_tracks_panel))
         m_tracks_panel->update();
-    }
-
-    if (m_notation_panel && (m_engine.transport_state() != TransportState::Stopped || current_tab == 3)) {
+    if (shown(m_notation_panel))
         m_notation_panel->update();
-    }
 }
 
 void WxMainWindow::OnClose(wxCloseEvent& event) {

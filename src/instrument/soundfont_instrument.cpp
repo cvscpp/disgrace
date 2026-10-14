@@ -23,7 +23,10 @@ namespace disgrace_ns
 {
 
     namespace {
-        constexpr int kFluidSynthPolyphony = 512;
+        // 512 voices makes fluid_synth_process scan a huge voice list on every
+        // block even when only a few notes are held. 64 is enough for a tracker
+        // column and keeps the audio callback from starving the GUI.
+        constexpr int kFluidSynthPolyphony = 64;
     }
 
     SoundFontInstrument::SoundFontInstrument(double sample_rate)

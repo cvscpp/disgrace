@@ -22,6 +22,8 @@
 #include <wx/scrolwin.h>
 #include <wx/button.h>
 #include <wx/sizer.h>
+#include <wx/bitmap.h>
+#include <cstdint>
 
 namespace disgrace_ns {
 
@@ -42,6 +44,7 @@ public:
     void OnMouseWheel(wxMouseEvent& event);
     void OnSize(wxSizeEvent& event);
     void draw(wxDC& dc);
+    void draw_overlays(wxDC& dc);
 
 private:
     void draw_staff(wxDC& dc, int tx, int ty, int tw, int type);
@@ -66,6 +69,24 @@ private:
 
     std::vector<wxButton*> m_preview_buttons;
 
+    struct CacheKey {
+        int ox = 0, oy = 0, cw = 0, ch = 0;
+        int zoom_milli = 0;
+        size_t gen = 0;
+        size_t tracks = 0;
+        size_t order = 0;
+        uint32_t theme = 0;
+        uint8_t recording = 0;
+        bool same(const CacheKey& o) const {
+            return ox == o.ox && oy == o.oy && cw == o.cw && ch == o.ch
+                && zoom_milli == o.zoom_milli && gen == o.gen && tracks == o.tracks
+                && order == o.order && theme == o.theme && recording == o.recording;
+        }
+    };
+    wxBitmap m_static_cache;
+    CacheKey m_cache_key;
+    bool m_cache_valid = false;
+
     wxDECLARE_EVENT_TABLE();
 };
 
@@ -88,6 +109,8 @@ private:
     Engine& m_engine;
     int m_tab_index = -1;
     size_t m_last_track_count = 0;
+    int m_last_row = -1;
+    size_t m_last_gen = (size_t)-1;
     wxButton* m_zoom_in_btn;
     wxButton* m_zoom_out_btn;
     wxButton* m_view_all_btn;

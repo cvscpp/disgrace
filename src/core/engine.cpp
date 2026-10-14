@@ -385,14 +385,18 @@ void Engine::play() {
     // edit position, not on wherever playback last stopped: without this,
     // moving to pattern m while stopped and pressing Play would resume the
     // stale order position n. Already-playing: leave everything alone.
-    if (!transport().is_playing() && !m_order.empty()) {
+    const bool was_playing = transport().is_playing();
+    if (!was_playing && !m_order.empty()) {
         size_t pos = m_edit_order_pos.load();
         if (pos >= m_order.size()) pos = m_order.size() - 1;
         m_edit_order_pos.store(pos);
         set_play_position(pos, m_current_row);
-        // set_play_position only repositions when stopped; start below.
+        // set_play_position -> stop() enqueues Stop. A bare transport().play()
+        // is undone on the next audio callback. start() enqueues Play after
+        // that Stop so the command queue ends in the playing state.
     }
-    transport().play();
+    if (!was_playing)
+        start();
 }
 
 void Engine::play_song() {
@@ -492,15 +496,42 @@ void Engine::auto_seek() {
     }
 }
 
-void Engine::preview_note(size_t t, uint8_t note, size_t column) {
-    if (t < m_tracks.size()) {
-        if (note == 254) m_tracks[t].note_off(column);
-        else m_tracks[t].note_on(note, 100, column);
+void Engine::drain_preview_events() {
+    PreviewEvent ev;
+    while (m_preview_queue.pop(ev)) {
+        if (ev.track >= m_tracks.size()) continue;
+        if (ev.note == 255 || ev.note == 254)
+            m_tracks[ev.track].note_off(ev.column);
+        else
+            m_tracks[ev.track].note_on(ev.note, 100, ev.column);
     }
 }
 
+void Engine::preview_note(size_t t, uint8_t note, size_t column) {
+    if (t >= m_tracks.size()) return;
+    if (!audio_active()) {
+        if (note == 254) m_tracks[t].note_off(column);
+        else m_tracks[t].note_on(note, 100, column);
+        return;
+    }
+    PreviewEvent ev;
+    ev.track = (uint16_t)t;
+    ev.column = (uint16_t)column;
+    ev.note = note;
+    m_preview_queue.push(ev);
+}
+
 void Engine::stop_preview(size_t t, size_t column) {
-    if (t < m_tracks.size()) m_tracks[t].note_off(column);
+    if (t >= m_tracks.size()) return;
+    if (!audio_active()) {
+        m_tracks[t].note_off(column);
+        return;
+    }
+    PreviewEvent ev;
+    ev.track = (uint16_t)t;
+    ev.column = (uint16_t)column;
+    ev.note = 255;
+    m_preview_queue.push(ev);
 }
 
 void Engine::start_sample_preview(std::shared_ptr<SampleData> data, int via_track,
@@ -663,6 +694,7 @@ void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float*
         }
     }
 
+    drain_preview_events();
     process_commands();
 
     size_t processed = 0;

@@ -1627,6 +1627,42 @@ void InstrumentPanel::update_editor() {
                 name->Bind(wxEVT_KILL_FOCUS,  [smp_name_commit](wxFocusEvent& ev){ ev.Skip(); smp_name_commit(); });
                 rs->Add(name, 1, wxALIGN_CENTER_VERTICAL | wxALL, 1);
 
+                // Root note: the sample plays at its recorded speed/pitch
+                // on this note (XRNS BaseNote); other notes resample
+                // relative to it. Spin shows the raw value, label the name.
+                const char* root_names[] = {"C-","C#","D-","D#","E-","F-","F#","G-","G#","A-","A#","B-"};
+                wxStaticText* root_lbl = new wxStaticText(row, wxID_ANY, wxEmptyString,
+                                                          wxDefaultPosition, wxSize(32, -1));
+                root_lbl->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_tracker_text));
+                auto refresh_root_lbl = [root_lbl, root_names](int v) {
+                    if (v < 0) v = 0; if (v > 119) v = 119;
+                    root_lbl->SetLabel(wxString::Format("%s%d", root_names[v % 12],
+                                                        note_display_octave((uint8_t)v)));
+                };
+                refresh_root_lbl(entry.root_note);
+                wxSpinCtrl* root = new wxSpinCtrl(row, wxID_ANY, wxEmptyString,
+                                                  wxDefaultPosition, wxSize(50, -1),
+                                                  wxSP_ARROW_KEYS, 0, 119, entry.root_note);
+                root->SetToolTip("Root note: original speed/pitch plays here");
+                root->Bind(wxEVT_SET_FOCUS, [this, select_sample_row](wxFocusEvent& ev){
+                    ev.Skip();
+                    select_sample_row();
+                });
+                auto commit_root = [this, i, root, refresh_root_lbl]() {
+                    int v = root->GetValue();
+                    if (v < 0) v = 0; if (v > 119) v = 119;
+                    if (m_selected_instrument >= 0) {
+                        static_cast<SampleInstrument*>(&m_engine.instrument(m_selected_instrument))
+                            ->set_sample_root((size_t)i, (uint8_t)v);
+                        m_engine.mark_dirty();
+                    }
+                    refresh_root_lbl(v);
+                };
+                root->Bind(wxEVT_SPINCTRL, [commit_root](wxSpinEvent&) { commit_root(); });
+                root->Bind(wxEVT_TEXT_ENTER, [commit_root](wxCommandEvent&) { commit_root(); });
+                rs->Add(root_lbl, 0, wxALIGN_CENTER_VERTICAL | wxALL, 0);
+                rs->Add(root, 0, wxALIGN_CENTER_VERTICAL | wxALL, 0);
+
                 wxButton* load = new wxButton(row, wxID_ANY, "L", wxDefaultPosition, wxSize(25, 25));
                 load->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(14, 14)));
                 load->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent& ev){ 

@@ -48,6 +48,10 @@ namespace disgrace_ns
         disgrace_ns::Voice* v = allocate_voice(column_index);
         if (v) {
             static_cast<disgrace_ns::SampleVoice*>(v)->set_sample(sample.data);
+            // Root note: triggering it reproduces the sample at its recorded
+            // speed/pitch; other notes resample relative to it.
+            static_cast<disgrace_ns::SampleVoice*>(v)->set_root(sample.root_note,
+                                                                sample.transpose_cents);
             v->start(note, velocity, freq, offset_samples);
         }
     }
@@ -96,9 +100,11 @@ namespace disgrace_ns
         }
     }
 
-    void disgrace_ns::SampleInstrument::add_sample(const std::string& name, std::shared_ptr<disgrace_ns::SampleData> data)
+    void disgrace_ns::SampleInstrument::add_sample(const std::string& name, std::shared_ptr<disgrace_ns::SampleData> data,
+                                                     uint8_t root_note, int transpose_cents)
     {
-        m_samples.push_back({name, data});
+        if (root_note > 119) root_note = 119;
+        m_samples.push_back({name, data, root_note, transpose_cents});
         
         // Ensure voices are allocated in the GUI thread during setup, not in the audio thread.
         for (size_t i = 0; i < MAX_VOICES; ++i) {
@@ -220,6 +226,13 @@ namespace disgrace_ns
     {
         if (index < m_samples.size()) {
             m_samples[index].name = name;
+        }
+    }
+
+    void disgrace_ns::SampleInstrument::set_sample_root(size_t index, uint8_t root_note)
+    {
+        if (index < m_samples.size()) {
+            m_samples[index].root_note = (root_note > 119) ? 119 : root_note;
         }
     }
 

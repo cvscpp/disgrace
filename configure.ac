@@ -41,7 +41,66 @@ AC_ARG_ENABLE([debug],
 if test "x$debug_build" = "xyes"; then
     CXXFLAGS="$CXXFLAGS -g -O0 -DDEBUG"
 else
-    CXXFLAGS="$CXXFLAGS -O2"
+    # Default release optimization is -O3 (auto-vectorization + unrolling
+    # for the per-sample DSP loops, with no floating-point semantic change:
+    # -ffast-math is NOT implied by -O3). Only touch flags autoconf chose
+    # itself: an explicit user CXXFLAGS (env or command line, visible via
+    # ac_env_CXXFLAGS_set) is always respected as-is.
+    if test "${ac_env_CXXFLAGS_set}" != set; then
+        case " $CXXFLAGS " in
+            *" -O"*) CXXFLAGS=`echo " $CXXFLAGS " | sed 's/ -O[[^ ]]* / -O3 /'` ;;
+            *) CXXFLAGS="$CXXFLAGS -O3" ;;
+        esac
+    fi
+fi
+
+# Link-time optimization: devirtualizes the DSP/Instrument process() chains
+# and inlines across translation units. Off by default (slower links, and
+# distros apply their own LTO policy); use --enable-lto or `make production`.
+AC_ARG_ENABLE([lto],
+    AS_HELP_STRING([--enable-lto], [Enable link-time optimization (-flto)]),
+    [enable_lto=$enableval],
+    [enable_lto=no]
+)
+if test "x$enable_lto" = "xyes"; then
+    AC_MSG_CHECKING([whether $CXX accepts -flto])
+    save_CXXFLAGS="$CXXFLAGS"
+    CXXFLAGS="$CXXFLAGS -flto"
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([],[])],
+        [lto_ok=yes],
+        [lto_ok=no])
+    CXXFLAGS="$save_CXXFLAGS"
+    AC_MSG_RESULT([$lto_ok])
+    if test "x$lto_ok" = "xyes"; then
+        CXXFLAGS="$CXXFLAGS -flto"
+        LDFLAGS="$LDFLAGS -flto"
+    else
+        AC_MSG_WARN([compiler does not accept -flto, building without LTO])
+    fi
+fi
+
+# Native micro-architecture tuning. Off by default: the binary only runs on
+# CPUs of this family, which is wrong for distro packaging. Use
+# --enable-native-march or `make production` for local max-speed builds.
+AC_ARG_ENABLE([native-march],
+    AS_HELP_STRING([--enable-native-march], [Tune for this CPU (-march=native -mtune=native)]),
+    [enable_native_march=$enableval],
+    [enable_native_march=no]
+)
+if test "x$enable_native_march" = "xyes"; then
+    AC_MSG_CHECKING([whether $CXX accepts -march=native])
+    save_CXXFLAGS="$CXXFLAGS"
+    CXXFLAGS="$CXXFLAGS -march=native"
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([],[])],
+        [native_ok=yes],
+        [native_ok=no])
+    CXXFLAGS="$save_CXXFLAGS"
+    AC_MSG_RESULT([$native_ok])
+    if test "x$native_ok" = "xyes"; then
+        CXXFLAGS="$CXXFLAGS -march=native -mtune=native"
+    else
+        AC_MSG_WARN([compiler does not accept -march=native, building generic])
+    fi
 fi
 
 # pkg-config

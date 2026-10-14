@@ -35,13 +35,14 @@ std::string LilyPondExporter::midi_to_lily(uint8_t note) {
     int pitch = note % 12;
     int octave = note / 12;
     
-    // LilyPond absolute pitch: 
+    // LilyPond absolute pitch:
     // c' is Middle C (C4, MIDI 60)
     // c is C3 (MIDI 48)
     // c, is C2 (MIDI 36)
-    // disgrace uses octave 5 for 60-71
+    // Note values are raw MIDI numbers (60-71 = C-4 octave), so the
+    // C-4 octave (value/12 == 5) maps to a single tick mark.
     std::string s = names[pitch];
-    int lily_octave = octave - 5; 
+    int lily_octave = octave - 4; 
 
     if (lily_octave > 0) {
         for (int i = 0; i < lily_octave; ++i) s += "'";

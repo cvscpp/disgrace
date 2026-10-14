@@ -42,9 +42,11 @@ public:
     void update_effect_editor();
     void update_mastering_panel();
 
-    static const int kSelectedMaster = -1;
-    static const int kSelectedTrackBase = 0;
-    static const int kSelectedBusBase = 1000;
+    // constexpr (implicitly inline): same LTO odr-use rationale as
+    // MixerBus::ROUTE_* in mixer/mixer_bus.h.
+    static constexpr int kSelectedMaster = -1;
+    static constexpr int kSelectedTrackBase = 0;
+    static constexpr int kSelectedBusBase = 1000;
 
 private:
     Engine& m_engine;

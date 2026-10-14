@@ -446,10 +446,11 @@ static const bool s_is_sharp[12]    = {false, true, false, true, false, false,
                                         true, false, true, false, true, false};
 
 void NotationView::draw_note(wxDC& dc, int nx, int track_y, int note, int staff_type) {
-    // Diatonic position relative to C4 (MIDI note 48 in this app's convention)
+    // Diatonic position relative to middle C (MIDI note 60 = C-4). Note
+    // values are raw MIDI numbers throughout the engine (69 = A4/440 Hz).
     int octave = note / 12;
     int pitch  = note % 12;
-    int pos    = s_pitch_to_pos[pitch] + (octave - 4) * 7;  // steps above C4
+    int pos    = s_pitch_to_pos[pitch] + (octave - 5) * 7;  // steps above C4
 
     int staff_top = track_y + N_STAFF_Y;
 

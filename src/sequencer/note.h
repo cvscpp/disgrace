@@ -45,4 +45,17 @@ struct TrackEvent
     uint8_t param2 = 0;
 };
 
+// Display octave for a note value. The engine uses raw MIDI note numbers
+// everywhere (69 = A4/440 Hz) and note names follow the MIDI/Yamaha
+// convention (60 = C-4), matching the piano labels and Renoise: the raw
+// value divided by 12 reads one octave too high (60 would show "C-5").
+// Values above the valid range clamp to the top octave, the bottom
+// sub-octave (0-11) clamps to octave 0 ("C-0".."B-0").
+inline int note_display_octave(uint8_t note)
+{
+    if (note > 119) return 9;
+    int o = (int)note / 12 - 1;
+    return o < 0 ? 0 : o;
+}
+
 } // namespace disgrace_ns

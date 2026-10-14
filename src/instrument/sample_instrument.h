@@ -27,6 +27,13 @@ namespace disgrace_ns
     struct SampleEntry {
         std::string name;
         std::shared_ptr<disgrace_ns::SampleData> data;
+        // MIDI note the sample was recorded at: triggering it plays the
+        // sample at its original speed (see SampleVoice::set_root).
+        // Default 69 (A4) = historical behavior for old projects.
+        uint8_t root_note = 69;
+        // Extra transpose in cents, folded from Renoise per-sample
+        // Transpose (*100) + Finetune at import. Positive raises pitch.
+        int transpose_cents = 0;
     };
 
     enum class SampleFormatAction {
@@ -50,10 +57,12 @@ namespace disgrace_ns
         void set_pitch(float freq) override;
         void process(float* l, float* r, size_t nframes) override;
 
-        void add_sample(const std::string& name, std::shared_ptr<disgrace_ns::SampleData> data);
+        void add_sample(const std::string& name, std::shared_ptr<disgrace_ns::SampleData> data,
+                        uint8_t root_note = 69, int transpose_cents = 0);
         void remove_sample(size_t index);
         void move_sample(size_t from, size_t to);
         void set_sample_name(size_t index, const std::string& name);
+        void set_sample_root(size_t index, uint8_t root_note);
         void convert_sample_format(size_t index, SampleFormatAction action);
         size_t sample_count() const { return m_samples.size(); }
         const SampleEntry& get_sample(size_t index) const { return m_samples[index]; }

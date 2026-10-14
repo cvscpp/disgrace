@@ -56,9 +56,11 @@ public:
     // 0+ = Index of another MixerBus
     // -2 and below = Hardware Output Pairs ( -2=Out 1-2, -3=Out 3-4, etc. )
     // -100 and below = Hardware Output Mono ( -100=Out 1, -101=Out 2, etc. )
-    static const int ROUTE_MASTER = -1;
-    static const int ROUTE_HW_STEREO_BASE = -2;
-    static const int ROUTE_HW_MONO_BASE = -100;
+    // constexpr (implicitly inline): static const members need an
+    // out-of-class definition once odr-used, which LTO link builds trip on.
+    static constexpr int ROUTE_MASTER = -1;
+    static constexpr int ROUTE_HW_STEREO_BASE = -2;
+    static constexpr int ROUTE_HW_MONO_BASE = -100;
 
     void set_output_bus(int bus_idx);
     int output_bus() const;

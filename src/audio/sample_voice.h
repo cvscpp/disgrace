@@ -44,6 +44,17 @@ namespace disgrace_ns
                    void set_engine_rate(double sr);
                    void set_sample(std::shared_ptr<disgrace_ns::SampleData> data) { m_sample = data; }
 
+                   // Root note the sample was recorded at (MIDI number) plus
+                   // an extra transpose in cents (Renoise Transpose/Finetune;
+                   // positive raises playback pitch). Playback speed is
+                   // relative to the root, so triggering the root note plays
+                   // the sample at its original speed:
+                   //   increment = (freq / root_freq) * 2^(cents/1200)
+                   //               * (sample_rate / engine_rate)
+                   // Default root A4/440 Hz preserves the historical behavior
+                   // (samples implicitly rooted at A4) for old projects.
+                   void set_root(uint8_t midi_note, int transpose_cents = 0);
+
                    void process(float* out_l,
                                 float* out_r,
                                 size_t frames) override;
@@ -63,6 +74,12 @@ namespace disgrace_ns
                    }
 
     private:
+        void update_increment() {
+            if (m_sample && m_sample->sample_rate > 0 && m_engine_rate > 0.0 && m_root_freq > 0.0f)
+                m_increment = (m_frequency / m_root_freq) * m_transpose_factor *
+                              (double(m_sample->sample_rate) / m_engine_rate);
+        }
+
         std::shared_ptr<disgrace_ns::SampleData> m_sample;
         disgrace_ns::ADSR m_env;
 
@@ -70,6 +87,8 @@ namespace disgrace_ns
         double m_position = 0.0;
         double m_increment = 1.0;
         double m_frequency = 440.0;
+        float m_root_freq = 440.0f;
+        float m_transpose_factor = 1.0f;
 
         float m_volume = 1.f;
         bool m_active = false;

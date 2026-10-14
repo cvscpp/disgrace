@@ -50,6 +50,16 @@ struct RenoiseInstrument {
     std::string name;
     std::string type; 
     std::vector<std::pair<std::string, std::string>> samples;
+    // Per-sample root/retune, in lockstep with `samples`. Renoise numbers
+    // notes C-0=0, i.e. 12 below this app's MIDI numbering (Renoise A-4 is
+    // 57, here 69), so the importer adds +12 when converting base_note to
+    // a disgrace root note. Defaults = Renoise C-4 middle C, no retune.
+    struct SampleMusic {
+        int base_note = 48;
+        int transpose = 0;   // semitones, + raises playback pitch
+        int finetune = 0;    // cents, + raises playback pitch
+    };
+    std::vector<SampleMusic> sample_music;
 };
 
 struct RenoiseTrack {
@@ -87,6 +97,13 @@ static std::string get_descendant_content(xmlNodePtr node, const char* name) {
 }
 
 static uint8_t parse_renoise_note(const std::string& note_str) {
+    // NOTE: no octave offset is applied here on purpose. Note *strings*
+    // ("C-3", "A-4", ...) denote absolute pitches: "A-4" is 440 Hz in both
+    // Renoise and here, and semitone intervals between strings are
+    // identical, so the MIDI-number mapping below reproduces Renoise
+    // pitches exactly. (Renoise's internal *numbers* are a different story:
+    // its C-0=0 numbering runs 12 below MIDI, hence the +12 in the
+    // BaseNote→root conversion. Don't "fix" this function with an offset.)
     if (note_str == "OFF") return 254;
     if (note_str == "---" || note_str.empty() || note_str == "..") return 255;
     
@@ -291,15 +308,28 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
                             for (xmlNodePtr sample_node = child->children; sample_node; sample_node = sample_node->next) {
                                 if (xmlStrEqual(sample_node->name, (const xmlChar*)"Sample")) {
                                     std::string s_name, s_path;
+                                    RenoiseInstrument::SampleMusic music;
                                     for (xmlNodePtr s_child = sample_node->children; s_child; s_child = s_child->next) {
                                         if (xmlStrEqual(s_child->name, (const xmlChar*)"Name")) s_name = get_node_content(s_child);
-                                        else if (xmlStrEqual(s_child->name, (const xmlChar*)"SamplePart")) {
+                                        else if (xmlStrEqual(s_child->name, (const xmlChar*)"Transpose")) {
+                                            try { music.transpose = std::stoi(get_node_content(s_child)); } catch (...) {}
+                                        } else if (xmlStrEqual(s_child->name, (const xmlChar*)"Finetune")) {
+                                            try { music.finetune = std::stoi(get_node_content(s_child)); } catch (...) {}
+                                        } else if (xmlStrEqual(s_child->name, (const xmlChar*)"Mapping")) {
+                                            std::string base = get_descendant_content(s_child, "BaseNote");
+                                            if (!base.empty()) {
+                                                try { music.base_note = std::stoi(base); } catch (...) {}
+                                            }
+                                        } else if (xmlStrEqual(s_child->name, (const xmlChar*)"SamplePart")) {
                                             for (xmlNodePtr sp_child = s_child->children; sp_child; sp_child = sp_child->next) {
                                                 if (xmlStrEqual(sp_child->name, (const xmlChar*)"File")) s_path = get_node_content(sp_child);
                                             }
                                         }
                                     }
-                                    if (!s_path.empty()) inst.samples.push_back({s_name, s_path});
+                                    if (!s_path.empty()) {
+                                        inst.samples.push_back({s_name, s_path});
+                                        inst.sample_music.push_back(music);
+                                    }
                                 }
                             }
                         } else if (xmlStrEqual(child->name, (const xmlChar*)"SampleGenerator")) {
@@ -318,6 +348,7 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
                                         }
                                     }
                                     inst.samples.push_back({sample_name, ""});
+                                    inst.sample_music.push_back(RenoiseInstrument::SampleMusic());
                                 }
                             }
                         }
@@ -505,14 +536,28 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
             for (uint8_t ri_idx : used_samplers) {
                 const auto& ri = ri_list[ri_idx];
                 bool sample_loaded = false;
-                for (const auto& s : ri.samples) {
+                for (size_t si = 0; si < ri.samples.size(); ++si) {
+                    const auto& s = ri.samples[si];
                     if (s.second.empty()) continue;
                     fs::path sample_path(s.second);
                     if (sample_path.is_relative()) sample_path = fs::path(extracted_dir) / sample_path;
                     auto data = std::make_shared<SampleData>(); std::vector<float> l, r; uint32_t sr;
                     if (AudioFile::load_audio(sample_path.string(), l, r, sr)) {
                         data->left = l; data->right = r; data->sample_rate = sr;
-                        sampler->add_sample(s.first.empty() ? ri.name : s.first, data);
+                        // Root note conversion: Renoise numbers notes C-0=0
+                        // (its A-4 is 57) while this app uses MIDI numbering
+                        // (A-4 is 69), so +12. Triggering the root then plays
+                        // the sample at its recorded speed/pitch.
+                        int root = 60, cents = 0;
+                        if (si < ri.sample_music.size()) {
+                            const auto& mu = ri.sample_music[si];
+                            root = mu.base_note + 12;
+                            cents = mu.transpose * 100 + mu.finetune;
+                        }
+                        if (root < 0) root = 0;
+                        if (root > 119) root = 119;
+                        sampler->add_sample(s.first.empty() ? ri.name : s.first, data,
+                                            (uint8_t)root, cents);
                         sampler_inst_to_sample_idx[rt][ri_idx] = next_s_idx++;
                         sample_loaded = true;
                         break;

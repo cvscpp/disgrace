@@ -47,8 +47,7 @@ namespace disgrace_ns
 
         m_position = (double)offset_samples;
         m_frequency = std::max(0.0, (double)freq);
-        m_increment = (m_frequency / 440.0) *
-                      (double(m_sample->sample_rate) / m_engine_rate);
+        update_increment();
 
         m_volume = velocity / 127.f;
          m_env.note_on();
@@ -69,9 +68,7 @@ namespace disgrace_ns
     void disgrace_ns::SampleVoice::set_pitch(float freq)
     {
         m_frequency = std::max(0.0, (double)freq);
-        if (m_sample && m_sample->sample_rate > 0 && m_engine_rate > 0.0)
-            m_increment = (m_frequency / 440.0) *
-                          (double(m_sample->sample_rate) / m_engine_rate);
+        update_increment();
     }
 
     void disgrace_ns::SampleVoice::set_volume(float vol)
@@ -83,9 +80,15 @@ namespace disgrace_ns
     {
         m_engine_rate = std::max(1.0, sr);
         m_env.set_sample_rate(sr);
-        if (m_sample && m_sample->sample_rate > 0)
-            m_increment = (m_frequency / 440.0) *
-                          (double(m_sample->sample_rate) / m_engine_rate);
+        update_increment();
+    }
+
+    void disgrace_ns::SampleVoice::set_root(uint8_t midi_note, int transpose_cents)
+    {
+        if (midi_note > 127) midi_note = 127;
+        m_root_freq = 440.0f * std::pow(2.0f, ((int)midi_note - 69) / 12.0f);
+        m_transpose_factor = std::pow(2.0f, transpose_cents / 1200.0f);
+        update_increment();
     }
 
     bool disgrace_ns::SampleVoice::active() const

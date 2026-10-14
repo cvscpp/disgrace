@@ -530,7 +530,7 @@ void TracksView::draw(wxDC& dc) {
                                     dc.SetFont(note_font);
                                     const char* notes[] = {"C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-"};
                                     wxString nbuf;
-                                    nbuf.Printf("%s%d", notes[ev.note % 12], ev.note / 12);
+                                    nbuf.Printf("%s%d", notes[ev.note % 12], note_display_octave(ev.note));
                                     if (nw > 20) dc.DrawText(nbuf, nx + 2, ty + 15);
                                 }
                             }

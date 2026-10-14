@@ -99,6 +99,8 @@ namespace disgrace_ns
                         json js;
                         js["name"] = sample.name;
                         js["file"] = "samples/" + sample_filename;
+                        js["root"] = sample.root_note;
+                        js["transpose_cents"] = sample.transpose_cents;
                         jsamples.push_back(js);
                     }
                 }
@@ -306,7 +308,11 @@ namespace disgrace_ns
                             uint32_t rate;
                             if (AudioFile::load_audio(sample_path.string(), sd->left, sd->right, rate)) {
                                 sd->sample_rate = rate;
-                                sampler.add_sample(js["name"], sd);
+                                // Absent in pre-root project files → 69/0 keeps
+                                // their exact historical playback.
+                                sampler.add_sample(js["name"], sd,
+                                    (uint8_t)js.value("root", 69),
+                                    js.value("transpose_cents", 0));
                             }
                         }
                     }

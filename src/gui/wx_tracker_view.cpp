@@ -339,7 +339,7 @@ void TrackerView::draw(wxDC& dc) {
                 }
                 if (ev.note == 255) dc.DrawText("---", f_x, ry + 2);
                 else if (ev.note == 254) dc.DrawText("OFF", f_x, ry + 2);
-                else dc.DrawText(wxString::Format("%s%d", note_names[ev.note % 12], ev.note / 12), f_x, ry + 2);
+                else dc.DrawText(wxString::Format("%s%d", note_names[ev.note % 12], note_display_octave(ev.note)), f_x, ry + 2);
 
                 // Sample / Text (for Voice instruments)
                 f_idx = c * 3 + 1;
@@ -827,7 +827,11 @@ void TrackerView::insert_note(uint8_t note) {
 
     uint8_t final_note = note;
     if (note != 254) {
-        int octave_note = note + m_engine.base_octave() * 12;
+        // Octave numbering follows Renoise/MIDI convention (Oct 4 + C =
+        // C-4 = value 60 = 261.6 Hz): the key semitone sits one octave
+        // above the raw base multiple, matching the documented keyboard
+        // layout (lower row C4-B4) and the tracker labels.
+        int octave_note = note + (m_engine.base_octave() + 1) * 12;
         if (octave_note > 119) octave_note = 119;
         final_note = (uint8_t)octave_note;
     }

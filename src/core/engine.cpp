@@ -43,12 +43,32 @@
 #include <chrono>
 #include <filesystem>
 #include <cmath>
+#if defined(__SSE__) || defined(__x86_64__) || defined(__i386__)
+#include <pmmintrin.h>
+#endif
 
 namespace fs = std::filesystem;
 
 namespace disgrace_ns {
 
 namespace {
+
+// Denormal (subnormal) floats can make SSE FP arithmetic ~100x slower, and
+// feedback loops (reverb combs/allpasses, filters, long effect tails) are
+// where denormals breed. Enable Flush-To-Zero + Denormals-Are-Zero once per
+// calling thread: silent tails stay exact zero, normal audio is
+// bit-identical, only denormal inputs/results are flushed. Thread-local
+// guard because JACK/OSS own the realtime thread and offline export runs on
+// another one; every audio path funnels through render_block_multi().
+inline void enable_flush_denormals_to_zero() {
+#if defined(__SSE__) || defined(__x86_64__) || defined(__i386__)
+    thread_local bool done = false;
+    if (done) return;
+    done = true;
+    _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+    _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+#endif
+}
 
 std::unique_ptr<AudioBackend> make_audio_backend(Engine *engine, AudioBackendType type,
                                                  uint32_t num_ins, uint32_t num_outs,
@@ -687,6 +707,7 @@ void Engine::process_block(float* l, float* r, size_t nframes, const float* cons
 
 void Engine::render_block_multi(float** out_bufs, uint32_t num_outs, size_t frames,
                                 const float* const* in_bufs, uint32_t num_ins) {
+    enable_flush_denormals_to_zero();
     if (m_is_recording_sample.load()) {
         bool should_record = false;
         if (m_recording_sample_mode.load() == SampleRecordMode::Free) {

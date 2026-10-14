@@ -31,7 +31,7 @@ static void note_to_name_buf(uint8_t note, char* buf) {
     if (note == 255) { strcpy(buf, "---"); return; }
     if (note == 254) { strcpy(buf, "==="); return; }
     if (note > 119) { strcpy(buf, "---"); return; }
-    int octave = note / 12;
+    int octave = note_display_octave(note);
     int n = note % 12;
     snprintf(buf, 8, "%s%d", names[n], octave);
 }

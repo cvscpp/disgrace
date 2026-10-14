@@ -464,7 +464,7 @@ void TrackerView::draw(wxDC& dc) {
             } else dc.SetTextForeground(effect_col);
             dc.DrawText(wxString::Format("%02X", row_ev.param2), f_x, ry + 2);
         }
-        dc.SetPen(wxPen(fg_col));
+        dc.SetPen(wxPen(lpb_hl_col));
         dc.DrawLine(tui.x + tui.w + 5, 0, tui.x + tui.w + 5, 20000);
     }
 }

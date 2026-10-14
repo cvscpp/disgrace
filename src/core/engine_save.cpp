@@ -41,6 +41,7 @@ void Engine::save_project(const ::std::string& path)
         if (SongSerializer::save(*this, tmp_dir.string())) {
             if (ProjectArchive::save(path, tmp_dir.string())) {
                 std::cout << "Project saved successfully to " << path << std::endl;
+                m_project_path = path;
                 mark_saved();
             } else {
                 std::cerr << "Failed to archive project to " << path << std::endl;
@@ -71,6 +72,7 @@ void Engine::load_project(const ::std::string& path)
         if (ProjectArchive::extract(path, tmp_dir.string())) {
             if (SongSerializer::load(*this, tmp_dir.string())) {
                 m_project_temp_dir = tmp_dir.string();
+                m_project_path = path;
                 mark_saved();
                 std::cout << "Project loaded successfully from " << path << std::endl;
             } else {
@@ -93,6 +95,8 @@ void Engine::import_audio(const ::std::string& path)
     
     if (path_str.size() >= 5 && path_str.compare(path_str.size() - 5, 5, ".xrns") == 0) {
         if (XrnsImporter::import(*this, path)) {
+            m_project_path = path;
+            mark_saved();
             std::cout << "XRNS import successful" << std::endl;
         } else {
             std::cerr << "Failed to import XRNS file" << std::endl;
@@ -103,6 +107,8 @@ void Engine::import_audio(const ::std::string& path)
     if ((path_str.size() >= 4 && path_str.compare(path_str.size() - 4, 4, ".mid") == 0) ||
         (path_str.size() >= 5 && path_str.compare(path_str.size() - 5, 5, ".midi") == 0)) {
         if (MidiImporter::import(*this, path)) {
+            m_project_path = path;
+            mark_saved();
             std::cout << "MIDI import successful" << std::endl;
         } else {
             std::cerr << "Failed to import MIDI file" << std::endl;

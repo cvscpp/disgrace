@@ -18,6 +18,7 @@
 
 #include "wx_mixer_panel.h"
 #include "theme.h"
+#include "file_history.h"
 #include "wx_vu_meter.h"
 #include "wx_spectral_view.h"
 #include "wx_analog_vu_meter.h"
@@ -747,8 +748,9 @@ void MixerPanel::update_effect_editor() {
                 wxButton* load_ref_btn = new wxButton(m_fx_params_group, wxID_ANY, "Load");
                 load_ref_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(14, 14)));
                 load_ref_btn->Bind(wxEVT_BUTTON, [this, rm](wxCommandEvent& ev) {
-                    wxFileDialog dlg(this, "Load Reference Track", "", "", "Audio files (*.wav;*.flac;*.ogg;*.mp3)|*.wav;*.flac;*.ogg;*.mp3", wxFD_OPEN);
+                    wxFileDialog dlg(this, "Load Reference Track", file_history_project_dir(m_engine, "reference"), "", "Audio files (*.wav;*.flac;*.ogg;*.mp3)|*.wav;*.flac;*.ogg;*.mp3", wxFD_OPEN);
                     if (dlg.ShowModal() == wxID_OK) {
+                        file_history_remember("reference", dlg.GetPath());
                         rm->load_reference(dlg.GetPath().ToStdString());
                         update_effect_editor();
                     }
@@ -818,8 +820,9 @@ void MixerPanel::update_effect_editor() {
         wxButton* load_ref_btn = new wxButton(m_fx_params_group, wxID_ANY, "Load");
         load_ref_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(14, 14)));
         load_ref_btn->Bind(wxEVT_BUTTON, [this, &matcher](wxCommandEvent& ev) {
-            wxFileDialog dlg(this, "Load Reference Track", "", "", "Audio files (*.wav;*.flac;*.ogg;*.mp3)|*.wav;*.flac;*.ogg;*.mp3", wxFD_OPEN);
+            wxFileDialog dlg(this, "Load Reference Track", file_history_project_dir(m_engine, "reference"), "", "Audio files (*.wav;*.flac;*.ogg;*.mp3)|*.wav;*.flac;*.ogg;*.mp3", wxFD_OPEN);
             if (dlg.ShowModal() == wxID_OK) {
+                file_history_remember("reference", dlg.GetPath());
                 if (matcher.load_reference(dlg.GetPath().ToStdString())) {
                     update_effect_editor();
                 }
@@ -990,8 +993,9 @@ void MixerPanel::on_save_chain(wxCommandEvent& event) {
 
     if (!is_master && !is_bus && !is_track) return;
 
-    wxFileDialog dlg(this, "Save Chain", "", "", "Chain files (*.chain)|*.chain", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    wxFileDialog dlg(this, "Save Chain", file_history_project_dir(m_engine, "chain"), "", "Chain files (*.chain)|*.chain", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
     if (dlg.ShowModal() == wxID_OK) {
+        file_history_remember("chain", dlg.GetPath());
         if (is_master) {
             m_engine.m_master.save_effect_chain(dlg.GetPath().ToStdString());
         }
@@ -1015,8 +1019,9 @@ void MixerPanel::on_load_chain(wxCommandEvent& event) {
 
     if (!is_master && !is_bus && !is_track) return;
 
-    wxFileDialog dlg(this, "Load Chain", "", "", "Chain files (*.chain)|*.chain", wxFD_OPEN);
+    wxFileDialog dlg(this, "Load Chain", file_history_project_dir(m_engine, "chain"), "", "Chain files (*.chain)|*.chain", wxFD_OPEN);
     if (dlg.ShowModal() == wxID_OK) {
+        file_history_remember("chain", dlg.GetPath());
         if (is_master) {
             m_engine.m_master.load_effect_chain(dlg.GetPath().ToStdString());
         }

@@ -27,7 +27,9 @@
 #include "wx_settings_panel.h"
 #include "wx_project_panel.h"
 #include "wx_help_panel.h"
+#include "file_history.h"
 #include "../core/engine.h"
+#include "../core/app_info.h"
 #include <wx/combobox.h>
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
@@ -139,6 +141,7 @@ WxMainWindow::WxMainWindow(int w, int h, const wxString& title, Engine& engine)
     m_timer = new wxTimer(this, wxID_ANY);
     m_timer->Start(kUiTimerIntervalMs);
 
+    update_title();
     Centre();
 }
 
@@ -193,6 +196,7 @@ void WxMainWindow::init_panels() {
 }
 
 void WxMainWindow::update_all_uis() {
+    update_title();
     if (m_mixer_panel) m_mixer_panel->update_mixer_ui();
     if (m_tracker_panel) m_tracker_panel->update_pattern_list();
     if (m_project_panel) {
@@ -207,6 +211,11 @@ void WxMainWindow::update_all_uis() {
 
 void WxMainWindow::request_update() {
     wxQueueEvent(this, new wxCommandEvent(wxEVT_COMMAND_BUTTON_CLICKED));
+}
+
+void WxMainWindow::update_title() {
+    SetTitle(wxString::FromUTF8(
+        (m_engine.project_display_name() + " - " + app_display_name_with_version()).c_str()));
 }
 
 Track& WxMainWindow::track(size_t index) {
@@ -253,13 +262,14 @@ void WxMainWindow::OnClose(wxCloseEvent& event) {
         }
 
         if (answer == wxYES) {
-            wxFileDialog dlg(this, "Save Project", "", "",
+            wxFileDialog dlg(this, "Save Project", file_history_project_dir(m_engine, "project"), "",
                              "Disgrace Projects (*.dg)|*.dg",
                              wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
             if (dlg.ShowModal() != wxID_OK) {
                 event.Veto();
                 return;
             }
+            file_history_remember("project", dlg.GetPath());
             m_engine.save_project(dlg.GetPath().ToStdString());
         }
     }
@@ -382,20 +392,18 @@ void WxMainWindow::OnCharHook(wxKeyEvent& event) {
             }
             break;
         case Action::NextOrderPos: {
+            if (!m_tracker_panel) break;
             size_t pos = m_engine.m_edit_order_pos.load();
-            if (pos < m_engine.m_order.size() - 1) {
-                m_engine.m_edit_order_pos.store(pos + 1);
-                m_engine.set_active_pattern(m_engine.m_order[pos + 1]);
-                if (m_tracker_panel) m_tracker_panel->update_pattern_list();
+            if (pos + 1 < m_engine.order_size()) {
+                m_tracker_panel->goto_order_pos(pos + 1);
             }
             break;
         }
         case Action::PrevOrderPos: {
+            if (!m_tracker_panel) break;
             size_t pos = m_engine.m_edit_order_pos.load();
             if (pos > 0) {
-                m_engine.m_edit_order_pos.store(pos - 1);
-                m_engine.set_active_pattern(m_engine.m_order[pos - 1]);
-                if (m_tracker_panel) m_tracker_panel->update_pattern_list();
+                m_tracker_panel->goto_order_pos(pos - 1);
             }
             break;
         }

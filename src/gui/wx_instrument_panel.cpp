@@ -19,6 +19,7 @@
 #include "wx_instrument_panel.h"
 #include "wx_waveform_view.h"
 #include "wx_main_window.h"
+#include "file_history.h"
 #include "wx_detached_frame.h"
 #include "wx_vu_meter.h"
 #include "../core/engine.h"
@@ -844,8 +845,9 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_sfont_load_btn = new wxButton(m_sfont_editor, wxID_ANY, "Load SoundFont");
     m_sfont_load_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(16, 16)));
     m_sfont_load_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&){
-        wxFileDialog dlg(this, "Load SoundFont", "", "", "SoundFont files (*.sf2;*.sf3)|*.sf2;*.sf3", wxFD_OPEN);
+        wxFileDialog dlg(this, "Load SoundFont", file_history_project_dir(m_engine, "soundfont"), "", "SoundFont files (*.sf2;*.sf3)|*.sf2;*.sf3", wxFD_OPEN);
         if (dlg.ShowModal() == wxID_OK) {
+            file_history_remember("soundfont", dlg.GetPath());
             auto& inst = m_engine.instrument(m_selected_instrument);
             if (inst.type() == InstrumentType::SoundFont) {
                 static_cast<SoundFontInstrument*>(&inst)->load_soundfont(dlg.GetPath().ToStdString());
@@ -889,9 +891,10 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_sfz_load_btn = new wxButton(m_sfz_editor, wxID_ANY, "Load SFZ");
     m_sfz_load_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(16, 16)));
     m_sfz_load_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-        wxFileDialog dlg(this, "Load SFZ Instrument", "", "",
+        wxFileDialog dlg(this, "Load SFZ Instrument", file_history_project_dir(m_engine, "soundfont"), "",
                          "SFZ files (*.sfz)|*.sfz", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
         if (dlg.ShowModal() != wxID_OK) return;
+        file_history_remember("soundfont", dlg.GetPath());
         if (m_selected_instrument < 0) return;
         auto& inst = m_engine.instrument(m_selected_instrument);
         if (inst.type() == InstrumentType::SFZ) {
@@ -942,9 +945,10 @@ InstrumentPanel::InstrumentPanel(wxWindow* parent, Engine& engine)
     m_xrni_load_btn = new wxButton(m_xrni_editor, wxID_ANY, "Load XRNI");
     m_xrni_load_btn->SetBitmap(wxArtProvider::GetBitmap(wxART_FILE_OPEN, wxART_BUTTON, wxSize(16, 16)));
     m_xrni_load_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-        wxFileDialog dlg(this, "Load XRNI Instrument", "", "",
+        wxFileDialog dlg(this, "Load XRNI Instrument", file_history_project_dir(m_engine, "soundfont"), "",
                          "XRNI files (*.xrni)|*.xrni", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
         if (dlg.ShowModal() != wxID_OK) return;
+        file_history_remember("soundfont", dlg.GetPath());
         if (m_selected_instrument < 0) return;
         auto& inst = m_engine.instrument(m_selected_instrument);
         if (inst.type() == InstrumentType::XRNI) {
@@ -1984,13 +1988,14 @@ void InstrumentPanel::on_new(wxCommandEvent& event) {
 void InstrumentPanel::on_load(wxCommandEvent& event) {
     wxFileDialog dlg(this,
                      "Load Instrument",
-                     "",
+                     file_history_project_dir(m_engine, "instrument"),
                      "",
                      kInstrumentArchiveFilter,
                      wxFD_OPEN | wxFD_FILE_MUST_EXIST);
     if (dlg.ShowModal() != wxID_OK) {
         return;
     }
+    file_history_remember("instrument", dlg.GetPath());
 
     LoadedSampleInstrument loaded;
     if (!load_sample_instrument_archive(dlg.GetPath().ToStdString(), loaded)) {
@@ -2065,13 +2070,14 @@ void InstrumentPanel::on_save(wxCommandEvent& event) {
 
     wxFileDialog dlg(this,
                      "Save Instrument",
-                     "",
+                     file_history_project_dir(m_engine, "instrument"),
                      default_name,
                      kInstrumentArchiveFilter,
                      wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
     if (dlg.ShowModal() != wxID_OK) {
         return;
     }
+    file_history_remember("instrument", dlg.GetPath());
 
     wxFileName out_path(dlg.GetPath());
     if (out_path.GetExt().CmpNoCase("dgi") != 0) {
@@ -2442,8 +2448,9 @@ void InstrumentPanel::on_load_sample(wxCommandEvent& event) {
     auto& inst = m_engine.instrument(m_selected_instrument);
     if (inst.type() != InstrumentType::Sampler) return;
 
-    wxFileDialog dlg(this, "Load Sample", "", "", "Audio Files|*.wav;*.flac;*.mp3;*.ogg", wxFD_OPEN);
+    wxFileDialog dlg(this, "Load Sample", file_history_project_dir(m_engine, "sample"), "", "Audio Files|*.wav;*.flac;*.mp3;*.ogg", wxFD_OPEN);
     if (dlg.ShowModal() == wxID_OK) {
+        file_history_remember("sample", dlg.GetPath());
         auto data = std::make_shared<SampleData>();
         uint32_t sr = 0;
         if (AudioFile::load_audio(dlg.GetPath().ToStdString(), data->left, data->right, sr)) {
@@ -2470,8 +2477,9 @@ void InstrumentPanel::on_save_sample(wxCommandEvent& event) {
     auto& entry = s->get_sample(m_selected_sample);
     if (!entry.data) return;
 
-    wxFileDialog dlg(this, "Save Sample", "", entry.name, "WAV Files|*.wav", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    wxFileDialog dlg(this, "Save Sample", file_history_project_dir(m_engine, "sample"), entry.name, "WAV Files|*.wav", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
     if (dlg.ShowModal() == wxID_OK) {
+        file_history_remember("sample", dlg.GetPath());
         wxFileName out_path(dlg.GetPath());
         if (out_path.GetExt().CmpNoCase("wav") != 0) {
             out_path.SetExt("wav");
@@ -2523,10 +2531,11 @@ void InstrumentPanel::on_piper_browse(wxCommandEvent& /*event*/) {
     auto& inst = m_engine.instrument(m_selected_instrument);
     if (inst.type() != InstrumentType::Voice) return;
 
-    wxFileDialog dlg(this, "Select Piper ONNX model", "", "",
+    wxFileDialog dlg(this, "Select Piper ONNX model", file_history_initial_dir("model"), "",
                      "Piper model files (*.onnx)|*.onnx|All files (*)|*",
                      wxFD_OPEN | wxFD_FILE_MUST_EXIST);
     if (dlg.ShowModal() != wxID_OK) return;
+    file_history_remember("model", dlg.GetPath());
 
     std::string path = dlg.GetPath().ToStdString();
     VoiceInstrument* voice = static_cast<VoiceInstrument*>(&inst);

@@ -178,6 +178,17 @@ void ConfigManager::read_from(const std::string& path) {
             }
         }
 
+        if (j.contains("browser")) {
+            auto& jb = j["browser"];
+            if (jb.contains("last_dirs") && jb["last_dirs"].is_object()) {
+                m_config.last_dirs.clear();
+                for (auto it = jb["last_dirs"].begin(); it != jb["last_dirs"].end(); ++it) {
+                    if (it.value().is_string())
+                        m_config.last_dirs[it.key()] = it.value().get<std::string>();
+                }
+            }
+        }
+
         if (m_config.plugin_paths.empty()) {
             m_config.plugin_paths = default_plugin_paths();
         }
@@ -222,6 +233,14 @@ void ConfigManager::write_to(const std::string& path) {
 
         j["threading"]["worker_threads"] = m_config.num_worker_threads;
         j["plugins"]["paths"] = m_config.plugin_paths;
+
+        {
+            nlohmann::json jd = nlohmann::json::object();
+            for (const auto& [cat, dir] : m_config.last_dirs) {
+                if (!dir.empty()) jd[cat] = dir;
+            }
+            j["browser"]["last_dirs"] = jd;
+        }
 
         std::ofstream f(path);
         f << j.dump(4);

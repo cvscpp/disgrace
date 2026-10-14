@@ -380,6 +380,13 @@ public:
     void set_project_album(const std::string& a) { m_project_album = a; }
     const std::string& project_year() const { return m_project_year; }
     void set_project_year(const std::string& y) { m_project_year = y; }
+    // Source file of the current project (.dg path, or the imported
+    // .xrns/.mid file). Empty for a fresh unsaved project.
+    const std::string& project_path() const { return m_project_path; }
+    // Name for window titles etc.: the song title, unless unset or still
+    // the placeholder (then the file name without extension), else
+    // "Untitled".
+    std::string project_display_name() const;
 
     double get_current_time_seconds() const;
     double get_time_at_row(size_t row) const;
@@ -456,6 +463,7 @@ private:
     std::string m_project_artist = "Unknown Artist";
     std::string m_project_album = "";
     std::string m_project_year = "";
+    std::string m_project_path;
 };
 
 } // namespace disgrace_ns

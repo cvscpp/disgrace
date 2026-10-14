@@ -199,6 +199,14 @@ bool XrnsImporter::import(Engine& engine, const std::string& path) {
             fs::remove_all(tmp_dir);
             return false;
         }
+
+        // Fallback title from the file name (MIDI import does the same);
+        // the window title shows this unless the song sets its own.
+        try {
+            fs::path fp(path);
+            if (!fp.stem().string().empty())
+                engine.set_project_title(fp.stem().string());
+        } catch (...) {}
         
         fs::remove_all(tmp_dir);
         return true;
@@ -286,7 +294,11 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
     for (xmlNodePtr node = root->children; node; node = node->next) {
         if (xmlStrEqual(node->name, (const xmlChar*)"GlobalSongData")) {
             for (xmlNodePtr child = node->children; child; child = child->next) {
-                if (xmlStrEqual(child->name, (const xmlChar*)"BeatsPerMinute"))
+                // The tag is BeatsPerMin in real Song.xml files (older docs
+                // say BeatsPerMinute); accept both so tempo actually imports
+                // instead of silently staying at the 125 BPM default.
+                if (xmlStrEqual(child->name, (const xmlChar*)"BeatsPerMin") ||
+                    xmlStrEqual(child->name, (const xmlChar*)"BeatsPerMinute"))
                     engine.set_tempo(std::atof(get_node_content(child).c_str()));
                 else if (xmlStrEqual(child->name, (const xmlChar*)"LinesPerBeat"))
                     engine.set_lpb((uint32_t)std::atoi(get_node_content(child).c_str()));

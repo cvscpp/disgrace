@@ -1,5 +1,6 @@
 #include "wx_project_panel.h"
 #include "wx_main_window.h"
+#include "file_history.h"
 #include "../core/engine.h"
 #include "../io/lilypond_exporter.h"
 
@@ -73,6 +74,15 @@ ProjectPanel::ProjectPanel(wxWindow* parent, WxMainWindow* main_window, Engine& 
 
     update_file_list(".");
 
+    // Start the browser where the user last worked with projects, not ".".
+    {
+        wxString last = file_history_initial_dir("project");
+        if (!last.empty()) {
+            m_dir_picker->SetPath(last);
+            update_file_list(last);
+        }
+    }
+
     // Project Metadata Fields
     wxStaticBoxSizer* meta_sizer = new wxStaticBoxSizer(wxVERTICAL, m_left_panel, "Project Metadata");
     wxFlexGridSizer* meta_grid = new wxFlexGridSizer(4, 2, 5, 5);
@@ -83,6 +93,7 @@ ProjectPanel::ProjectPanel(wxWindow* parent, WxMainWindow* main_window, Engine& 
         *ctrl = new wxTextCtrl(m_left_panel, wxID_ANY, initial_val);
         (*ctrl)->Bind(wxEVT_TEXT, [this, setter, ctrl](wxCommandEvent&) {
             (m_engine.*setter)((*ctrl)->GetValue().ToStdString());
+            if (m_main_window) m_main_window->update_title();
         });
         meta_grid->Add(*ctrl, 1, wxEXPAND);
     };
@@ -439,31 +450,35 @@ void ProjectPanel::on_new(wxCommandEvent& event) {
 }
 
 void ProjectPanel::on_load(wxCommandEvent& event) {
-    wxFileDialog dlg(this, "Load Project", "", "", "Disgrace Projects (*.dg;*.DG)|*.dg;*.DG", wxFD_OPEN);
+    wxFileDialog dlg(this, "Load Project", file_history_project_dir(m_engine, "project"), "", "Disgrace Projects (*.dg;*.DG)|*.dg;*.DG", wxFD_OPEN);
     if (dlg.ShowModal() == wxID_OK) {
+        file_history_remember("project", dlg.GetPath());
         m_engine.load_project(dlg.GetPath().ToStdString());
         if (m_main_window) m_main_window->update_all_uis();
     }
 }
 
 void ProjectPanel::on_import(wxCommandEvent& event) {
-    wxFileDialog dlg(this, "Import Audio", "", "", "Audio Files (*.wav;*.flac;*.ogg;*.mp3;*.aiff;*.sf2;*.xrns;*.mid;*.midi)|*.wav;*.flac;*.ogg;*.mp3;*.aiff;*.sf2;*.xrns;*.mid;*.midi;*.WAV;*.FLAC;*.OGG;*.MP3;*.AIFF;*.SF2;*.XRNS;*.MID;*.MIDI", wxFD_OPEN);
+    wxFileDialog dlg(this, "Import Audio", file_history_project_dir(m_engine, "import"), "", "Audio Files (*.wav;*.flac;*.ogg;*.mp3;*.aiff;*.sf2;*.xrns;*.mid;*.midi)|*.wav;*.flac;*.ogg;*.mp3;*.aiff;*.sf2;*.xrns;*.mid;*.midi;*.WAV;*.FLAC;*.OGG;*.MP3;*.AIFF;*.SF2;*.XRNS;*.MID;*.MIDI", wxFD_OPEN);
     if (dlg.ShowModal() == wxID_OK) {
+        file_history_remember("import", dlg.GetPath());
         m_engine.import_audio(dlg.GetPath().ToStdString());
         if (m_main_window) m_main_window->update_all_uis();
     }
 }
 
 void ProjectPanel::on_save(wxCommandEvent& event) {
-    wxFileDialog dlg(this, "Save Project", "", "", "Disgrace Projects (*.dg)|*.dg", wxFD_SAVE);
+    wxFileDialog dlg(this, "Save Project", file_history_project_dir(m_engine, "project"), "", "Disgrace Projects (*.dg)|*.dg", wxFD_SAVE);
     if (dlg.ShowModal() == wxID_OK) {
+        file_history_remember("project", dlg.GetPath());
         m_engine.save_project(dlg.GetPath().ToStdString());
     }
 }
 
 void ProjectPanel::on_export(wxCommandEvent& event) {
-    wxFileDialog dlg(this, "Export to WAV", "", "", "WAV Files|*.wav", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    wxFileDialog dlg(this, "Export to WAV", file_history_project_dir(m_engine, "export"), "", "WAV Files|*.wav", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
     if (dlg.ShowModal() != wxID_OK) return;
+    file_history_remember("export", dlg.GetPath());
 
     Engine::ExportOptions opts;
     wxString sr = m_sample_rate_ch->GetStringSelection();
@@ -505,8 +520,9 @@ void ProjectPanel::on_export_timer(wxTimerEvent& /*event*/) {
 }
 
 void ProjectPanel::on_export_ly(wxCommandEvent& event) {
-    wxFileDialog dlg(this, "Export to LilyPond", "", "", "LilyPond Files|*.ly", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    wxFileDialog dlg(this, "Export to LilyPond", file_history_project_dir(m_engine, "export"), "", "LilyPond Files|*.ly", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
     if (dlg.ShowModal() == wxID_OK) {
+        file_history_remember("export", dlg.GetPath());
         if (LilyPondExporter::export_project(m_engine, dlg.GetPath().ToStdString())) {
             wxMessageBox("LilyPond export completed", "Success", wxOK | wxICON_INFORMATION);
         } else {
@@ -518,6 +534,7 @@ void ProjectPanel::on_export_ly(wxCommandEvent& event) {
 void ProjectPanel::on_file_select(wxCommandEvent& event) {}
 
 void ProjectPanel::on_dir_changed(wxFileDirPickerEvent& event) {
+    file_history_remember("project", event.GetPath());
     update_file_list(event.GetPath());
 }
 

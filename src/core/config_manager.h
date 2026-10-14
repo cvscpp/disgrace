@@ -20,6 +20,7 @@
 #define DISGRACE_CORE_CONFIG_MANAGER_H
 
 #include <string>
+#include <map>
 #include <vector>
 #include <nlohmann/json.hpp>
 #include "../audio/audio_backend.h"
@@ -67,6 +68,11 @@ struct Config {
 
     // Plugin scanning
     std::vector<std::string> plugin_paths;
+
+    // File dialogs: last used directory per category ("project", "import",
+    // "export", "instrument", "sample", ...). Persisted so dialogs reopen
+    // where the user last worked instead of at the executable's directory.
+    std::map<std::string, std::string> last_dirs;
 };
 
 class ConfigManager {

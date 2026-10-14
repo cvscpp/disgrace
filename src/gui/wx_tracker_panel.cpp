@@ -299,6 +299,17 @@ void TrackerPanel::on_detach(wxCommandEvent& event) {
     m_detached_frame->set_on_detach_callback([this]() { m_detached_frame = nullptr; });
 }
 
+void TrackerPanel::goto_order_pos(size_t pos) {
+    if (m_engine.order_size() == 0) return;
+    if (pos >= m_engine.order_size()) pos = m_engine.order_size() - 1;
+    m_engine.m_edit_order_pos.store(pos);
+    size_t entry = m_engine.order_entry(pos);
+    if (entry != Engine::order_npos)
+        m_engine.set_active_pattern(entry);
+    m_selected_order_idx = (int)pos;
+    update_pattern_list();
+}
+
 void TrackerPanel::update_pattern_list() {
     Freeze();
     m_tracker->set_pattern(m_engine.pattern());

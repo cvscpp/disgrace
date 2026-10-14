@@ -52,6 +52,10 @@ public:
 
     void update_pattern_list();
     void update();
+    // Navigate the viewed order position (pattern list selection, active
+    // pattern and highlight) without touching playback. Starting playback
+    // afterwards (Space / F6 / F7) operates on this position.
+    void goto_order_pos(size_t pos);
     void grab_focus();
     int get_cursor_row() const;
     TrackerView* get_tracker_view() const { return m_tracker; }

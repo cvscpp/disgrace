@@ -1,6 +1,7 @@
 #include "wx_settings_panel.h"
 #include "theme.h"
 #include "wx_main_window.h"
+#include "file_history.h"
 #include "../core/engine.h"
 #include "../core/config_manager.h"
 
@@ -582,10 +583,11 @@ void SettingsPanel::on_load_settings(wxCommandEvent&) {
 }
 
 void SettingsPanel::on_export_settings(wxCommandEvent&) {
-    wxFileDialog dlg(this, "Export Settings", "", "disgrace_settings.json",
+    wxFileDialog dlg(this, "Export Settings", file_history_project_dir(m_engine, "settings"), "disgrace_settings.json",
         "JSON files (*.json)|*.json|All files (*.*)|*.*",
         wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
     if (dlg.ShowModal() == wxID_OK) {
+        file_history_remember("settings", dlg.GetPath());
         apply_plugin_paths();
         m_engine.save_config(); // Update config from engine first
         ConfigManager::instance().save_to(dlg.GetPath().ToStdString());
@@ -595,10 +597,11 @@ void SettingsPanel::on_export_settings(wxCommandEvent&) {
 }
 
 void SettingsPanel::on_import_settings(wxCommandEvent&) {
-    wxFileDialog dlg(this, "Import Settings", "", "",
+    wxFileDialog dlg(this, "Import Settings", file_history_project_dir(m_engine, "settings"), "",
         "JSON files (*.json)|*.json|All files (*.*)|*.*",
         wxFD_OPEN | wxFD_FILE_MUST_EXIST);
     if (dlg.ShowModal() == wxID_OK) {
+        file_history_remember("settings", dlg.GetPath());
         ConfigManager::instance().load_from(dlg.GetPath().ToStdString());
         m_engine.load_config();
         ThemeManager::apply_theme_and_settings(m_engine);

@@ -50,6 +50,10 @@ public:
 
     void update_all_uis();
     void request_update();
+    // Refresh the frame title from the engine (song title, else file
+    // name, else "Untitled"). Called after loads/saves/imports and
+    // metadata edits.
+    void update_title();
 
     Track& track(size_t index);
     int get_cursor_row() const;

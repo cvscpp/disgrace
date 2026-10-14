@@ -291,6 +291,19 @@ void Engine::new_project() {
     m_project_artist = "Unknown Artist";
     m_project_album = "";
     m_project_year = "";
+    m_project_path = "";
+}
+
+std::string Engine::project_display_name() const {
+    if (!m_project_title.empty() && m_project_title != "Untitled Project")
+        return m_project_title;
+    if (!m_project_path.empty()) {
+        try {
+            std::string stem = fs::path(m_project_path).stem().string();
+            if (!stem.empty()) return stem;
+        } catch (...) {}
+    }
+    return "Untitled";
 }
 
 void Engine::reinitialize_audio(uint32_t num_ins, uint32_t num_outs, uint32_t num_midi_ins, uint32_t num_midi_outs) {
@@ -367,7 +380,20 @@ void Engine::panic() {
         track.panic();
     }
 }
-void Engine::play() { transport().play(); }
+void Engine::play() {
+    // Starting playback (Space / Play button) operates on the navigated
+    // edit position, not on wherever playback last stopped: without this,
+    // moving to pattern m while stopped and pressing Play would resume the
+    // stale order position n. Already-playing: leave everything alone.
+    if (!transport().is_playing() && !m_order.empty()) {
+        size_t pos = m_edit_order_pos.load();
+        if (pos >= m_order.size()) pos = m_order.size() - 1;
+        m_edit_order_pos.store(pos);
+        set_play_position(pos, m_current_row);
+        // set_play_position only repositions when stopped; start below.
+    }
+    transport().play();
+}
 
 void Engine::play_song() {
     stop();
@@ -393,6 +419,13 @@ void Engine::play_pattern() {
 
 void Engine::play_from_position(size_t row) {
     stop();
+    if (!m_order.empty()) {
+        size_t pos = m_edit_order_pos.load();
+        if (pos >= m_order.size()) pos = m_order.size() - 1;
+        m_edit_order_pos.store(pos);
+        m_order_pos.store(pos);
+        set_active_pattern(m_order[pos]);
+    }
     m_current_row = row;
     m_current_tick = 0;
     set_loop(true);
@@ -407,6 +440,14 @@ void Engine::set_play_position(size_t order_pos, size_t row) {
     if (order_pos < m_order.size()) {
         m_order_pos.store(order_pos);
         set_active_pattern(m_order[order_pos]);
+    }
+    // Clamp the row to the (possibly newly selected) pattern: order
+    // entries can have different lengths, and a stale cursor row would
+    // otherwise start past the end.
+    if (!m_patterns.empty()) {
+        size_t rows = pattern().row_count();
+        if (rows == 0) row = 0;
+        else if (row >= rows) row = rows - 1;
     }
     m_current_row = row;
     m_current_tick = 0;

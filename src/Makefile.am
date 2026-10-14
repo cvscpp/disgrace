@@ -141,6 +141,7 @@ noinst_HEADERS = \
     edit/edit_command.h \
     edit/undo_stack.h \
     gui/model/mixer_model.h \
+    gui/file_history.h \
     gui/theme.h \
     gui/tracker_widget.h \
     gui/wx_analog_vu_meter.h \

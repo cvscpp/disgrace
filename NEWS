@@ -1,6 +1,18 @@
 Disgrace news
 =============
 
+0.1.3
+-----
+- Sampler instruments gain a per-sample root note (plus transpose cents):
+  the root trigger plays the sample at its recorded speed/pitch and
+  transposition stays musical. XRNS import reads Mapping/BaseNote,
+  Transpose and Finetune; the sampler editor has a Root control.
+- Octave labels follow MIDI/Yamaha convention (60 = C-4) in tracker,
+  tracks view and notation, matching Renoise; LilyPond export fixed
+  accordingly and live keyboard entry aligns octave numbering.
+- Build: default -O3, --enable-lto / --enable-native-march, new
+  `make production` target, denormal FTZ/DAZ in the render path.
+
 0.1.2
 -----
 - Fix off-by-one orphan instrument: new projects start with the default

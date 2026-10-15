@@ -1,6 +1,14 @@
 Disgrace news
 =============
 
+0.1.5
+-----
+- Fix scrambled pattern lengths in the tracker pattern list (duplicate
+  rows went stale after resize; the timer rebuild no longer wipes
+  half-typed values).
+- Restore dead Ctrl+letter shortcuts (Copy/Cut/Paste/Undo/...) in the
+  tracker and add an Edit section to its right-click menu.
+
 0.1.3
 -----
 - Sampler instruments gain a per-sample root note (plus transpose cents):

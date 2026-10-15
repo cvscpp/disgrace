@@ -1,5 +1,5 @@
 AC_PREREQ([2.69])
-AC_INIT([disgrace], [0.1.3], [miroslav.shaltev@shaltev.de])
+AC_INIT([disgrace], [0.1.5], [miroslav.shaltev@shaltev.de])
 AC_CONFIG_SRCDIR([src/main.cpp])
 AC_CONFIG_HEADERS([config.h])
 

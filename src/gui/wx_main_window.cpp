@@ -291,6 +291,16 @@ void WxMainWindow::OnCharHook(wxKeyEvent& event) {
 
     Action action = m_engine.m_key_bindings.get_action(key, modifiers);
 
+    // The tracker view handles these edit actions itself in OnKeyDown (which
+    // fires as a separate event after this hook). When it has focus, step
+    // aside so each keypress is handled exactly once — otherwise Cut would
+    // wipe the just-filled clipboard and Undo/Redo would fire twice.
+    auto tracker_edit_focus = [&]() -> bool {
+        return m_selected_tab == 1 && m_tracker_panel &&
+               m_tracker_panel->get_tracker_view() &&
+               m_tracker_panel->get_tracker_view()->HasFocus();
+    };
+
     auto is_note_action = [](Action a) -> bool {
         return ((int)a >= (int)Action::NoteC && (int)a <= (int)Action::NoteB) ||
                ((int)a >= (int)Action::NoteC2 && (int)a <= (int)Action::NoteB2) ||
@@ -353,10 +363,12 @@ void WxMainWindow::OnCharHook(wxKeyEvent& event) {
         case Action::PlayFromPosition: m_engine.play_from_position(m_engine.current_row()); break;
         case Action::Stop: m_engine.stop(); break;
         case Action::Undo: 
+            if (tracker_edit_focus()) { event.Skip(); break; }
             if (m_selected_tab == 1 && m_tracker_panel) m_tracker_panel->get_tracker_view()->handle_action(Action::Undo);
             else m_engine.undo_stack().undo(); 
             break;
         case Action::Redo: 
+            if (tracker_edit_focus()) { event.Skip(); break; }
             if (m_selected_tab == 1 && m_tracker_panel) m_tracker_panel->get_tracker_view()->handle_action(Action::Redo);
             else m_engine.undo_stack().redo(); 
             break;
@@ -405,14 +417,17 @@ void WxMainWindow::OnCharHook(wxKeyEvent& event) {
         }
         case Action::ToggleMetronome: m_engine.toggle_metronome(); break;
         case Action::Cut: 
+            if (tracker_edit_focus()) { event.Skip(); break; }
             if (m_selected_tab == 1 && m_tracker_panel) m_tracker_panel->get_tracker_view()->handle_action(Action::Cut);
             else if (m_selected_tab == 4 && m_instrument_panel) m_instrument_panel->cut(); 
             break;
         case Action::Copy: 
+            if (tracker_edit_focus()) { event.Skip(); break; }
             if (m_selected_tab == 1 && m_tracker_panel) m_tracker_panel->get_tracker_view()->handle_action(Action::Copy);
             else if (m_selected_tab == 4 && m_instrument_panel) m_instrument_panel->copy(); 
             break;
         case Action::Paste: 
+            if (tracker_edit_focus()) { event.Skip(); break; }
             if (m_selected_tab == 1 && m_tracker_panel) m_tracker_panel->get_tracker_view()->handle_action(Action::Paste);
             else if (m_selected_tab == 4 && m_instrument_panel) m_instrument_panel->paste(); 
             break;

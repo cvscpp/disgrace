@@ -98,6 +98,12 @@ namespace {
         // Join the cursor track into an adjacent track as extra subtracks
         ID_JOIN_PREV,
         ID_JOIN_NEXT,
+        // Block clipboard
+        ID_EDIT_CUT,
+        ID_EDIT_COPY,
+        ID_EDIT_PASTE,
+        ID_EDIT_DELETE,
+        ID_EDIT_SELECT_ALL,
     };
 }
 
@@ -1290,6 +1296,23 @@ void TrackerView::OnRightClick(wxMouseEvent& event) {
 
     wxMenu menu;
 
+    // Edit sub-menu: block clipboard ops (same actions as Ctrl+X/C/V,
+    // Delete and Ctrl+A). Cut/Copy/Delete need an active selection,
+    // Paste needs clipboard content.
+    const bool has_sel = m_sel_active;
+    const bool has_clip = !m_engine.clipboard().cells.empty();
+    menu.Append(ID_EDIT_CUT, wxT("Cut\tCtrl+X"));
+    menu.Append(ID_EDIT_COPY, wxT("Copy\tCtrl+C"));
+    menu.Append(ID_EDIT_PASTE, wxT("Paste\tCtrl+V"));
+    menu.Append(ID_EDIT_DELETE, wxT("Delete"));
+    menu.Append(ID_EDIT_SELECT_ALL, wxT("Select All\tCtrl+A"));
+    menu.Enable(ID_EDIT_CUT, has_sel);
+    menu.Enable(ID_EDIT_COPY, has_sel);
+    menu.Enable(ID_EDIT_PASTE, has_clip);
+    menu.Enable(ID_EDIT_DELETE, has_sel);
+
+    menu.AppendSeparator();
+
     // Transpose sub-menu — three sections: Selection / Pattern / Song
     wxMenu* trans_menu = new wxMenu;
 
@@ -1334,8 +1357,19 @@ void TrackerView::OnRightClick(wxMouseEvent& event) {
     menu.Bind(wxEVT_MENU, [&](wxCommandEvent& ev) {
         int id = ev.GetId();
 
+        // Block clipboard
+        if (id == ID_EDIT_CUT) {
+            handle_action(Action::Cut);
+        } else if (id == ID_EDIT_COPY) {
+            handle_action(Action::Copy);
+        } else if (id == ID_EDIT_PASTE) {
+            handle_action(Action::Paste);
+        } else if (id == ID_EDIT_DELETE) {
+            handle_action(Action::Clear);
+        } else if (id == ID_EDIT_SELECT_ALL) {
+            handle_action(Action::SelectAll);
         // Selection-scope transpose
-        if (id == ID_TRANSPOSE_UP1 || id == ID_TRANSPOSE_DOWN1 ||
+        } else if (id == ID_TRANSPOSE_UP1 || id == ID_TRANSPOSE_DOWN1 ||
             id == ID_TRANSPOSE_UP12 || id == ID_TRANSPOSE_DOWN12) {
             int semitones = 0;
             if      (id == ID_TRANSPOSE_UP1)   semitones = +1;

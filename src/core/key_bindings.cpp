@@ -192,7 +192,11 @@ void KeyBindings::set_defaults() {
 
 Action KeyBindings::get_action(int key, int modifiers) const {
     int norm_key = key;
-    if (key >= 'a' && key <= 'z') norm_key = key - 'a' + 'A';
+    // On GTK, Ctrl+letter arrives as an ASCII control code (1-26 =
+    // Ctrl+A..Z) rather than the letter itself; normalize those too or
+    // every Ctrl+letter shortcut (Copy/Cut/Paste/Undo/...) silently misses.
+    if (key >= 1 && key <= 26) norm_key = key - 1 + 'A';
+    else if (key >= 'a' && key <= 'z') norm_key = key - 'a' + 'A';
     auto it = m_key_to_action.find({norm_key, modifiers});
     if (it != m_key_to_action.end()) return it->second;
     return static_cast<Action>(-1);
@@ -200,7 +204,8 @@ Action KeyBindings::get_action(int key, int modifiers) const {
 
 void KeyBindings::assign(Action action, int key, int modifiers) {
     int norm_key = key;
-    if (key >= 'a' && key <= 'z') norm_key = key - 'a' + 'A';
+    if (key >= 1 && key <= 26) norm_key = key - 1 + 'A';
+    else if (key >= 'a' && key <= 'z') norm_key = key - 'a' + 'A';
 
     auto it = m_action_to_key.find(action);
     if (it != m_action_to_key.end()) {

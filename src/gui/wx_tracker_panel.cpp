@@ -377,20 +377,28 @@ void TrackerPanel::update_pattern_list() {
                 long new_len = 0;
                 if (inp->GetValue().ToLong(&new_len) && new_len > 0 && new_len <= 512) {
                     this->m_engine.resize_pattern(pat_idx, (size_t)new_len);
-                    inp->SetValue(wxString::Format("%zu", this->m_engine.pattern(pat_idx).row_count()));
-                    this->m_tracker->recalculate_size();
-                    this->m_tracker->Refresh();
+                    // Rebuild async so every order row showing this pattern
+                    // (it may appear several times) displays the new length;
+                    // updating only this field left the duplicates stale.
+                    this->CallAfter([this]() {
+                        this->update_pattern_list();
+                        this->m_tracker->recalculate_size();
+                        this->m_tracker->Refresh();
+                    });
                 }
             }
         });
         len_inp->Bind(wxEVT_KILL_FOCUS, [this, pat_idx, len_inp](wxFocusEvent& ev) {
             ev.Skip();
             long new_len = 0;
-            if (len_inp->GetValue().ToLong(&new_len) && new_len > 0 && new_len <= 512) {
+            if (len_inp->GetValue().ToLong(&new_len) && new_len > 0 && new_len <= 512 &&
+                (size_t)new_len != this->m_engine.pattern(pat_idx).row_count()) {
                 this->m_engine.resize_pattern(pat_idx, (size_t)new_len);
-                len_inp->SetValue(wxString::Format("%zu", this->m_engine.pattern(pat_idx).row_count()));
-                this->m_tracker->recalculate_size();
-                this->m_tracker->Refresh();
+                this->CallAfter([this]() {
+                    this->update_pattern_list();
+                    this->m_tracker->recalculate_size();
+                    this->m_tracker->Refresh();
+                });
             }
         });
         m_pattern_length_inputs[pat_idx] = len_inp;
@@ -440,10 +448,18 @@ void TrackerPanel::update() {
             current_order_size != m_last_order_size ||
             current_pattern_count != m_last_pattern_count) {
 
-            m_selected_order_idx = (int)current_edit_pos;
-            update_pattern_list();
-            tracker_changed = true;
-            order_changed = true;
+            // Never destroy the list while a length field is being edited:
+            // the rebuild would wipe the half-typed value (and its focus),
+            // scrambling the edit. Defer to a later tick instead.
+            wxWindow* focus = wxWindow::FindFocus();
+            bool editing_length = focus && m_pattern_list_container &&
+                                  m_pattern_list_container->IsDescendant(focus);
+            if (!editing_length) {
+                m_selected_order_idx = (int)current_edit_pos;
+                update_pattern_list();
+                tracker_changed = true;
+                order_changed = true;
+            }
         }
 
         if (is_playing && tracker_changed) {

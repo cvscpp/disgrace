@@ -112,8 +112,10 @@ TrackerPanel::TrackerPanel(wxWindow* parent, Engine& engine)
     row3->Add(m_inc_pattern_btn, 0, wxALL, PAD);
     left_col->Add(row3, 0, wxEXPAND);
 
-    // Pattern list scroll (expands vertically to fill remaining space)
-    int pattern_list_width = 120;
+    // Pattern list scroll (expands vertically to fill remaining space).
+    // Wide enough for [POS button][pattern idx][length field] plus the
+    // vertical scrollbar, so the length field is never clipped.
+    int pattern_list_width = 148;
     m_pattern_scroll = new wxScrolledWindow(this, wxID_ANY, wxDefaultPosition,
                                             wxSize(pattern_list_width, -1), wxVSCROLL);
     m_pattern_scroll->SetScrollRate(0, 25);
@@ -323,18 +325,21 @@ void TrackerPanel::update_pattern_list() {
     m_order_buttons.clear();
     m_pattern_length_inputs.clear();
 
-    int row_h = 25;
-    int start_x = 0;
-    int start_y = 0;
+    // Sizer-based rows (no absolute positions): rows can never overlap or
+    // run under the scrollbar, at any font/DPI setting.
+    wxBoxSizer* list_sizer = new wxBoxSizer(wxVERTICAL);
+    const int row_h = 25;
 
     for (size_t i = 0; i < order_n; ++i) {
         size_t pat_idx = m_engine.order_entry(i);
         if (pat_idx == Engine::order_npos || pat_idx >= m_engine.pattern_count()) continue;
-        int cur_y = start_y + (int)(i * row_h);
+
+        wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
 
         wxString pos_str;
         pos_str.Printf("%02zu:", i);
-        wxButton* b = new wxButton(m_pattern_list_container, wxID_ANY, pos_str, wxPoint(start_x, cur_y), wxSize(35, row_h));
+        wxButton* b = new wxButton(m_pattern_list_container, wxID_ANY, pos_str,
+                                   wxDefaultPosition, wxSize(38, row_h));
         if (m_selected_order_idx == (int)i) {
             b->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_selection_color));
             b->SetForegroundColour(ThemeManager::contrastColor(m_engine.m_selection_color));
@@ -358,16 +363,21 @@ void TrackerPanel::update_pattern_list() {
             }
         });
         m_order_buttons[i] = b;
+        row->Add(b, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
 
         wxString pat_str;
         pat_str.Printf("%02zu", pat_idx);
-        wxStaticText* p = new wxStaticText(m_pattern_list_container, wxID_ANY, pat_str, wxPoint(start_x + 40, cur_y + 5), wxSize(25, row_h - 5));
+        wxStaticText* p = new wxStaticText(m_pattern_list_container, wxID_ANY, pat_str,
+                                           wxDefaultPosition, wxSize(28, -1));
         p->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_tracker_note));
+        row->Add(p, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
 
         size_t len = m_engine.pattern(pat_idx).row_count();
         wxString len_str;
         len_str.Printf("%zu", len);
-        wxTextCtrl* len_inp = new wxTextCtrl(m_pattern_list_container, wxID_ANY, len_str, wxPoint(start_x + 70, cur_y + 2), wxSize(40, 20), wxTE_PROCESS_ENTER);
+        wxTextCtrl* len_inp = new wxTextCtrl(m_pattern_list_container, wxID_ANY, len_str,
+                                            wxDefaultPosition, wxSize(44, -1),
+                                            wxTE_PROCESS_ENTER);
         len_inp->SetBackgroundColour(ThemeManager::toWxColour(m_engine.m_tracker_bg));
         len_inp->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_tracker_text));
         
@@ -402,12 +412,14 @@ void TrackerPanel::update_pattern_list() {
             }
         });
         m_pattern_length_inputs[pat_idx] = len_inp;
+        row->Add(len_inp, 0, wxALIGN_CENTER_VERTICAL);
+        list_sizer->Add(row, 0, wxEXPAND | wxBOTTOM, 1);
     }
 
-    m_pattern_list_container->SetSize(wxSize(120, (int)(order_n * row_h)));
-    m_pattern_scroll->SetVirtualSize(120, (int)(order_n * row_h));
-
+    m_pattern_list_container->SetSizer(list_sizer);
+    list_sizer->SetSizeHints(m_pattern_list_container);
     m_pattern_list_container->Layout();
+    m_pattern_scroll->FitInside();
     m_pattern_scroll->Refresh();
     Thaw();
 }

@@ -23,7 +23,7 @@ EXTRA_DIST = \
     dist/debian/disgrace.1 \
     dist/debian/README \
     dist/gentoo/metadata/layout.conf \
-    dist/gentoo/media-sound/disgrace/disgrace-0.1.5.ebuild \
+    dist/gentoo/media-sound/disgrace/disgrace-0.1.6.ebuild \
     dist/gentoo/media-sound/disgrace/metadata.xml \
     dist/gentoo/README
 

@@ -1,3 +1,10 @@
+disgrace (0.1.6-1) unstable; urgency=medium
+
+  * Guitar tab exporter with tuning dialog; fix pattern-list layout
+    scrambling under the scrollbar.
+
+ -- Miroslav Shaltev <miroslav.shaltev@shaltev.de>  Sat, 17 Oct 2026 22:30:00 +0000
+
 disgrace (0.1.5-1) unstable; urgency=medium
 
   * Fix scrambled pattern lengths; restore dead Ctrl+letter shortcuts

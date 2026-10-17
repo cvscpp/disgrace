@@ -1,6 +1,15 @@
 Disgrace news
 =============
 
+0.1.6
+-----
+- Guitar tab exporter: new "Export TAB" button renders a track as
+  ASCII guitar/bass tab with a tuning dialog (presets plus free
+  per-subtrack open strings). Notes sustain until note-off and
+  out-of-range notes find the nearest playable string.
+- Tracker pattern list rows use sizer layout and no longer scramble
+  under the scrollbar at any font or DPI.
+
 0.1.5
 -----
 - Fix scrambled pattern lengths in the tracker pattern list (duplicate

@@ -54,8 +54,9 @@ disgrace_SOURCES = \
     instrument/midi_instrument.cpp \
     instrument/voice_instrument.cpp \
     instrument/voice_synthesis_worker.cpp \
-    io/audio_file.cpp \
-    io/lilypond_exporter.cpp \
+   io/audio_file.cpp \
+   io/lilypond_exporter.cpp \
+   io/tab_exporter.cpp \
     io/project_archive.cpp \
     io/song_serializer.cpp \
     io/xrns_importer.cpp \
@@ -71,7 +72,8 @@ disgrace_SOURCES = \
     analysis/fft_analyzer.cpp \
     analysis/onset_detector.cpp \
     audio/beat_quantizer.cpp \
-    gui/wx_beat_quantize_dialog.cpp
+    gui/wx_beat_quantize_dialog.cpp \
+   gui/wx_tab_export_dialog.cpp
 
 dssi_sandbox_SOURCES = instrument/dssi_sandbox_main.cpp
 dssi_sandbox_CXXFLAGS = $(ALSA_CFLAGS)
@@ -146,6 +148,7 @@ noinst_HEADERS = \
     gui/tracker_widget.h \
     gui/wx_analog_vu_meter.h \
     gui/wx_beat_quantize_dialog.h \
+   gui/wx_tab_export_dialog.h \
     gui/wx_detached_frame.h \
     gui/wx_help_panel.h \
     gui/wx_instrument_panel.h \
@@ -174,8 +177,9 @@ noinst_HEADERS = \
     instrument/voice_instrument.h \
     instrument/voice_synthesis_worker.h \
     instrument/xrni_instrument.h \
-    io/audio_file.h \
-    io/lilypond_exporter.h \
+   io/audio_file.h \
+   io/lilypond_exporter.h \
+   io/tab_exporter.h \
     io/midi_importer.h \
     io/project_archive.h \
     io/song_serializer.h \

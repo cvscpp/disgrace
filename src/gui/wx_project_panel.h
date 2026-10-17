@@ -38,6 +38,7 @@ private:
     wxButton* m_save_btn;
     wxButton* m_export_btn;
     wxButton* m_export_ly_btn;
+    wxButton* m_export_tab_btn;
     wxDirPickerCtrl* m_dir_picker;
     wxListBox* m_file_list;
 
@@ -65,6 +66,7 @@ private:
     void on_export(wxCommandEvent& event);
     void on_export_timer(wxTimerEvent& event);
     void on_export_ly(wxCommandEvent& event);
+    void on_export_tab(wxCommandEvent& event);
     void on_file_select(wxCommandEvent& event);
     void on_dir_changed(wxFileDirPickerEvent& event);
     void on_file_dclick(wxCommandEvent& event);

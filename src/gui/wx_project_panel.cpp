@@ -1,8 +1,10 @@
 #include "wx_project_panel.h"
 #include "wx_main_window.h"
+#include "wx_tab_export_dialog.h"
 #include "file_history.h"
 #include "../core/engine.h"
 #include "../io/lilypond_exporter.h"
+#include "../io/tab_exporter.h"
 
 #include <wx/sizer.h>
 #include <wx/msgdlg.h>
@@ -23,6 +25,7 @@ wxBEGIN_EVENT_TABLE(ProjectPanel, wxPanel)
     EVT_BUTTON(wxID_SAVE, ProjectPanel::on_save)
     EVT_BUTTON(wxID_FILE2, ProjectPanel::on_export)
     EVT_BUTTON(wxID_FILE3, ProjectPanel::on_export_ly)
+    EVT_BUTTON(wxID_FILE4, ProjectPanel::on_export_tab)
 wxEND_EVENT_TABLE()
 
 ProjectPanel::ProjectPanel(wxWindow* parent, WxMainWindow* main_window, Engine& engine)
@@ -35,7 +38,7 @@ ProjectPanel::ProjectPanel(wxWindow* parent, WxMainWindow* main_window, Engine& 
 
     // File Operations Group
     wxStaticBoxSizer* file_group = new wxStaticBoxSizer(wxVERTICAL, m_left_panel, "File Operations");
-    wxFlexGridSizer* file_btn_grid = new wxFlexGridSizer(2, 3, 5, 5);
+    wxFlexGridSizer* file_btn_grid = new wxFlexGridSizer(3, 3, 5, 5);
     file_btn_grid->AddGrowableCol(0);
     file_btn_grid->AddGrowableCol(1);
     file_btn_grid->AddGrowableCol(2);
@@ -50,6 +53,7 @@ ProjectPanel::ProjectPanel(wxWindow* parent, WxMainWindow* main_window, Engine& 
     m_save_btn = create_btn(wxID_SAVE, "Save");
     m_export_btn = create_btn(wxID_FILE2, "Export");
     m_export_ly_btn = create_btn(wxID_FILE3, "Export LY");
+    m_export_tab_btn = create_btn(wxID_FILE4, "Export TAB");
 
     file_btn_grid->Add(m_new_btn, 1, wxEXPAND);
     file_btn_grid->Add(m_load_btn, 1, wxEXPAND);
@@ -57,6 +61,7 @@ ProjectPanel::ProjectPanel(wxWindow* parent, WxMainWindow* main_window, Engine& 
     file_btn_grid->Add(m_save_btn, 1, wxEXPAND);
     file_btn_grid->Add(m_export_btn, 1, wxEXPAND);
     file_btn_grid->Add(m_export_ly_btn, 1, wxEXPAND);
+    file_btn_grid->Add(m_export_tab_btn, 1, wxEXPAND);
     
     file_group->Add(file_btn_grid, 0, wxEXPAND | wxALL, 5);
     left_sizer->Add(file_group, 0, wxEXPAND | wxALL, 5);
@@ -527,6 +532,24 @@ void ProjectPanel::on_export_ly(wxCommandEvent& event) {
             wxMessageBox("LilyPond export completed", "Success", wxOK | wxICON_INFORMATION);
         } else {
             wxMessageBox("LilyPond export failed", "Error", wxOK | wxICON_ERROR);
+        }
+    }
+}
+
+void ProjectPanel::on_export_tab(wxCommandEvent& event) {
+    TabExportDialog dlg(this, m_engine);
+    if (dlg.ShowModal() != wxID_OK) return;
+    TabExportConfig cfg = dlg.get_config();
+
+    wxFileDialog save(this, "Export Guitar Tabs", file_history_project_dir(m_engine, "export"), "",
+                      "Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
+                      wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    if (save.ShowModal() == wxID_OK) {
+        file_history_remember("export", save.GetPath());
+        if (TabExporter::export_track(m_engine, cfg, save.GetPath().ToStdString())) {
+            wxMessageBox("Tab export completed", "Success", wxOK | wxICON_INFORMATION);
+        } else {
+            wxMessageBox("Tab export failed", "Error", wxOK | wxICON_ERROR);
         }
     }
 }

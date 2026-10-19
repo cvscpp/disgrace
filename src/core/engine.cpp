@@ -1498,6 +1498,26 @@ size_t Engine::track_count() const { return m_tracks.size(); }
 Track& Engine::track(size_t index) { return m_tracks[index]; }
 const Track& Engine::track(size_t index) const { return m_tracks[index]; }
 
+size_t Engine::track_columns(size_t track) const {
+    if (m_patterns.empty() || track >= m_tracks.size()) return 1;
+    return pattern(m_active_pattern.load()).column_count(track);
+}
+
+void Engine::set_track_columns(size_t track, size_t cols) {
+    if (cols < 1) cols = 1;
+    if (cols > MAX_COLS) cols = MAX_COLS;
+    for (auto& p : m_patterns) p->set_column_count(track, cols);
+}
+
+void Engine::sync_track_columns() {
+    for (size_t t = 0; t < m_tracks.size(); ++t) {
+        size_t cols = 1;
+        for (auto& p : m_patterns)
+            cols = std::max(cols, p->column_count(t));
+        for (auto& p : m_patterns) p->set_column_count(t, cols);
+    }
+}
+
 void Engine::add_instrument() { m_instruments.push_back(std::make_unique<NoneInstrument>()); mark_dirty(); }
 void Engine::add_instrument(::std::unique_ptr<disgrace_ns::Instrument> inst) { m_instruments.push_back(std::move(inst)); mark_dirty(); }
 void Engine::remove_instrument(size_t index) { if (index < m_instruments.size()) { m_instruments.erase(m_instruments.begin() + index); mark_dirty(); } }
@@ -1519,11 +1539,16 @@ size_t Engine::pattern_count() const { return m_patterns.size(); }
 
 size_t Engine::create_pattern() {
     size_t rows = 64;
+    size_t src = m_active_pattern.load();
     if (!m_patterns.empty()) rows = pattern().row_count();
     m_patterns.push_back(std::make_unique<Pattern>(rows, m_tracks.size()));
     Pattern& p = *m_patterns.back();
-    for (size_t i = 0; i < m_tracks.size(); ++i) {
-        p.set_column_count(i, 1);
+    // Subtrack counts are global per track: inherit them from the
+    // previously active pattern instead of resetting to one column.
+    if (src < m_patterns.size() - 1) {
+        for (size_t i = 0; i < m_tracks.size(); ++i) {
+            p.set_column_count(i, m_patterns[src]->column_count(i));
+        }
     }
     return m_patterns.size() - 1;
 }

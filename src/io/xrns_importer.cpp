@@ -688,6 +688,7 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
     engine.m_edit_order_pos.store(0);
     engine.m_order_pos.store(0);
 
+    engine.sync_track_columns();
     std::cout << "XRNS import complete: " << engine.track_count() << " tracks, " << engine.pattern_count() << " patterns" << std::endl;
     engine.mark_dirty();
     return true;

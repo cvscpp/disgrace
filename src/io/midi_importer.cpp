@@ -422,6 +422,7 @@ bool MidiImporter::import(Engine& engine, const std::string& path)
     engine.m_edit_order_pos.store(0);
     engine.m_order_pos.store(0);
 
+    engine.sync_track_columns();
     std::cout << "MIDI import complete: " << engine.track_count() << " tracks, "
               << engine.pattern_count() << " patterns, " << parser.notes.size()
               << " notes, " << int(std::lround(bpm)) << " BPM" << std::endl;

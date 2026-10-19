@@ -464,6 +464,9 @@ namespace disgrace_ns
                 }
             }
         }
+        // Legacy files may have per-pattern column counts that disagree;
+        // subtrack counts are global per track now.
+        engine.sync_track_columns();
         return true;
     }
 

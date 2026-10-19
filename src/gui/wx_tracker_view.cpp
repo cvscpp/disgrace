@@ -733,12 +733,12 @@ void TrackerView::OnMouseDown(wxMouseEvent& event) {
         for (size_t t = 0; t < m_track_ui.size(); ++t) {
             const auto& ui = m_track_ui[t];
             if (mx >= ui.btn_plus_x && mx < ui.btn_plus_x + 18) {
-                m_engine.pattern().set_column_count(t, m_engine.pattern().column_count(t) + 1);
+                m_engine.set_track_columns(t, m_engine.track_columns(t) + 1);
                 recalculate_size(); Refresh(); return;
             }
             if (mx >= ui.btn_minus_x && mx < ui.btn_minus_x + 18) {
-                size_t current = m_engine.pattern().column_count(t);
-                if (current > 1) { m_engine.pattern().set_column_count(t, current - 1); recalculate_size(); Refresh(); }
+                size_t current = m_engine.track_columns(t);
+                if (current > 1) { m_engine.set_track_columns(t, current - 1); recalculate_size(); Refresh(); }
                 return;
             }
         }

@@ -308,6 +308,13 @@ public:
     disgrace_ns::Track& track(size_t index);
     const disgrace_ns::Track& track(size_t index) const;
     size_t track_count() const;
+    // Subtrack (note column) count is global per track: every pattern of
+    // a track has the same number of subtracks.
+    size_t track_columns(size_t track) const;
+    void set_track_columns(size_t track, size_t cols);
+    // Reconcile legacy/imported songs: raise every pattern of a track to
+    // the largest column count found among the patterns.
+    void sync_track_columns();
     void add_track();
     void remove_track(size_t index);
     void move_track(size_t from, size_t to);

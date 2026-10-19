@@ -1,6 +1,12 @@
 Disgrace news
 =============
 
+0.1.7
+-----
+- Subtrack counts are now global per track: adding or removing note
+  columns applies to every pattern, and new patterns keep the same
+  subtracks instead of resetting to one.
+
 0.1.6
 -----
 - Guitar tab exporter: new "Export TAB" button renders a track as

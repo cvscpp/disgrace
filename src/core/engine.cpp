@@ -407,6 +407,7 @@ void Engine::play_song() {
     }
     m_current_row = 0;
     m_current_tick = 0;
+    m_samples_until_next_tick.store(0);
     set_loop(false);
     auto_seek();
     start();
@@ -416,6 +417,7 @@ void Engine::play_pattern() {
     stop();
     m_current_row = 0;
     m_current_tick = 0;
+    m_samples_until_next_tick.store(0);
     set_loop(true);
     auto_seek();
     start();
@@ -432,6 +434,7 @@ void Engine::play_from_position(size_t row) {
     }
     m_current_row = row;
     m_current_tick = 0;
+    m_samples_until_next_tick.store(0);
     set_loop(true);
     auto_seek();
     start();
@@ -455,6 +458,7 @@ void Engine::set_play_position(size_t order_pos, size_t row) {
     }
     m_current_row = row;
     m_current_tick = 0;
+    m_samples_until_next_tick.store(0);
     if (was_playing) {
         transport().set_loop(was_looping);
         auto_seek();
@@ -699,13 +703,25 @@ void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float*
 
     size_t processed = 0;
     while (processed < nframes) {
+        // Snapshot the transport state once per iteration. The GUI thread can
+        // start/stop playback at any moment (Transport::play()/stop() are plain
+        // atomic stores), and process_tick() itself stops the transport at the
+        // song end. When the state was read again after rendering, a Play
+        // pressed while this block was rendering made `block` (the full period,
+        // not clamped to the tick phase because the transport was still stopped
+        // at the top) exceed m_samples_until_next_tick, so the subtraction at
+        // the bottom underflowed it to ~SIZE_MAX. From then on no tick ever
+        // fired — playback stayed "playing" but silent — and the transport
+        // clock computed samples_per_tick - ~SIZE_MAX, i.e. a huge negative
+        // time (formats as "-2147483648:...").
+        const bool playing = transport().is_playing();
         size_t block = nframes - processed;
-        if (transport().is_playing()) {
+        if (playing) {
             if (m_samples_until_next_tick == 0) {
                 process_tick();
                 m_samples_until_next_tick = m_timing.samples_per_tick();
             }
-            block = std::min(block, m_samples_until_next_tick);
+            block = std::min(block, m_samples_until_next_tick.load());
         }
         block = std::min(block, MAX_BLOCK);
 
@@ -719,8 +735,12 @@ void Engine::process_audio(const float* const* in_bufs, uint32_t num_ins, float*
 
         render_block_multi(offset_out_bufs, num_outs, block, in_bufs ? offset_in_bufs : nullptr, num_ins);
         processed += block;
-        if (transport().is_playing())
-            m_samples_until_next_tick -= block;
+        if (playing) {
+            // Saturating: never let the tick phase underflow.
+            const size_t phase = m_samples_until_next_tick.load(std::memory_order_relaxed);
+            m_samples_until_next_tick.store(phase > block ? phase - block : 0,
+                                            std::memory_order_relaxed);
+        }
     }
 
     // Master bus processing on hardware outputs 1-2 (out_bufs[0] and out_bufs[1])
@@ -764,7 +784,7 @@ void Engine::process_block(float* l, float* r, size_t nframes, const float* cons
             process_tick();
             m_samples_until_next_tick = m_timing.samples_per_tick();
         }
-        size_t block = std::min(m_samples_until_next_tick, nframes - processed);
+        size_t block = std::min(m_samples_until_next_tick.load(), nframes - processed);
         block = std::min(block, MAX_BLOCK);
         
         const float* offset_in_bufs[64];
@@ -1560,12 +1580,17 @@ size_t Engine::copy_pattern(size_t index) {
 }
 
 void Engine::resize_pattern(size_t index, size_t new_rows) {
-    EngineCommand cmd;
-    cmd.type = EngineCommandType::ResizePattern;
-    cmd.index = index;
-    cmd.value = (float)new_rows;
-    m_cmd_queue.push(cmd);
-    process_commands();
+    // Apply directly instead of routing through m_cmd_queue. Draining the
+    // queue here made the GUI a second consumer of a single-consumer ring
+    // buffer (the audio thread is the other), so Play/Stop commands could be
+    // popped twice or executed out of order — leaving the transport in the
+    // wrong state. Pattern row counts are a plain size_t and the sample data
+    // is not reallocated, so applying this on the GUI thread is safe.
+    if (index >= m_patterns.size()) return;
+    m_patterns[index]->resize_rows(new_rows);
+    if (m_active_pattern.load() == index &&
+        m_current_row.load() >= m_patterns[index]->row_count())
+        m_current_row = 0;
 }
 
 void Engine::process_commands() {
@@ -1947,17 +1972,37 @@ double Engine::get_current_time_seconds() const {
     
     double samples = (double)total_rows * m_timing.samples_per_row();
     samples += (double)m_current_tick * m_timing.samples_per_tick();
-    
-    // Add sub-tick progress if playing
+
+    // Add sub-tick progress if playing. m_samples_until_next_tick is owned by
+    // the RT thread: if it is ever stale, torn or out of range, ignore it
+    // instead of converting the clock into a huge negative time (the transport
+    // bar used to show e.g. "-2147483648:-418293516410639.688").
     if (transport().is_playing()) {
-        samples += (double)m_timing.samples_per_tick() - (double)m_samples_until_next_tick;
+        const double tick = (double)m_timing.samples_per_tick();
+        const double remaining = (double)m_samples_until_next_tick;
+        if (remaining <= tick)
+            samples += tick - remaining;
     }
-    
-    return samples / (double)m_sample_rate;
+
+    const double seconds = samples / (double)m_sample_rate;
+    // Also maps NaN to 0 so the clock never renders garbage.
+    return seconds > 0.0 ? seconds : 0.0;
 }
 
 double Engine::get_time_at_row(size_t row) const {
     size_t total_rows = 0;
+
+    // The tracker cursor can be left beyond the end of the active pattern
+    // (e.g. after the pattern length was shortened), and a negative cursor row
+    // arrives here as a huge size_t. Clamp to the pattern so the clock cannot
+    // show a nonsensical duration.
+    if (!m_patterns.empty()) {
+        const size_t rows = m_patterns[m_active_pattern.load()]->row_count();
+        if (rows > 0 && row >= rows)
+            row = rows - 1;
+        else if (rows == 0)
+            row = 0;
+    }
     
     // Use edit order pos for calculation when not playing
     size_t edit_pos = m_edit_order_pos.load();
@@ -1970,7 +2015,8 @@ double Engine::get_time_at_row(size_t row) const {
     total_rows += row;
     
     double samples = (double)total_rows * m_timing.samples_per_row();
-    return samples / (double)m_sample_rate;
+    const double seconds = samples / (double)m_sample_rate;
+    return seconds > 0.0 ? seconds : 0.0;
 }
 
 } // namespace disgrace_ns

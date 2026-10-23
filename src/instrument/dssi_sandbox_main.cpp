@@ -134,6 +134,10 @@ int main(int argc, char* argv[])
     int         plugin_idx  = atoi(argv[3]);
     double      sample_rate = atof(argv[4]);
 
+    // The host closes the setup pipe once it has read READY. A plugin (or a
+    // library underneath it) writing to stdout must never kill the sandbox.
+    signal(SIGPIPE, SIG_IGN);
+
     (void)chdir_to_degenerat_preset_root(plugin_path);
 
     // ── 1. Attach to shared memory (created by parent) ─────────────────
@@ -267,6 +271,19 @@ int main(int argc, char* argv[])
     fprintf(stdout, "AUDIO_R %d\n", audio_out_r);
     fprintf(stdout, "READY\n");
     fflush(stdout);
+
+    // ── 4b. Detach stdout from the host pipe ──────────────────────────
+    // The host closes its read end once the handshake is complete. Point
+    // stdout at /dev/null: a plugin that printf()s from run_synth() would
+    // otherwise fill the pipe buffer and block inside write(), freezing the
+    // RT loop. That looked exactly like a dead plugin and was undetectable.
+    {
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            close(devnull);
+        }
+    }
 
     // ── 5. RT loop ────────────────────────────────────────────────────
     // Copy initial port values from shm (host may have set them during setup).

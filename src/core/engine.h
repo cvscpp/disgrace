@@ -149,7 +149,10 @@ public:
     void remove_pattern_from_order(size_t order_pos);
     size_t copy_pattern_in_order(size_t order_pos);
 
-    size_t m_samples_until_next_tick = 0;
+    // Tick phase: samples left until the next sequencer tick. Written by the
+    // RT thread while playing and by the GUI when (re)starting playback, so it
+    // is atomic. Never allowed to underflow (see process_audio).
+    ::std::atomic<size_t> m_samples_until_next_tick{0};
     int    m_current_tick = 0;
     ::std::atomic<size_t> m_current_row{0};
     ::std::atomic<size_t> m_order_pos{0};

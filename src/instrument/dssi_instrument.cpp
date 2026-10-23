@@ -25,6 +25,7 @@
 #include <cerrno>
 
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -39,6 +40,17 @@
 namespace disgrace_ns {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// How long the parent waits for the child's setup protocol (OK…READY).
+// Generous: large sample-based synths can take a while to instantiate.
+static constexpr int kSetupTimeoutMs = 15000;
+
+static int64_t monotonic_ms()
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
 
 // Resolve the absolute path of the running executable.  Portable across the
 // platforms Disgrace supports:
@@ -96,24 +108,29 @@ void DSSIInstrument::teardown_sandbox()
 {
     m_alive.store(false);
 
-    if (m_child_pid > 0 && m_shm_ptr) {
-        shm()->shutdown = 1;
-        sem_post(&shm()->sem_req);
-        for (int i = 0; i < 20; ++i) {
-            usleep(10000);
-            int status;
-            if (waitpid(m_child_pid, &status, WNOHANG) == m_child_pid)
-                goto cleanup;
-        }
-        kill(m_child_pid, SIGKILL);
-        waitpid(m_child_pid, nullptr, 0);
-    }
-cleanup:
-    m_child_pid = -1;
+    // Take ownership of the pid. After this exchange the RT thread's liveness
+    // probe can no longer touch it, and the pid is never signalled twice —
+    // signalling a reaped pid would risk hitting a recycled, unrelated process.
+    const pid_t pid = m_child_pid.exchange(-1, std::memory_order_acq_rel);
 
-    if (m_stdout_rfd >= 0) {
-        close(m_stdout_rfd);
-        m_stdout_rfd = -1;
+    if (pid > 0) {
+        if (m_shm_ptr) {
+            shm()->shutdown = 1;
+            sem_post(&shm()->sem_req);
+        }
+        bool reaped = false;
+        for (int i = 0; i < 20 && m_shm_ptr; ++i) {
+            usleep(10000);
+            int status = 0;
+            const pid_t r = waitpid(pid, &status, WNOHANG);
+            if (r == pid) { reaped = true; break; }
+            // ECHILD: someone else (the liveness probe) already reaped it.
+            if (r == -1 && errno == ECHILD) { reaped = true; break; }
+        }
+        if (!reaped) {
+            kill(pid, SIGKILL);
+            waitpid(pid, nullptr, 0);
+        }
     }
 
     if (m_shm_ptr && m_shm_ptr != MAP_FAILED) {
@@ -126,11 +143,21 @@ cleanup:
         shm_unlink(m_shm_name.c_str());
         m_shm_name.clear();
     }
+
+    // Per-session runtime state must not survive into the next spawn.
+    m_request_pending = false;
+    m_pending_frames  = 0;
+    m_pending_midi.clear();
+    m_wait_samples    = 0;
+    for (auto& n : m_last_note) n = -1;
 }
 
 bool DSSIInstrument::spawn_sandbox(const std::string& plugin_path, int plugin_idx)
 {
     teardown_sandbox();
+    m_audio_out_l = -1;
+    m_audio_out_r = -1;
+    m_has_run_synth = false;
 
     // ── Shared memory ────────────────────────────────────────────────
     char shm_name_buf[64];
@@ -198,6 +225,10 @@ bool DSSIInstrument::spawn_sandbox(const std::string& plugin_path, int plugin_id
         close(pfd[0]);
         dup2(pfd[1], STDOUT_FILENO);
         close(pfd[1]);
+        // The host closes the read end once the handshake is done and the
+        // child then points stdout at /dev/null. Ignore SIGPIPE as well so
+        // that a stray write can never kill the sandbox mid-song.
+        signal(SIGPIPE, SIG_IGN);
         int maxfd = (int)sysconf(_SC_OPEN_MAX);
         for (int i = 3; i < maxfd; ++i) close(i);
 
@@ -217,78 +248,111 @@ bool DSSIInstrument::spawn_sandbox(const std::string& plugin_path, int plugin_id
 
     // Parent
     close(pfd[1]);
-    m_child_pid = pid;
+    m_child_pid.store(pid, std::memory_order_relaxed);
 
-    // ── Read setup protocol from child ────────────────────────────────
-    FILE* f = fdopen(pfd[0], "r");
-    if (!f) {
-        std::cerr << "[DSSIInstrument] fdopen failed\n";
-        teardown_sandbox();
-        return false;
-    }
+    // ── Read setup protocol from child (bounded in time) ──────────────
+    // This runs on the GUI thread, so a plugin that hangs in instantiate()
+    // must not block it forever: poll with a deadline instead of fgets().
+    const int64_t deadline = monotonic_ms() + kSetupTimeoutMs;
+    std::string rx;          // received bytes not yet split into lines
+    bool timed_out = false;
+
+    auto pump = [&]() -> bool {
+        const int64_t left = deadline - monotonic_ms();
+        if (left <= 0) { timed_out = true; return false; }
+        struct pollfd p{ pfd[0], POLLIN, 0 };
+        const int pr = poll(&p, 1, (int)std::min<int64_t>(left, 250));
+        if (pr == 0) return true;                       // re-check the deadline
+        if (pr < 0) return errno == EINTR;              // else: error → stop
+        char buf[512];
+        const ssize_t n = read(pfd[0], buf, sizeof(buf));
+        if (n > 0) { rx.append(buf, (size_t)n); return true; }
+        if (n < 0 && errno == EINTR) return true;
+        return false;                                   // EOF or fatal read error
+    };
+
+    auto next_line = [&](std::string& out) -> bool {
+        for (;;) {
+            const size_t nl = rx.find('\n');
+            if (nl != std::string::npos) {
+                out.assign(rx, 0, nl);
+                rx.erase(0, nl + 1);
+                while (!out.empty() && out.back() == '\r') out.pop_back();
+                return true;
+            }
+            if (!pump()) return false;
+        }
+    };
 
     bool ok = false;
-    char line[1024];
-    while (fgets(line, sizeof(line), f)) {
-        size_t len = strlen(line);
-        while (len > 0 && (line[len-1] == '\n' || line[len-1] == '\r')) line[--len] = '\0';
+    std::string err_line;
+    std::string line;
+    while (next_line(line)) {
+        const char* l = line.c_str();
 
-        if (strncmp(line, "ERROR ", 6) == 0) {
-            std::cerr << "[DSSIInstrument] child: " << line << "\n";
+        if (strncmp(l, "ERROR ", 6) == 0) {
+            err_line = l + 6;
             break;
-        } else if (strcmp(line, "OK") == 0) {
+        } else if (strcmp(l, "OK") == 0) {
             ok = true;
-        } else if (strncmp(line, "NAME ", 5) == 0) {
-            set_plugin_name(line + 5);
-        } else if (strncmp(line, "HAS_SYNTH ", 10) == 0) {
-            m_has_run_synth = (line[10] == '1');
-        } else if (strncmp(line, "CTRL_COUNT ", 11) == 0) {
-            int cnt = atoi(line + 11);
+        } else if (strncmp(l, "NAME ", 5) == 0) {
+            set_plugin_name(l + 5);
+        } else if (strncmp(l, "HAS_SYNTH ", 10) == 0) {
+            m_has_run_synth = (l[10] == '1');
+        } else if (strncmp(l, "CTRL_COUNT ", 11) == 0) {
+            int cnt = atoi(l + 11);
             m_ctrl_info.clear();
             m_ctrl_info.reserve((size_t)cnt);
-        } else if (strncmp(line, "CTRL ", 5) == 0) {
+        } else if (strncmp(l, "CTRL ", 5) == 0) {
             CtrlInfo ci{};
             char name_buf[512] = {};
             int seq_idx = 0;
-            if (sscanf(line + 5, "%d %d %f %f %f %511[^\n]",
+            if (sscanf(l + 5, "%d %d %f %f %f %511[^\n]",
                        &seq_idx, &ci.port_idx,
                        &ci.min_v, &ci.max_v, &ci.def_v, name_buf) >= 5) {
                 ci.name = name_buf;
                 ci.current_value = ci.def_v;
                 m_ctrl_info.push_back(ci);
             }
-        } else if (strncmp(line, "AUDIO_L ", 8) == 0) {
-            m_audio_out_l = atoi(line + 8);
-        } else if (strncmp(line, "AUDIO_R ", 8) == 0) {
-            m_audio_out_r = atoi(line + 8);
-        } else if (strcmp(line, "READY") == 0) {
+        } else if (strncmp(l, "AUDIO_L ", 8) == 0) {
+            m_audio_out_l = atoi(l + 8);
+        } else if (strncmp(l, "AUDIO_R ", 8) == 0) {
+            m_audio_out_r = atoi(l + 8);
+        } else if (strcmp(l, "READY") == 0) {
             break;
-        } else if (strncmp(line, "PROGRAM_COUNT ", 14) == 0) {
-            int cnt = atoi(line + 14);
+        } else if (strncmp(l, "PROGRAM_COUNT ", 14) == 0) {
+            int cnt = atoi(l + 14);
             m_programs.clear();
             m_programs.reserve((size_t)cnt);
-        } else if (strncmp(line, "PROGRAM ", 8) == 0) {
+        } else if (strncmp(l, "PROGRAM ", 8) == 0) {
             ProgramInfo pi{};
             char name_buf[512] = {};
             int seq_idx = 0;
-            if (sscanf(line + 8, "%d %lu %lu %511[^\n]",
+            if (sscanf(l + 8, "%d %lu %lu %511[^\n]",
                        &seq_idx, &pi.bank, &pi.program, name_buf) >= 3) {
                 pi.name = name_buf;
                 m_programs.push_back(pi);
             }
         }
     }
-
-    // Retain the raw fd; detach the FILE wrapper without closing the underlying fd.
-    int tmp_fd = dup(fileno(f));
-    fclose(f);
-    m_stdout_rfd = tmp_fd;
+    close(pfd[0]);
 
     if (!ok) {
-        std::cerr << "[DSSIInstrument] plugin failed to start\n";
+        if (timed_out) {
+            m_last_error = "plugin did not respond within " +
+                           std::to_string(kSetupTimeoutMs / 1000) +
+                           "s while starting";
+        } else if (!err_line.empty()) {
+            m_last_error = err_line;
+        } else {
+            m_last_error = "sandbox exited during startup";
+        }
+        std::cerr << "[DSSIInstrument] " << m_last_error
+                  << " (" << plugin_path << " #" << plugin_idx << ")\n";
         teardown_sandbox();
         return false;
     }
+    m_last_error.clear();
 
     // Populate shm port values with defaults
     shm()->port_count = (uint32_t)m_ctrl_info.size();
@@ -318,23 +382,45 @@ bool DSSIInstrument::load_plugin(const std::string& path, int index)
     m_programs.clear();
     m_bank    = 0;
     m_program = 0;
-    return spawn_sandbox(path, index);
+    m_last_error.clear();
+    set_status(InstrumentStatus::Starting);
+    set_exit_status(0);
+
+    const bool ok = spawn_sandbox(path, index);
+    set_status(ok ? InstrumentStatus::Ok : InstrumentStatus::LoadFailed);
+    return ok;
 }
 
 bool DSSIInstrument::is_alive() const
 {
     if (!m_alive.load(std::memory_order_relaxed)) return false;
-    if (m_child_pid <= 0) return true;
-    // Throttle the kill() probe: monotonic clock, at most ~2 checks/sec.
-    // clock_gettime is vDSO (no syscall); kill() is not.
-    struct timespec now_ts;
-    clock_gettime(CLOCK_MONOTONIC, &now_ts);
-    const int64_t now_ms = (int64_t)now_ts.tv_sec * 1000 + now_ts.tv_nsec / 1000000;
-    const int64_t last = m_last_alive_check_ms.load(std::memory_order_relaxed);
+    const pid_t pid = m_child_pid.load(std::memory_order_relaxed);
+    if (pid <= 0) return true;
+
+    // Throttle the syscalls to ~2/sec, and let exactly one thread perform
+    // them. clock_gettime is cheap (vDSO); waitpid is not.
+    const int64_t now_ms = monotonic_ms();
+    int64_t last = m_last_alive_check_ms.load(std::memory_order_relaxed);
     if (now_ms - last < 500) return true;
-    m_last_alive_check_ms.store(now_ms, std::memory_order_relaxed);
-    if (kill(m_child_pid, 0) == -1 && errno == ESRCH) {
+    if (!m_last_alive_check_ms.compare_exchange_strong(last, now_ms,
+                                                       std::memory_order_relaxed))
+        return true; // another thread is probing right now
+
+    // Reap instead of signalling. kill(zombie, 0) succeeds, so the previous
+    // probe could never observe a crashed sandbox: the child stayed a zombie
+    // and the track went permanently silent with no diagnostic anywhere.
+    int status = 0;
+    pid_t r;
+    do { r = waitpid(pid, &status, WNOHANG); } while (r == -1 && errno == EINTR);
+
+    // r == pid: the sandbox exited and we just reaped it.
+    // ECHILD:  it was reaped elsewhere — gone either way, so treat as dead
+    //          rather than reporting a phantom "alive" forever.
+    if (r == pid || (r == -1 && errno == ECHILD)) {
+        set_exit_status(r == pid ? status : 0);
+        set_status(InstrumentStatus::Crashed);
         m_alive.store(false, std::memory_order_relaxed);
+        m_child_pid.store(-1, std::memory_order_relaxed);
         return false;
     }
     return true;
@@ -419,6 +505,7 @@ void DSSIInstrument::process(float* l, float* r, size_t nframes)
         if (m_request_pending && m_shm_ptr)
             sem_trywait(&shm()->sem_done);
         m_request_pending = false;
+        m_wait_samples = 0;
         return;
     }
 
@@ -427,8 +514,19 @@ void DSSIInstrument::process(float* l, float* r, size_t nframes)
     // One-block latency. Never block the JACK thread, and never post a
     // second request while the sandbox is still rendering the previous one.
     if (m_request_pending) {
-        if (sem_trywait(&s->sem_done) != 0)
+        if (sem_trywait(&s->sem_done) != 0) {
+            // Still rendering. A sandbox that stops answering silences the
+            // track forever (we never post again), so report it instead of
+            // hiding it: 2 s without a reply is a stall, not latency.
+            m_wait_samples += nframes;
+            if (m_wait_samples > (uint64_t)m_sample_rate * 2 &&
+                status() != InstrumentStatus::Stalled)
+                set_status(InstrumentStatus::Stalled);
             return;
+        }
+        m_wait_samples = 0;
+        if (status() == InstrumentStatus::Stalled)
+            set_status(InstrumentStatus::Ok);
         uint32_t frames = m_pending_frames;
         if (frames > nframes) frames = (uint32_t)nframes;
         if (m_volume == 1.0f) {

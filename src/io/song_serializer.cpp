@@ -32,6 +32,7 @@
 #include "audio_file.h"
 
 #include <fstream>
+#include <iostream>
 #include <filesystem>
 #include <nlohmann/json.hpp>
 
@@ -377,6 +378,11 @@ namespace disgrace_ns
                                     dssi.set_parameter(p, jparams[p]);
                                 }
                             }
+                        } else {
+                            // Instrument stays silent but is flagged LoadFailed;
+                            // keep going so the rest of the project loads.
+                            std::cerr << "Warning: could not load plugin '" << path
+                                      << "': " << dssi.last_error() << std::endl;
                         }
                     }
                 }

@@ -22,6 +22,7 @@
 #include <string>
 #include <memory>
 #include <array>
+#include <atomic>
 #include "../audio/voice.h"
 
 namespace disgrace_ns
@@ -38,6 +39,18 @@ enum class InstrumentType {
     Midi,
     Voice,
     XRNI
+};
+
+// Health of an instrument's audio backend. Instruments that run in-process
+// are always Ok; only out-of-process backends (the DSSI sandbox) ever report
+// anything else. Reading the status is RT-safe and allocation-free, so the
+// GUI can poll it from its timer and the audio thread can update it.
+enum class InstrumentStatus : uint8_t {
+    Ok,          // working
+    Starting,    // backend is being prepared (load in progress)
+    LoadFailed,  // backend could not be started
+    Crashed,     // backend process exited on its own
+    Stalled      // backend is alive but has stopped producing audio
 };
 
 class Instrument
@@ -86,16 +99,41 @@ public:
     virtual Parameter get_parameter(size_t) const { return {}; }
     virtual void set_parameter(size_t, float) {}
 
+    // ── backend health ───────────────────────────────────────────────
+    InstrumentStatus status() const {
+        return m_status.load(std::memory_order_relaxed);
+    }
+    // Raw waitpid() status of a backend that exited by itself, 0 if none.
+    // The UI can turn this into "exit code N" / "killed by signal S".
+    int exit_status() const {
+        return m_exit_status.load(std::memory_order_relaxed);
+    }
+
 protected:
     virtual ::std::unique_ptr<disgrace_ns::Voice> create_voice() = 0;
 
     disgrace_ns::Voice* allocate_voice(size_t column_index);
+
+    // Cheap enough for the audio thread: a relaxed store, no allocation, no
+    // locking. const so backend liveness probes stay const-correct.
+    void set_status(InstrumentStatus s) const {
+        m_status.store(s, std::memory_order_relaxed);
+    }
+    void set_exit_status(int s) const {
+        m_exit_status.store(s, std::memory_order_relaxed);
+    }
 
     std::string m_name = "New Instrument";
     std::string m_plugin_name = "";
     InstrumentType m_type = InstrumentType::None;
 protected:
     ::std::array<::std::unique_ptr<disgrace_ns::Voice>, MAX_VOICES> m_voices;
+
+private:
+    // Written by whichever thread owns the backend (RT thread for a crash,
+    // GUI thread for load results), read from the GUI timer.
+    mutable ::std::atomic<InstrumentStatus> m_status{InstrumentStatus::Ok};
+    mutable ::std::atomic<int> m_exit_status{0};
 };
 
 class NoneInstrument : public Instrument {

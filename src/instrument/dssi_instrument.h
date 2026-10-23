@@ -64,6 +64,10 @@ public:
     unsigned long      program() const { return m_program; }
     float              volume()  const { return m_volume; }
 
+    // Reason the last load_plugin() failed (empty on success). Written on the
+    // GUI thread by load_plugin(), so reading it from the GUI is safe.
+    const std::string& last_error() const { return m_last_error; }
+
 protected:
     std::unique_ptr<Voice> create_voice() override { return nullptr; }
 
@@ -73,10 +77,12 @@ private:
     void teardown_sandbox();
     static std::string find_sandbox_binary();
 
-    pid_t   m_child_pid  = -1;
-    int     m_stdout_rfd = -1;   // read end of child's stdout pipe
+    // Atomic: written by spawn/teardown on the GUI thread and cleared by the
+    // RT thread's liveness probe when it reaps a dead child, so mutable.
+    mutable std::atomic<pid_t> m_child_pid{-1};
     void*   m_shm_ptr    = nullptr;
     std::string m_shm_name;
+    std::string m_last_error;
     DSSIBridgeShm* shm() { return static_cast<DSSIBridgeShm*>(m_shm_ptr); }
 
     // ── per-parameter info (filled during load_plugin from child stdout) ─
@@ -110,6 +116,9 @@ private:
     // never waits on the plugin.
     bool m_request_pending = false;
     uint32_t m_pending_frames = 0;
+    // Frames spent waiting for a reply to the outstanding request; used to
+    // tell a slow plugin from a hung one.
+    uint64_t m_wait_samples = 0;
 
     // ── crash state ──────────────────────────────────────────────────
     // kill() is a syscall: throttle the liveness probe so the RT thread

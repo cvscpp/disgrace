@@ -1,6 +1,25 @@
 Disgrace news
 =============
 
+0.1.8
+-----
+- Fix playback going silent for the rest of the session after a few
+  minutes of editing. The sequencer tick phase could underflow when Play
+  was pressed while an audio block was being rendered; no tick fired
+  afterwards, so the song kept "playing" without sound and the transport
+  clock showed a garbage duration. The phase is now updated atomically
+  and saturates instead of wrapping, playback starts reset it, and the
+  clock clamps its inputs. Resizing a pattern no longer drains the
+  Play/Stop command queue from the GUI thread.
+- DSSI: a crashed or hung plugin sandbox is now detected and reported
+  instead of silently silencing the track forever. The liveness probe
+  reaps the child (kill() succeeded on zombies, so a crash was invisible),
+  a reload no longer inherits a stuck request, the sandbox stops blocking
+  on a full stdout pipe, and plugin startup is bounded by a 15 s timeout.
+  Instrument health (Ok / LoadFailed / Crashed / Stalled) and the failure
+  reason are exposed for the UI and logged when a project fails to load
+  a plugin.
+
 0.1.7
 -----
 - Subtrack counts are now global per track: adding or removing note

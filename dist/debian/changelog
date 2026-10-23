@@ -1,3 +1,12 @@
+disgrace (0.1.8-1) unstable; urgency=medium
+
+  * Fix playback going silent mid-session when the sequencer tick phase
+    underflowed, and the garbage transport clock that followed.
+  * Detect and report crashed or hung DSSI plugin sandboxes instead of
+    silencing the track permanently; bound plugin startup with a timeout.
+
+ -- Miroslav Shaltev <miroslav.shaltev@shaltev.de>  Thu, 23 Oct 2026 22:00:00 +0000
+
 disgrace (0.1.7-1) unstable; urgency=medium
 
   * Make subtrack counts global per track; new patterns keep their

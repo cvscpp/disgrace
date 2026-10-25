@@ -95,7 +95,8 @@ std::string DSSIInstrument::find_sandbox_binary()
 
 // ─── Constructor / destructor ─────────────────────────────────────────────────
 
-DSSIInstrument::DSSIInstrument(double sample_rate) : m_sample_rate(sample_rate) {}
+DSSIInstrument::DSSIInstrument(double sample_rate)
+    : m_sample_rate(sample_rate > 0.0 ? (uint32_t)(sample_rate + 0.5) : 44100u) {}
 
 DSSIInstrument::~DSSIInstrument()
 {
@@ -149,6 +150,7 @@ void DSSIInstrument::teardown_sandbox()
     m_pending_frames  = 0;
     m_pending_midi.clear();
     m_wait_samples    = 0;
+    fifo_reset();
     for (auto& n : m_last_note) n = -1;
 }
 
@@ -208,7 +210,8 @@ bool DSSIInstrument::spawn_sandbox(const std::string& plugin_path, int plugin_id
     // ── Fork ──────────────────────────────────────────────────────────
     std::string sandbox_bin = find_sandbox_binary();
     char sr_buf[32];
-    snprintf(sr_buf, sizeof(sr_buf), "%.0f", m_sample_rate);
+    snprintf(sr_buf, sizeof(sr_buf), "%u",
+             (unsigned)m_sample_rate.load(std::memory_order_relaxed));
     char idx_buf[16];
     snprintf(idx_buf, sizeof(idx_buf), "%d", plugin_idx);
 
@@ -354,6 +357,15 @@ bool DSSIInstrument::spawn_sandbox(const std::string& plugin_path, int plugin_id
     }
     m_last_error.clear();
 
+    // A plugin without a usable stereo (or mono) output cannot be mixed
+    // through the track, so do not pretend the load succeeded.
+    if (m_audio_out_l < 0) {
+        m_last_error = "plugin has no audio output ports";
+        std::cerr << "[DSSIInstrument] " << m_last_error << " (" << plugin_path << ")\n";
+        teardown_sandbox();
+        return false;
+    }
+
     // Populate shm port values with defaults
     shm()->port_count = (uint32_t)m_ctrl_info.size();
     for (size_t i = 0; i < m_ctrl_info.size() && i < DSB_MAX_PORTS; ++i)
@@ -369,13 +381,113 @@ bool DSSIInstrument::spawn_sandbox(const std::string& plugin_path, int plugin_id
     }
 
     m_alive.store(true);
+    std::cerr << "[DSSIInstrument] " << (plugin_name().empty() ? plugin_path : plugin_name())
+              << " ready at " << m_sample_rate.load(std::memory_order_relaxed)
+              << " Hz, audio out L=" << m_audio_out_l
+              << " R=" << m_audio_out_r << "\n";
     return true;
+}
+
+void DSSIInstrument::flush_parameters_to_shm()
+{
+    if (!m_shm_ptr) return;
+    shm()->port_count = (uint32_t)std::min(m_ctrl_info.size(), (size_t)DSB_MAX_PORTS);
+    for (size_t i = 0; i < m_ctrl_info.size() && i < DSB_MAX_PORTS; ++i)
+        shm()->port_values[i] = m_ctrl_info[i].current_value;
+}
+
+void DSSIInstrument::wait_for_audio_idle() const
+{
+    // process() never blocks (it uses sem_trywait), so a couple of audio
+    // cycles is normally enough. The cap only guards against a wedged
+    // thread; after it we proceed rather than hang the GUI/export thread.
+    for (int i = 0; i < 200 && m_processing.load(std::memory_order_acquire) != 0; ++i)
+        usleep(1000);
+}
+
+bool DSSIInstrument::respawn_for_sample_rate()
+{
+    if (m_path.empty() || !m_alive.load(std::memory_order_acquire))
+        return false;
+
+    const uint32_t hz = m_sample_rate.load(std::memory_order_relaxed);
+
+    // Keep the user-visible state across the re-instantiation: control
+    // values are matched by LADSPA port index because the new instance
+    // reports them (with rate-dependent ranges) from scratch.
+    struct SavedParam { int port; float value; };
+    std::vector<SavedParam> saved;
+    saved.reserve(m_ctrl_info.size());
+    for (const auto& c : m_ctrl_info)
+        saved.push_back({c.port_idx, c.current_value});
+
+    // Stop the audio thread from touching the shared block while it is
+    // replaced: m_alive=false makes new process() calls bail out, and the
+    // counter covers a block that was already in flight.
+    m_alive.store(false, std::memory_order_release);
+    wait_for_audio_idle();
+
+    set_status(InstrumentStatus::Starting);
+    if (!spawn_sandbox(m_path, m_index)) {
+        set_status(InstrumentStatus::LoadFailed);
+        std::cerr << "[DSSIInstrument] could not re-instantiate '" << m_path
+                  << "' at " << hz << " Hz: " << m_last_error << "\n";
+        return false;
+    }
+
+    for (auto& c : m_ctrl_info) {
+        for (const auto& s : saved) {
+            if (s.port != c.port_idx) continue;
+            // The range may differ at the new rate (e.g. rate-dependent
+            // hints), so clamp instead of restoring blindly.
+            c.current_value = std::min(std::max(s.value, c.min_v), c.max_v);
+            break;
+        }
+    }
+    flush_parameters_to_shm();
+    if (m_bank != 0 || m_program != 0) {
+        shm()->select_program_bank    = (uint32_t)m_bank;
+        shm()->select_program_program = (uint32_t)m_program;
+        shm()->select_program_pending = 1;
+    }
+
+    set_status(InstrumentStatus::Ok);
+    return true;
+}
+
+void DSSIInstrument::set_sample_rate(double sr)
+{
+    if (!(sr > 0.0)) return;
+    const uint32_t hz = (uint32_t)(sr + 0.5);
+    const uint32_t old = m_sample_rate.exchange(hz, std::memory_order_acq_rel);
+    if (old == hz) return;
+
+    // No plugin loaded yet: the rate is picked up by the next spawn because
+    // spawn_sandbox() passes m_sample_rate to the sandbox.
+    if (m_path.empty()) return;
+
+    if (!m_alive.load(std::memory_order_acquire)) {
+        // A crashed/failed sandbox is not restarted implicitly; a later
+        // load_plugin() will use the new rate.
+        std::cerr << "[DSSIInstrument] sample rate changed from " << old
+                  << " to " << hz << " Hz (plugin not running)\n";
+        return;
+    }
+
+    std::cerr << "[DSSIInstrument] re-instantiating '" << m_path << "' at "
+              << hz << " Hz (was " << old << " Hz)\n";
+    respawn_for_sample_rate();
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 bool DSSIInstrument::load_plugin(const std::string& path, int index)
 {
+    // A reload replaces the shared block and the parameter table; make sure
+    // the audio thread is not inside process() while that happens.
+    m_alive.store(false, std::memory_order_release);
+    wait_for_audio_idle();
+
     m_path  = path;
     m_index = index;
     m_ctrl_info.clear();
@@ -494,63 +606,90 @@ void DSSIInstrument::panic()
     }
 }
 
-void DSSIInstrument::process(float* l, float* r, size_t nframes)
+namespace {
+// Marks the calling thread as being inside DSSIInstrument::process() so the
+// control thread can wait for it before replacing the shared block.
+struct AudioBusyGuard {
+    std::atomic<int>& counter;
+    explicit AudioBusyGuard(std::atomic<int>& c) : counter(c) {
+        counter.fetch_add(1, std::memory_order_acq_rel);
+    }
+    ~AudioBusyGuard() {
+        counter.fetch_sub(1, std::memory_order_acq_rel);
+    }
+};
+} // namespace
+
+void DSSIInstrument::set_block_size(uint32_t frames)
 {
-    if (nframes > DSB_MAX_FRAMES) nframes = DSB_MAX_FRAMES;
-    memset(l, 0, nframes * sizeof(float));
-    memset(r, 0, nframes * sizeof(float));
+    if (frames == 0) return;                       // backend did not tell us
+    if (frames > DSB_MAX_FRAMES) frames = DSB_MAX_FRAMES;
+    m_block_frames.store(frames, std::memory_order_relaxed);
+}
 
-    if (!is_alive()) {
-        m_pending_midi.clear();
-        if (m_request_pending && m_shm_ptr)
-            sem_trywait(&shm()->sem_done);
-        m_request_pending = false;
-        m_wait_samples = 0;
-        return;
+void DSSIInstrument::fifo_reset()
+{
+    m_fifo_read = 0;
+    m_fifo_fill = 0;
+}
+
+void DSSIInstrument::fifo_push(const float* l, const float* r, size_t n)
+{
+    if (n == 0) return;
+    if (n > kFifoFrames - m_fifo_fill) n = kFifoFrames - m_fifo_fill;  // never overflow
+    size_t w = m_fifo_read + m_fifo_fill;
+    for (size_t i = 0; i < n; ++i) {
+        const size_t idx = (w + i) & (kFifoFrames - 1);
+        m_fifo_l[idx] = l[i];
+        m_fifo_r[idx] = r[i];
     }
+    m_fifo_fill += n;
+}
 
+size_t DSSIInstrument::fifo_pop(float* l, float* r, size_t n, float gain)
+{
+    const size_t got = std::min(n, m_fifo_fill);
+    if (got == 0) return 0;
+    if (gain == 1.0f) {
+        for (size_t i = 0; i < got; ++i) {
+            const size_t idx = (m_fifo_read + i) & (kFifoFrames - 1);
+            l[i] = m_fifo_l[idx];
+            r[i] = m_fifo_r[idx];
+        }
+    } else {
+        for (size_t i = 0; i < got; ++i) {
+            const size_t idx = (m_fifo_read + i) & (kFifoFrames - 1);
+            l[i] = m_fifo_l[idx] * gain;
+            r[i] = m_fifo_r[idx] * gain;
+        }
+    }
+    m_fifo_read = (m_fifo_read + got) & (kFifoFrames - 1);
+    m_fifo_fill -= got;
+    return got;
+}
+
+void DSSIInstrument::harvest_reply()
+{
+    if (!m_request_pending || !m_shm_ptr) return;
     DSSIBridgeShm* s = shm();
+    if (sem_trywait(&s->sem_done) != 0) return;
 
-    // One-block latency. Never block the JACK thread, and never post a
-    // second request while the sandbox is still rendering the previous one.
-    if (m_request_pending) {
-        if (sem_trywait(&s->sem_done) != 0) {
-            // Still rendering. A sandbox that stops answering silences the
-            // track forever (we never post again), so report it instead of
-            // hiding it: 2 s without a reply is a stall, not latency.
-            m_wait_samples += nframes;
-            if (m_wait_samples > (uint64_t)m_sample_rate * 2 &&
-                status() != InstrumentStatus::Stalled)
-                set_status(InstrumentStatus::Stalled);
-            return;
-        }
-        m_wait_samples = 0;
-        if (status() == InstrumentStatus::Stalled)
-            set_status(InstrumentStatus::Ok);
-        uint32_t frames = m_pending_frames;
-        if (frames > nframes) frames = (uint32_t)nframes;
-        if (m_volume == 1.0f) {
-            memcpy(l, s->audio_l, frames * sizeof(float));
-            memcpy(r, s->audio_r, frames * sizeof(float));
-        } else {
-            const float vol = m_volume;
-            const float* sl = s->audio_l;
-            const float* sr = s->audio_r;
-            for (uint32_t i = 0; i < frames; ++i) {
-                l[i] = sl[i] * vol;
-                r[i] = sr[i] * vol;
-            }
-        }
-        m_request_pending = false;
-    }
+    fifo_push(s->audio_l, s->audio_r, m_pending_frames);
+    m_pending_frames = 0;
+    m_request_pending = false;
+    m_wait_samples = 0;
+    if (status() == InstrumentStatus::Stalled)
+        set_status(InstrumentStatus::Ok);
+}
 
-    s->nframes    = (uint32_t)nframes;
-    s->volume     = m_volume;
-    s->port_count = (uint32_t)m_ctrl_info.size();
-    for (size_t i = 0; i < m_ctrl_info.size() && i < DSB_MAX_PORTS; ++i)
-        s->port_values[i] = m_ctrl_info[i].current_value;
+void DSSIInstrument::post_request(uint32_t frames)
+{
+    DSSIBridgeShm* s = shm();
+    s->nframes = frames;
+    s->volume  = m_volume;
+    flush_parameters_to_shm();
 
-    uint32_t mc = (uint32_t)std::min(m_pending_midi.size(), (size_t)DSB_MAX_MIDI);
+    const uint32_t mc = (uint32_t)std::min(m_pending_midi.size(), (size_t)DSB_MAX_MIDI);
     s->midi_count = mc;
     for (uint32_t i = 0; i < mc; ++i) {
         const auto& me = m_pending_midi[i];
@@ -559,9 +698,62 @@ void DSSIInstrument::process(float* l, float* r, size_t nframes)
     m_pending_midi.clear();
     s->shutdown = 0;
 
-    m_pending_frames = (uint32_t)nframes;
+    m_pending_frames  = frames;
     m_request_pending = true;
     sem_post(&s->sem_req);
+}
+
+void DSSIInstrument::process(float* l, float* r, size_t nframes)
+{
+    AudioBusyGuard busy(m_processing);
+    if (nframes > DSB_MAX_FRAMES) nframes = DSB_MAX_FRAMES;
+    memset(l, 0, nframes * sizeof(float));
+    memset(r, 0, nframes * sizeof(float));
+
+    if (!is_alive()) {
+        m_pending_midi.clear();
+        // Do not touch the shared block here: teardown_sandbox() may be
+        // unmapping it concurrently (the sems are re-initialised on the
+        // next spawn anyway).
+        m_request_pending = false;
+        m_pending_frames  = 0;
+        m_wait_samples    = 0;
+        fifo_reset();
+        return;
+    }
+
+    // The engine calls process() with whatever block it needs — the
+    // sequencer splits every backend period at tick boundaries, so the size
+    // changes from call to call.  The sandbox renders whole blocks
+    // asynchronously, so the two are decoupled by a FIFO.  (Copying the
+    // previous reply verbatim, as this used to do, truncated it when the new
+    // block was shorter and zero-filled it when it was longer: dropped
+    // samples and gaps, audible as distortion whenever the transport ran.)
+    uint32_t block = m_block_frames.load(std::memory_order_relaxed);
+    if (nframes > block) {
+        // Host never told us the period (or it changed): use what it asks.
+        block = (uint32_t)nframes;
+        m_block_frames.store(block, std::memory_order_relaxed);
+    }
+
+    harvest_reply();
+
+    // Keep the pipe full: one request in flight, never more than the FIFO
+    // can hold, and stop at two blocks so the added latency stays bounded.
+    if (!m_request_pending &&
+        m_fifo_fill + block <= kFifoFrames &&
+        m_fifo_fill < (size_t)block * 2) {
+        post_request(block);
+    }
+
+    m_wait_samples += nframes;
+    fifo_pop(l, r, nframes, m_volume);
+
+    // A sandbox that stops answering silences the track forever, so report
+    // it instead of hiding it: 2 s without a reply is a stall, not latency.
+    if (m_wait_samples > (uint64_t)m_sample_rate.load(std::memory_order_relaxed) * 2 &&
+        status() != InstrumentStatus::Stalled)
+        set_status(InstrumentStatus::Stalled);
 }
 
 } // namespace disgrace_ns

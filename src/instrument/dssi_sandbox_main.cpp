@@ -39,6 +39,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cctype>
 #include <cmath>
 #include <cerrno>
 #include <algorithm>
@@ -60,6 +61,42 @@ namespace fs = std::filesystem;
 static float apply_sr_hint(float v, const LADSPA_PortRangeHint& h, double sr)
 {
     return LADSPA_IS_HINT_SAMPLE_RATE(h.HintDescriptor) ? v * (float)sr : v;
+}
+
+static std::string ascii_lower(std::string s)
+{
+    for (char& c : s)
+        c = (char)std::tolower((unsigned char)c);
+    return s;
+}
+
+// True when a port name identifies a channel side, e.g. "Output L",
+// "Left", "out_r" or "Main Right". Matching is token based so that names
+// such as "Level" or "Release" do not accidentally match a bare L/R.
+static bool port_name_is_side(const char* raw, char side)
+{
+    if (!raw || !*raw) return false;
+    const std::string n = ascii_lower(raw);
+    const char* want_word = (side == 'l') ? "left" : "right";
+    std::string token;
+    for (size_t i = 0; i <= n.size(); ++i) {
+        const char c = (i < n.size()) ? n[i] : '\0';
+        if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+            token.push_back(c);
+        } else if (!token.empty()) {
+            if (token == want_word) return true;
+            if (token.size() == 1 && token[0] == side) return true;
+            token.clear();
+        }
+    }
+    return false;
+}
+
+static const char* safe_port_name(const LADSPA_Descriptor* d, int port)
+{
+    if (!d || port < 0 || (unsigned long)port >= d->PortCount) return "";
+    const char* n = d->PortNames ? d->PortNames[port] : nullptr;
+    return n ? n : "";
 }
 
 static float default_port_value(const LADSPA_PortRangeHint& h, double sr)
@@ -196,19 +233,23 @@ int main(int argc, char* argv[])
     struct CtrlPort { int port_idx; float min_v, max_v, def_v; std::string name; };
     std::vector<CtrlPort> ctrl_ports;
     std::vector<float>    port_values(ladspa->PortCount, 0.f);
-    std::vector<float>    dummy_buf(DSB_MAX_FRAMES, 0.f);
-    int audio_out_l = -1, audio_out_r = -1;
 
+    // Every audio port that is not the stereo output gets its own zeroed
+    // scratch buffer. Sharing one buffer between audio inputs and surplus
+    // outputs lets a multi-output plugin read its own output back (feedback)
+    // or write into a buffer another port is reading.
+    std::vector<std::vector<float>> scratch_bufs;
+    auto new_scratch = [&]() -> float* {
+        scratch_bufs.emplace_back(DSB_MAX_FRAMES, 0.f);
+        return scratch_bufs.back().data();
+    };
+
+    std::vector<int> audio_outs;
     for (unsigned long i = 0; i < ladspa->PortCount; ++i) {
         LADSPA_PortDescriptor d = ladspa->PortDescriptors[i];
         if (LADSPA_IS_PORT_AUDIO(d)) {
-            if (LADSPA_IS_PORT_OUTPUT(d)) {
-                if      (audio_out_l == -1) audio_out_l = (int)i;
-                else if (audio_out_r == -1) audio_out_r = (int)i;
-                else ladspa->connect_port(inst, i, dummy_buf.data());
-            } else {
-                ladspa->connect_port(inst, i, dummy_buf.data());
-            }
+            ladspa->connect_port(inst, i, new_scratch());
+            if (LADSPA_IS_PORT_OUTPUT(d)) audio_outs.push_back((int)i);
         } else if (LADSPA_IS_PORT_CONTROL(d)) {
             if (LADSPA_IS_PORT_INPUT(d)) {
                 const auto& h = ladspa->PortRangeHints[i];
@@ -218,12 +259,70 @@ int main(int argc, char* argv[])
                 if (hi <= lo) hi = lo + 1.f;
                 port_values[i] = def;
                 ladspa->connect_port(inst, i, &port_values[i]);
-                ctrl_ports.push_back({(int)i, lo, hi, def, ladspa->PortNames[i]});
+                ctrl_ports.push_back({(int)i, lo, hi, def,
+                                      ladspa->PortNames && ladspa->PortNames[i] ? ladspa->PortNames[i] : ""});
             } else {
                 ladspa->connect_port(inst, i, &port_values[i]);
             }
         }
     }
+
+    // Pick the stereo pair. Prefer ports whose names identify the side
+    // ("Output L"/"Right"/...): plugins are free to put their two outputs
+    // anywhere in the port list (karplong has L at 0 and R at 5), and a
+    // multi-output plugin's first two audio ports are not necessarily the
+    // main stereo pair. Fall back to the first two audio outputs.
+    int audio_out_l = -1, audio_out_r = -1;
+    if (!audio_outs.empty()) {
+        int named_l = -1, named_r = -1;
+        for (int p : audio_outs) {
+            const char* n = safe_port_name(ladspa, p);
+            if (named_l == -1 && port_name_is_side(n, 'l')) { named_l = p; continue; }
+            if (named_r == -1 && port_name_is_side(n, 'r')) { named_r = p; }
+        }
+        if (named_l != -1 && named_r != -1) {
+            audio_out_l = named_l;
+            audio_out_r = named_r;
+        } else if (named_l != -1 && audio_outs.size() >= 2) {
+            audio_out_l = named_l;
+            audio_out_r = (audio_outs[0] == named_l) ? audio_outs[1] : audio_outs[0];
+        } else if (named_r != -1 && audio_outs.size() >= 2) {
+            audio_out_r = named_r;
+            audio_out_l = (audio_outs[0] == named_r) ? audio_outs[1] : audio_outs[0];
+        } else if (audio_outs.size() >= 2) {
+            audio_out_l = audio_outs[0];
+            audio_out_r = audio_outs[1];
+        } else {
+            audio_out_l = audio_outs[0]; // mono
+        }
+    }
+
+    if (audio_out_l == -1) {
+        // Nothing to mix into the host: fail loudly instead of loading a
+        // "working" instrument that can only ever produce silence.
+        fprintf(stdout, "ERROR plugin has no audio output ports\n");
+        fflush(stdout);
+        ladspa->cleanup(inst);
+        dlclose(lib);
+        munmap(shm_raw, DSB_SHM_SIZE);
+        return 1;
+    }
+
+    // Connect the two mix outputs and clear them before activate() so the
+    // plugin never sees dangling port pointers.
+    memset(shm->audio_l, 0, sizeof(shm->audio_l));
+    memset(shm->audio_r, 0, sizeof(shm->audio_r));
+    ladspa->connect_port(inst, (unsigned long)audio_out_l, shm->audio_l);
+    if (audio_out_r != -1)
+        ladspa->connect_port(inst, (unsigned long)audio_out_r, shm->audio_r);
+
+    fprintf(stderr,
+            "[dssi_sandbox] %s: %.0f Hz, audio out L=%d(%s) R=%d(%s), %zu audio outs, %zu controls\n",
+            ladspa->Name ? ladspa->Name : "?",
+            sample_rate,
+            audio_out_l, safe_port_name(ladspa, audio_out_l),
+            audio_out_r, safe_port_name(ladspa, audio_out_r),
+            audio_outs.size(), ctrl_ports.size());
 
     if (ladspa->activate) ladspa->activate(inst);
 
@@ -342,17 +441,9 @@ int main(int argc, char* argv[])
             midi_evs.push_back(ev);
         }
 
-        // Connect audio output ports to shm buffers
-        if (audio_out_l != -1)
-            ladspa->connect_port(inst, (unsigned long)audio_out_l, shm->audio_l);
-        else
-            for (uint32_t i = 0; i < nf; ++i) shm->audio_l[i] = 0.f;
-
-        if (audio_out_r != -1)
-            ladspa->connect_port(inst, (unsigned long)audio_out_r, shm->audio_r);
-        else
-            for (uint32_t i = 0; i < nf; ++i) shm->audio_r[i] = 0.f;
-
+        // Output ports are connected once, before activate().  The plugin
+        // writes straight into the shared stereo buffers, so the host mixes
+        // exactly what the plugin produced through the track's channel.
         if (nf > 0) {
             if (desc->run_synth)
                 desc->run_synth(inst, nf, midi_evs.data(), (unsigned long)midi_evs.size());
@@ -360,8 +451,12 @@ int main(int argc, char* argv[])
                 ladspa->run(inst, nf);
 
             // Mono → stereo copy
-            if (audio_out_l != -1 && audio_out_r == -1)
+            if (audio_out_r == -1)
                 for (uint32_t i = 0; i < nf; ++i) shm->audio_r[i] = shm->audio_l[i];
+        } else {
+            // Nothing rendered: keep the host from mixing a stale block.
+            memset(shm->audio_l, 0, sizeof(float) * DSB_MAX_FRAMES);
+            memset(shm->audio_r, 0, sizeof(float) * DSB_MAX_FRAMES);
         }
 
         sem_post(&shm->sem_done);

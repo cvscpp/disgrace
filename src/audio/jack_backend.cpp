@@ -19,12 +19,48 @@
 #include "jack_backend.h"
 #include "../core/engine.h"
 #include <jack/midiport.h>
+#include <cerrno>
 #include <cstring>
 #include <cstdio>
+#include <string>
+#include <vector>
 #include <iostream>
 
 namespace disgrace_ns
 {
+
+namespace {
+
+// JACK port names are "<client>:<port>".  The client tells us which device
+// (card) a physical port belongs to.
+std::string jack_client_of(const char* port)
+{
+    if (!port) return {};
+    const char* colon = std::strchr(port, ':');
+    return colon ? std::string(port, (size_t)(colon - port)) : std::string(port);
+}
+
+// Pick the one physical device to wire our ports to.  jackd's driver client
+// is called "system"; when the graph carries several physical devices
+// (multi-card setups, PipeWire, composite servers) jack_get_ports() returns
+// all of them in an unspecified order, and blindly connecting the first N
+// entries can spread a stereo pair across two cards — the mix then comes out
+// of a card jackd is not driving.  Restrict the auto-connect to a single
+// client so at least the whole output pair always stays on one card.
+std::string choose_physical_device(const char** ports)
+{
+    if (!ports || !ports[0]) return {};
+    std::string chosen = jack_client_of(ports[0]);
+    for (size_t i = 0; ports[i]; ++i) {
+        if (jack_client_of(ports[i]) == "system") {
+            chosen = "system";
+            break;
+        }
+    }
+    return chosen;
+}
+
+} // namespace
 
 JackBackend::JackBackend(Engine *engine, 
                          uint32_t num_ins, uint32_t num_outs,
@@ -111,20 +147,49 @@ bool JackBackend::start()
     m_out_bufs_rt.resize(m_num_outs, nullptr);
     m_in_bufs_rt.resize(m_num_ins, nullptr);
 
-    // Auto-connect output ports to physical playback ports
+    // Auto-connect output ports to physical playback ports.  Keep every
+    // connection on one physical device so a mix (including DSSI plugin
+    // output) cannot leak onto another sound card when the graph has more
+    // than one physical device.
     const char **ports = jack_get_ports(m_client, nullptr, nullptr, JackPortIsPhysical | JackPortIsInput);
     if (ports) {
-        for (uint32_t i = 0; i < m_num_outs && ports[i]; ++i) {
-            jack_connect(m_client, jack_port_name(m_output_ports[i]), ports[i]);
+        const std::string device = choose_physical_device(ports);
+        uint32_t connected = 0;
+        for (size_t i = 0; ports[i] && connected < m_num_outs; ++i) {
+            if (jack_client_of(ports[i]) != device) continue;
+            const int rc = jack_connect(m_client, jack_port_name(m_output_ports[connected]), ports[i]);
+            if (rc != 0 && rc != EEXIST) {
+                std::cerr << "[JACK] could not connect "
+                          << jack_port_name(m_output_ports[connected]) << " to "
+                          << ports[i] << " (error " << rc << ")" << std::endl;
+            } else {
+                std::cerr << "[JACK] " << jack_port_name(m_output_ports[connected])
+                          << " -> " << ports[i] << std::endl;
+            }
+            ++connected;
+        }
+        if (connected < m_num_outs) {
+            std::cerr << "[JACK] auto-connected " << connected << " of "
+                      << m_num_outs << " output ports on device '"
+                      << device << "'" << std::endl;
         }
         jack_free(ports);
     }
 
-    // Auto-connect physical capture ports to input ports
+    // Auto-connect physical capture ports to input ports (same device).
     ports = jack_get_ports(m_client, nullptr, nullptr, JackPortIsPhysical | JackPortIsOutput);
     if (ports) {
-        for (uint32_t i = 0; i < m_num_ins && ports[i]; ++i) {
-            jack_connect(m_client, ports[i], jack_port_name(m_input_ports[i]));
+        const std::string device = choose_physical_device(ports);
+        uint32_t connected = 0;
+        for (size_t i = 0; ports[i] && connected < m_num_ins; ++i) {
+            if (jack_client_of(ports[i]) != device) continue;
+            const int rc = jack_connect(m_client, ports[i], jack_port_name(m_input_ports[connected]));
+            if (rc != 0 && rc != EEXIST) {
+                std::cerr << "[JACK] could not connect " << ports[i] << " to "
+                          << jack_port_name(m_input_ports[connected])
+                          << " (error " << rc << ")" << std::endl;
+            }
+            ++connected;
         }
         jack_free(ports);
     }

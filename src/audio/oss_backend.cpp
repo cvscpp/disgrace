@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
@@ -93,11 +94,19 @@ bool OssBackend::start()
         return true;
     }
 
-    m_fd = ::open("/dev/dsp", O_WRONLY);
+    // OSS numbers devices /dev/dsp0, /dev/dsp1, ... and /dev/dsp usually
+    // points at unit 0, which on a multi-card machine is not necessarily the
+    // card jackd is driving.  Honour the conventional $AUDIODEV override so
+    // the mix (and any hosted plugin audio) can be pinned to the right card.
+    const char* dev = std::getenv("AUDIODEV");
+    if (!dev || !*dev) dev = "/dev/dsp";
+
+    m_fd = ::open(dev, O_WRONLY);
     if (m_fd < 0) {
-        std::cerr << "Failed to open OSS device /dev/dsp: " << std::strerror(errno) << std::endl;
+        std::cerr << "Failed to open OSS device " << dev << ": " << std::strerror(errno) << std::endl;
         return false;
     }
+    std::cerr << "[OSS] playback device: " << dev << std::endl;
 
     if (!configure_device()) {
         stop();

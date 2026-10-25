@@ -85,18 +85,22 @@ std::unique_ptr<AudioBackend> make_audio_backend(Engine *engine, AudioBackendTyp
     return std::make_unique<NullBackend>();
 }
 
-std::unique_ptr<Instrument> make_instrument_for_type(Engine* engine, InstrumentType type, uint32_t sample_rate)
+std::unique_ptr<Instrument> make_instrument_for_type(Engine* engine, InstrumentType type, uint32_t sample_rate,
+                                                     uint32_t block_size)
 {
+    std::unique_ptr<Instrument> inst;
     switch (type) {
-        case InstrumentType::Sampler:   return std::make_unique<SampleInstrument>((double)sample_rate);
-        case InstrumentType::SoundFont: return std::make_unique<SoundFontInstrument>((double)sample_rate);
-        case InstrumentType::SFZ:       return std::make_unique<SfzInstrument>((double)sample_rate);
-        case InstrumentType::XRNI:      return std::make_unique<XrniInstrument>((double)sample_rate);
-        case InstrumentType::Plugin:    return std::make_unique<DSSIInstrument>((double)sample_rate);
-        case InstrumentType::Midi:      return std::make_unique<MidiInstrument>(engine);
-        case InstrumentType::Voice:     return std::make_unique<VoiceInstrument>(engine);
-        default:                        return std::make_unique<NoneInstrument>();
+        case InstrumentType::Sampler:   inst = std::make_unique<SampleInstrument>((double)sample_rate); break;
+        case InstrumentType::SoundFont: inst = std::make_unique<SoundFontInstrument>((double)sample_rate); break;
+        case InstrumentType::SFZ:       inst = std::make_unique<SfzInstrument>((double)sample_rate); break;
+        case InstrumentType::XRNI:      inst = std::make_unique<XrniInstrument>((double)sample_rate); break;
+        case InstrumentType::Plugin:    inst = std::make_unique<DSSIInstrument>((double)sample_rate); break;
+        case InstrumentType::Midi:      inst = std::make_unique<MidiInstrument>(engine); break;
+        case InstrumentType::Voice:     inst = std::make_unique<VoiceInstrument>(engine); break;
+        default:                        inst = std::make_unique<NoneInstrument>(); break;
     }
+    if (inst) inst->set_block_size(block_size);
+    return inst;
 }
 
 bool is_notation_instrument_type(InstrumentType type)
@@ -358,7 +362,11 @@ void Engine::propagate_sample_rate(uint32_t sr) {
     for (auto& track : m_tracks) track.chain().set_sample_rate((float)sr);
     for (auto& bus : m_buses) bus.chain().set_sample_rate((float)sr);
     m_master.set_sample_rate((float)sr);
-    for (auto& inst : m_instruments) inst->set_sample_rate((double)sr);
+    const uint32_t block = m_backend ? m_backend->buffer_size() : 0;
+    for (auto& inst : m_instruments) {
+        inst->set_sample_rate((double)sr);
+        inst->set_block_size(block);
+    }
 }
 
 void Engine::start() { 
@@ -1054,7 +1062,8 @@ void Engine::set_instrument_type(size_t index, InstrumentType type) {
     if (index >= m_instruments.size()) return;
     if (m_instruments[index]->type() == type) return;
     std::string name = m_instruments[index]->name();
-    std::unique_ptr<Instrument> new_inst = make_instrument_for_type(this, type, m_sample_rate);
+    std::unique_ptr<Instrument> new_inst = make_instrument_for_type(
+        this, type, m_sample_rate, m_backend ? m_backend->buffer_size() : 0);
     new_inst->set_name(name); new_inst->set_type(type);
     for (auto& track : m_tracks) if (track.instrument() == m_instruments[index].get()) track.set_instrument(new_inst.get());
     m_instruments[index] = std::move(new_inst);
@@ -1062,7 +1071,8 @@ void Engine::set_instrument_type(size_t index, InstrumentType type) {
 
 size_t Engine::add_track_with_instrument(InstrumentType type, const std::string& base_name) {
     std::string name = base_name.empty() ? "New Track" : base_name;
-    auto inst = make_instrument_for_type(this, type, m_sample_rate);
+    auto inst = make_instrument_for_type(this, type, m_sample_rate,
+                                        m_backend ? m_backend->buffer_size() : 0);
     inst->set_type(type);
     inst->set_name(name);
 
@@ -1539,7 +1549,14 @@ void Engine::sync_track_columns() {
 }
 
 void Engine::add_instrument() { m_instruments.push_back(std::make_unique<NoneInstrument>()); mark_dirty(); }
-void Engine::add_instrument(::std::unique_ptr<disgrace_ns::Instrument> inst) { m_instruments.push_back(std::move(inst)); mark_dirty(); }
+void Engine::add_instrument(::std::unique_ptr<disgrace_ns::Instrument> inst) {
+    // Instruments that render through a helper process need the backend
+    // period; set it here as well so every construction path (project load,
+    // XRNS import, ...) gets it without having to remember.
+    if (inst) inst->set_block_size(m_backend ? m_backend->buffer_size() : 0);
+    m_instruments.push_back(std::move(inst));
+    mark_dirty();
+}
 void Engine::remove_instrument(size_t index) { if (index < m_instruments.size()) { m_instruments.erase(m_instruments.begin() + index); mark_dirty(); } }
 Instrument& Engine::instrument(size_t index) { return *m_instruments[index]; }
 const Instrument& Engine::instrument(size_t index) const { return *m_instruments[index]; }

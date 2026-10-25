@@ -40,6 +40,17 @@ public:
     void set_pitch(float freq) override;
     void process(float* l, float* r, size_t nframes) override;
 
+    // DSSI plugins bake the sample rate into instantiate(), so a rate change
+    // requires a fresh plugin instance.  Called by the engine whenever the
+    // backend/project rate or an export rate changes.
+    void set_sample_rate(double sr) override;
+    double sample_rate() const { return (double)m_sample_rate.load(std::memory_order_relaxed); }
+
+    // Backend period, used as the sandbox's render block.  A call to
+    // process() may be shorter than this (the sequencer splits a period at
+    // tick boundaries), so the two are decoupled by an output FIFO.
+    void set_block_size(uint32_t frames) override;
+
     bool load_plugin(const std::string& path, int index = 0);
 
     // Returns true when a plugin is loaded and the sandbox process is running.
@@ -77,6 +88,36 @@ private:
     void teardown_sandbox();
     static std::string find_sandbox_binary();
 
+    // Re-instantiate the plugin at the current sample rate, keeping the
+    // control-port values and program selection.  No-op when nothing is
+    // loaded or the sandbox is not running.
+    bool respawn_for_sample_rate();
+    // Publish m_ctrl_info to the shared block (RT-safe: plain stores).
+    void flush_parameters_to_shm();
+    // Block (bounded) until no audio thread is inside process().  Used on
+    // the control thread before the shared block is replaced.
+    void wait_for_audio_idle() const;
+
+    // ── sandbox block handoff ────────────────────────────────────────
+    // Collect a finished sandbox block into the FIFO, if one is ready.
+    void harvest_reply();
+    // Ask the sandbox to render one block of `frames`.
+    void post_request(uint32_t frames);
+    void fifo_reset();
+    void fifo_push(const float* l, const float* r, size_t n);
+    // Copies at most n frames; returns how many were available.
+    size_t fifo_pop(float* l, float* r, size_t n, float gain);
+
+    // Ring buffer of rendered frames.  Power of two so indices mask; sized
+    // for two maximum-size blocks.
+    static constexpr size_t kFifoFrames = 8192;
+    std::vector<float> m_fifo_l{std::vector<float>(kFifoFrames, 0.0f)};
+    std::vector<float> m_fifo_r{std::vector<float>(kFifoFrames, 0.0f)};
+    size_t m_fifo_read = 0;
+    size_t m_fifo_fill = 0;
+    // Frames per sandbox render block (the backend period).
+    std::atomic<uint32_t> m_block_frames{512};
+
     // Atomic: written by spawn/teardown on the GUI thread and cleared by the
     // RT thread's liveness probe when it reaps a dead child, so mutable.
     mutable std::atomic<pid_t> m_child_pid{-1};
@@ -101,12 +142,18 @@ private:
     bool m_has_run_synth = false;
 
     // ── runtime state ────────────────────────────────────────────────
-    double        m_sample_rate;
+    // Written by the control thread (engine/export/GUI), read by the audio
+    // thread for the stall timeout, hence atomic.
+    std::atomic<uint32_t> m_sample_rate{44100};
     std::string   m_path;
     int           m_index   = 0;
     unsigned long m_bank    = 0;
     unsigned long m_program = 0;
     float         m_volume  = 0.25f;
+
+    // Number of threads currently inside process().  The control thread
+    // waits for this to drop to zero before tearing down the shared block.
+    std::atomic<int> m_processing{0};
 
     // MIDI event staging (GUI/audio thread writes, flushed in process())
     struct StagedMidi { uint8_t type, channel, note, value; };

@@ -64,6 +64,11 @@ public:
 
     virtual void set_sample_rate(double sr) {}
 
+    // Hint from the engine: number of frames the audio backend asks for per
+    // callback (0 = unknown). Instruments that hand audio to a helper
+    // process render in whole blocks of this size.
+    virtual void set_block_size(uint32_t) {}
+
     virtual void set_volume(float vol) = 0;
 
     virtual void set_pitch(float freq) = 0;

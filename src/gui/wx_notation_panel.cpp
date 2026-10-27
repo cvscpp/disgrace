@@ -668,7 +668,7 @@ void NotationView::draw(wxDC& dc) {
                 if (nx < view_x - 40) continue;
                 for (size_t c = 0; c < num_cols; ++c) {
                     const auto& ev = pat.event(t, r, c);
-                    if (ev.note < 128) {
+                    if (note_is_playable(ev.note)) {
                         draw_note(dc, nx, ty, ev.note, staff_type);
                     }
                 }

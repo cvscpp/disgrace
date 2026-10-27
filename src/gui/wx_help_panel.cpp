@@ -56,11 +56,13 @@ void HelpPanel::load_documentation() {
 <tr><td><code>`</code></td><td>Toggle Metronome</td></tr>
 </table>
 
-<h3>Note Entry (QWERTY layout)</h3>
+<h3>Note Entry (QWERTY / QWERTZ layout)</h3>
 <table width="100%" border="0" cellpadding="3">
-<tr><td><code>Z S X D C V G B H N J M</code></td><td>C4&ndash;B4 (lower octave row)</td></tr>
-<tr><td><code>Q 2 W 3 E R 5 T 6 Y 7 U I</code></td><td>C5&ndash;C6 (upper octave row)</td></tr>
-<tr><td><code>[</code> / <code>]</code></td><td>Decrease / Increase base octave</td></tr>
+<tr><td><code>Z S X D C V G B H N J M</code></td><td>C&ndash;B of the current octave</td></tr>
+<tr><td><code>, L . ; /</code></td><td>C&ndash;E of the next octave (continues the lower row)</td></tr>
+<tr><td><code>Q 2 W 3 E R 5 T 6 Y 7 U I</code></td><td>C&ndash;C, one octave above the lower row</td></tr>
+<tr><td><code>9 O 0 P</code> (<code>&Uuml;</code> on QWERTZ)</td><td>C#&ndash;F, above the upper row</td></tr>
+<tr><td><code>[</code> / <code>]</code></td><td>Decrease / Increase base octave (0&ndash;9, C-0&ndash;B-9)</td></tr>
 <tr><td><code>1</code></td><td>Note Off</td></tr>
 </table>
 

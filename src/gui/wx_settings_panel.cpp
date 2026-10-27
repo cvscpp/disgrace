@@ -97,7 +97,9 @@ private:
     int m_mods;
 
     void on_key(wxKeyEvent& event) {
-        int key = event.GetKeyCode();
+        // Same normalisation as the rest of the app, so a captured U-umlaut
+        // on a German keyboard is stored as the character, not as key code 0.
+        int key = normalize_key_for_binding(event.GetKeyCode(), event.GetUnicodeKey());
         // Ignore bare modifier presses
         if (key == WXK_SHIFT || key == WXK_CONTROL || key == WXK_ALT) {
             event.Skip();
@@ -105,17 +107,21 @@ private:
         }
         m_key  = key;
         m_mods = 0;
-        if (event.ShiftDown())   m_mods |= 1;
-        if (event.ControlDown()) m_mods |= 2;
-        if (event.AltDown())     m_mods |= 4;
+        // Must match the bits KeyBindings uses (WXK_*), not 1/2/4, or an
+        // assigned Ctrl+key would be stored in a form get_action() never sees.
+        if (event.ShiftDown())   m_mods |= 0x4000;
+        if (event.ControlDown()) m_mods |= 0x1000;
+        if (event.AltDown())     m_mods |= 0x2000;
 
         // Show what was captured before closing
         wxString label;
-        if (m_mods & 2) label += "Ctrl+";
-        if (m_mods & 1) label += "Shift+";
-        if (m_mods & 4) label += "Alt+";
+        if (m_mods & 0x1000) label += "Ctrl+";
+        if (m_mods & 0x4000) label += "Shift+";
+        if (m_mods & 0x2000) label += "Alt+";
         if (key >= 32 && key < 127)
             label += wxChar(key);
+        else if (key > 127)
+            label += wxString(wxUniChar(key));
         else
             label += wxString::Format("<%d>", key);
         m_label->SetLabel(label);
@@ -440,6 +446,7 @@ void SettingsPanel::populate_shortcut_list() {
         { Action::OctaveUp,   "--- Octave ---" },
         { Action::NoteC,      "--- Notes (lower octave) ---" },
         { Action::NoteC2,     "--- Notes (upper octave) ---" },
+        { Action::NoteCs3,    "--- Notes (3rd octave) ---" },
     };
     const int n_cats = static_cast<int>(sizeof(cats) / sizeof(cats[0]));
 

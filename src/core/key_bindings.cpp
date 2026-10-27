@@ -109,6 +109,16 @@ void KeyBindings::set_defaults() {
         m_key_to_action[{norm_k, m}] = a;
     };
 
+    // Additional key for an action that already has its primary binding: the
+    // extra key plays the same note but does not replace the shortcut shown
+    // in the settings list.
+    auto add_alias = [&](Action a, int k, int m = 0) {
+        int norm_k = k;
+        if (k >= 'a' && k <= 'z') norm_k = k - 'a' + 'A';
+        if (!m_action_to_key.count(a)) m_action_to_key[a] = {norm_k, m};
+        m_key_to_action[{norm_k, m}] = a;
+    };
+
     add_default(Action::Play, ' ');
     add_default(Action::PlaySong, WXK_F5);
     add_default(Action::PlayPattern, WXK_F6);
@@ -160,6 +170,26 @@ void KeyBindings::set_defaults() {
     add_default(Action::NoteB2,  'u');
     add_default(Action::NoteC3,  'i');
 
+    // Continuation of the chromatic rows, tracker style (Renoise/FT2): the
+    // keyboard spans about two and a half octaves instead of stopping at B.
+    //  - lower row after M: , L . ; /  -> C..E of the next octave
+    //  - upper row after I: 9 O 0 P (+ U-umlaut on QWERTZ) -> C#..F
+    add_alias(Action::NoteC2,  ',');
+    add_alias(Action::NoteCs2, 'l');
+    add_alias(Action::NoteD2,  '.');
+    add_alias(Action::NoteDs2, ';');
+    add_alias(Action::NoteE2,  '/');
+    add_default(Action::NoteCs3, '9');
+    add_default(Action::NoteD3,  'o');
+    add_default(Action::NoteDs3, '0');
+    add_default(Action::NoteE3,  'p');
+    // German QWERTZ continues the upper row with U-umlaut after P.  wxGTK
+    // reports printable non-ASCII keys as Unicode code points, so the
+    // binding is the code point, not a UTF-8 byte sequence.  On QWERTY the
+    // next keys are [ and ], which stay on octave switching, so F has no
+    // default there (it can be assigned in the settings).
+    if (is_qwertz) add_default(Action::NoteF3, 0xFC /* ü */);
+
     add_default(Action::JumpToRow0,  WXK_F9);
     add_default(Action::JumpToRow16, WXK_F10);
     add_default(Action::JumpToRow32, WXK_F11);
@@ -195,16 +225,29 @@ Action KeyBindings::get_action(int key, int modifiers) const {
     // On GTK, Ctrl+letter arrives as an ASCII control code (1-26 =
     // Ctrl+A..Z) rather than the letter itself; normalize those too or
     // every Ctrl+letter shortcut (Copy/Cut/Paste/Undo/...) silently misses.
-    if (key >= 1 && key <= 26) norm_key = key - 1 + 'A';
+    // Only when Ctrl is actually held: Tab is code 9, which would otherwise
+    // be rewritten to 'I' and lose its binding.
+    if ((modifiers & WXK_CTRL) && key >= 1 && key <= 26) norm_key = key - 1 + 'A';
     else if (key >= 'a' && key <= 'z') norm_key = key - 'a' + 'A';
     auto it = m_key_to_action.find({norm_key, modifiers});
     if (it != m_key_to_action.end()) return it->second;
+
+    // Shift is part of the chord only for explicitly bound combinations
+    // (Ctrl+Shift+Z = Redo). For everything else it must not hide a plain
+    // binding: on a German layout ";" is Shift+comma and the note keys are
+    // meant to play whether or not a modifier it needs is held.
+    if ((modifiers & WXK_SHIFT) && !(modifiers & (WXK_CTRL | WXK_ALT))) {
+        it = m_key_to_action.find({norm_key, modifiers & ~WXK_SHIFT});
+        if (it != m_key_to_action.end()) return it->second;
+    }
     return static_cast<Action>(-1);
 }
 
 void KeyBindings::assign(Action action, int key, int modifiers) {
     int norm_key = key;
-    if (key >= 1 && key <= 26) norm_key = key - 1 + 'A';
+    // Same rule as get_action(): control codes only mean Ctrl+letter when
+    // Ctrl is actually part of the captured chord.
+    if ((modifiers & WXK_CTRL) && key >= 1 && key <= 26) norm_key = key - 1 + 'A';
     else if (key >= 'a' && key <= 'z') norm_key = key - 'a' + 'A';
 
     auto it = m_action_to_key.find(action);
@@ -263,6 +306,11 @@ std::string KeyBindings::get_action_name(Action action) const {
         case Action::NoteAs2: return "Note A# (2nd Octave)";
         case Action::NoteB2: return "Note B (2nd Octave)";
         case Action::NoteC3: return "Note C (3rd Octave)";
+        case Action::NoteCs3: return "Note C# (3rd Octave)";
+        case Action::NoteD3: return "Note D (3rd Octave)";
+        case Action::NoteDs3: return "Note D# (3rd Octave)";
+        case Action::NoteE3: return "Note E (3rd Octave)";
+        case Action::NoteF3: return "Note F (3rd Octave)";
         case Action::NextPattern: return "Next Pattern";
         case Action::PrevPattern: return "Previous Pattern";
         case Action::OctaveUp: return "Increase Octave";
@@ -324,10 +372,58 @@ std::string KeyBindings::get_key_name(Action action) const {
             case WXK_F10: name += "F10"; break;
             case WXK_F11: name += "F11"; break;
             case WXK_F12: name += "F12"; break;
-            default: name += char(key); break;
+            default:
+                // wxGTK reports printable non-ASCII keys as Unicode code
+                // points (e.g. U-umlaut = 0xFC); emit valid UTF-8 so the
+                // settings list shows the letter instead of a stray byte.
+                if (key > 0x7F && key < 0x800) {
+                    name += char(0xC0 | (key >> 6));
+                    name += char(0x80 | (key & 0x3F));
+                } else if (key > 0x7F) {
+                    name += '?';
+                } else {
+                    name += char(key);
+                }
+                break;
         }
     }
     return name;
+}
+
+int KeyBindings::note_semitone(Action action) {
+    switch (action) {
+        case Action::NoteC:   return 0;
+        case Action::NoteCs:  return 1;
+        case Action::NoteD:   return 2;
+        case Action::NoteDs:  return 3;
+        case Action::NoteE:   return 4;
+        case Action::NoteF:   return 5;
+        case Action::NoteFs:  return 6;
+        case Action::NoteG:   return 7;
+        case Action::NoteGs:  return 8;
+        case Action::NoteA:   return 9;
+        case Action::NoteAs:  return 10;
+        case Action::NoteB:   return 11;
+        case Action::NoteC2:  return 12;
+        case Action::NoteCs2: return 13;
+        case Action::NoteD2:  return 14;
+        case Action::NoteDs2: return 15;
+        case Action::NoteE2:  return 16;
+        case Action::NoteF2:  return 17;
+        case Action::NoteFs2: return 18;
+        case Action::NoteG2:  return 19;
+        case Action::NoteGs2: return 20;
+        case Action::NoteA2:  return 21;
+        case Action::NoteAs2: return 22;
+        case Action::NoteB2:  return 23;
+        case Action::NoteC3:  return 24;
+        case Action::NoteCs3: return 25;
+        case Action::NoteD3:  return 26;
+        case Action::NoteDs3: return 27;
+        case Action::NoteE3:  return 28;
+        case Action::NoteF3:  return 29;
+        default:              return -1;
+    }
 }
 
 const std::vector<Action>& KeyBindings::all_actions() {
@@ -405,6 +501,12 @@ const std::vector<Action>& KeyBindings::all_actions() {
         Action::NoteAs2,
         Action::NoteB2,
         Action::NoteC3,
+        // Notes — row 3 (the keys continuing past I/O/P)
+        Action::NoteCs3,
+        Action::NoteD3,
+        Action::NoteDs3,
+        Action::NoteE3,
+        Action::NoteF3,
     };
     return actions;
 }

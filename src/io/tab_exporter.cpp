@@ -42,7 +42,7 @@ namespace {
 }
 
 std::string TabExporter::note_name(int midi) {
-    if (midi < 0 || midi > 119) return "??";
+    if (midi < 0 || midi > (int)NOTE_MAX) return "??";
     return std::string(kNoteNames[midi % 12]) + std::to_string(note_display_octave((uint8_t)midi));
 }
 

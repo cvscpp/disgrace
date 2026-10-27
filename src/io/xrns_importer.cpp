@@ -566,8 +566,8 @@ bool XrnsImporter::parse_song_xml(Engine& engine, const std::string& extracted_d
                             root = mu.base_note + 12;
                             cents = mu.transpose * 100 + mu.finetune;
                         }
-                        if (root < 0) root = 0;
-                        if (root > 119) root = 119;
+                        if (root < NOTE_MIN) root = NOTE_MIN;
+                        if (root > NOTE_MAX) root = NOTE_MAX;
                         sampler->add_sample(s.first.empty() ? ri.name : s.first, data,
                                             (uint8_t)root, cents);
                         sampler_inst_to_sample_idx[rt][ri_idx] = next_s_idx++;

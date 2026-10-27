@@ -30,12 +30,15 @@ namespace disgrace_ns {
     note_off(column_index);
 
     const size_t col = column_index % 16;
-    m_last_note[col] = note;
+    // Notes above G-9 (128..131) have no MIDI wire representation, so send
+    // the highest note MIDI can carry instead of wrapping into 0..3.
+    const uint8_t midi_note = note_midi_clamp(note);
+    m_last_note[col] = midi_note;
     m_note_active[col] = true;
 
     MidiMessage msg;
     msg.status = 0x90 | (m_channel & 0x0F);
-    msg.data1 = note & 0x7F;
+    msg.data1 = midi_note & 0x7F;
     msg.data2 = velocity & 0x7F;
     m_engine->m_midi_out_queue.push(msg);
 }

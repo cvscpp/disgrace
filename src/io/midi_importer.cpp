@@ -40,7 +40,9 @@ namespace {
 
 constexpr size_t PATTERN_ROWS = MAX_ROWS; // 512
 constexpr uint8_t NOTE_OFF = 254;
-constexpr uint8_t MAX_TRACKER_NOTE = 119;
+// MIDI files can address 0..127; the tracker range extends past that
+// (up to B-9 = 131) but nothing above G-9 can arrive from a MIDI file.
+constexpr uint8_t MAX_TRACKER_NOTE = MIDI_NOTE_MAX;
 
 struct MidiNote {
     uint8_t channel = 0;
@@ -308,7 +310,9 @@ bool MidiImporter::import(Engine& engine, const std::string& path)
         double start_sec = tick_to_seconds(n.start_tick, segs, parser.ppq);
         double end_sec = tick_to_seconds(n.end_tick, segs, parser.ppq);
         PlacedNote pn;
-        pn.note = std::min<uint8_t>(n.note, MAX_TRACKER_NOTE);
+        // MIDI notes below C-0 (12) have no tracker representation; clamp
+        // into the playable range instead of dropping the note.
+        pn.note = note_clamp((int)std::min<uint8_t>(n.note, MAX_TRACKER_NOTE));
         pn.velocity = std::max<uint8_t>(1, std::min<uint8_t>(127, n.velocity));
         pn.start_row = uint64_t(std::llround(start_sec * bpm * lpb / 60.0));
         pn.end_row = uint64_t(std::llround(end_sec * bpm * lpb / 60.0));

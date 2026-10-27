@@ -282,7 +282,7 @@ void WxMainWindow::OnCharHook(wxKeyEvent& event) {
         return;
     }
 
-    int key = event.GetKeyCode();
+    int key = normalize_key_for_binding(event.GetKeyCode(), event.GetUnicodeKey());
     int wx_mods = event.GetModifiers();
     int modifiers = 0;
     if (wx_mods & wxMOD_CONTROL) modifiers |= 0x1000;
@@ -302,48 +302,19 @@ void WxMainWindow::OnCharHook(wxKeyEvent& event) {
     };
 
     auto is_note_action = [](Action a) -> bool {
-        return ((int)a >= (int)Action::NoteC && (int)a <= (int)Action::NoteB) ||
-               ((int)a >= (int)Action::NoteC2 && (int)a <= (int)Action::NoteB2) ||
-               (a == Action::NoteC3) || (a == Action::NoteOff);
+        return a == Action::NoteOff || KeyBindings::note_semitone(a) >= 0;
     };
 
     if (is_note_action(action)) {
         if (m_selected_tab == 4 && m_instrument_panel) {
-            int note_val = -1;
-            switch (action) {
-                case Action::NoteC:  note_val = 0; break;
-                case Action::NoteCs: note_val = 1; break;
-                case Action::NoteD:  note_val = 2; break;
-                case Action::NoteDs: note_val = 3; break;
-                case Action::NoteE:  note_val = 4; break;
-                case Action::NoteF:  note_val = 5; break;
-                case Action::NoteFs: note_val = 6; break;
-                case Action::NoteG:  note_val = 7; break;
-                case Action::NoteGs: note_val = 8; break;
-                case Action::NoteA:  note_val = 9; break;
-                case Action::NoteAs: note_val = 10; break;
-                case Action::NoteB:  note_val = 11; break;
-                case Action::NoteC2: note_val = 12; break;
-                case Action::NoteCs2:note_val = 13; break;
-                case Action::NoteD2: note_val = 14; break;
-                case Action::NoteDs2:note_val = 15; break;
-                case Action::NoteE2: note_val = 16; break;
-                case Action::NoteF2: note_val = 17; break;
-                case Action::NoteFs2:note_val = 18; break;
-                case Action::NoteG2: note_val = 19; break;
-                case Action::NoteGs2:note_val = 20; break;
-                case Action::NoteA2: note_val = 21; break;
-                case Action::NoteAs2:note_val = 22; break;
-                case Action::NoteB2: note_val = 23; break;
-                case Action::NoteC3: note_val = 24; break;
-                case Action::NoteOff: note_val = -1; break;
-                default: break;
-            }
+            const int note_val = KeyBindings::note_semitone(action); // -1 for NoteOff
             if (note_val >= 0) {
                 if (!m_inst_keys_pressed.count(key)) {
                     m_inst_keys_pressed.insert(key);
-                    int final_note = note_val + m_engine.base_octave() * 12;
-                    if (final_note > 119) final_note = 119;
+                    // Same mapping as the tracker (Oct 4 + C = C-4), so a
+                    // physical key plays the same pitch in both views.
+                    int final_note = note_val + (m_engine.base_octave() + 1) * 12;
+                    final_note = note_clamp(final_note);
                     m_instrument_panel->preview_note_on(final_note);
                 }
             } else {
@@ -443,7 +414,9 @@ void WxMainWindow::OnKeyDown(wxKeyEvent& event) {
 
 void WxMainWindow::OnKeyUp(wxKeyEvent& event) {
     if (m_selected_tab == 4 && m_instrument_panel) {
-        int key = event.GetKeyCode();
+        // Must match the key used in OnCharHook, or a note played from a
+        // non-ASCII key would never be released.
+        int key = normalize_key_for_binding(event.GetKeyCode(), event.GetUnicodeKey());
         if (m_inst_keys_pressed.count(key)) {
             m_inst_keys_pressed.erase(key);
             m_instrument_panel->preview_note_off();

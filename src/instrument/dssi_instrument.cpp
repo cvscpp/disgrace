@@ -577,6 +577,9 @@ void DSSIInstrument::note_on(uint8_t note, uint8_t velocity,
                               size_t column_index, size_t, uint8_t)
 {
     const size_t chan = column_index % 16;
+    // DSSI events carry MIDI note numbers; the tracker reaches B-9 (131),
+    // above what a plugin can address, so clamp instead of wrapping.
+    note = note_midi_clamp(note);
     if (m_last_note[chan] != -1) note_off(column_index);
     // RT-safe: never grow the staging vector in the audio thread.
     // Staging is flushed every block in process(); if a burst overflows

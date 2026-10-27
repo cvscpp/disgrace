@@ -28,9 +28,9 @@ namespace disgrace_ns {
 
 static void note_to_name_buf(uint8_t note, char* buf) {
     static const char* names[] = {"C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-"};
-    if (note == 255) { strcpy(buf, "---"); return; }
-    if (note == 254) { strcpy(buf, "==="); return; }
-    if (note > 119) { strcpy(buf, "---"); return; }
+    if (note == NOTE_EMPTY_VALUE) { strcpy(buf, "---"); return; }
+    if (note == NOTE_OFF_VALUE) { strcpy(buf, "==="); return; }
+    if (note > NOTE_MAX) { strcpy(buf, "---"); return; }
     int octave = note_display_octave(note);
     int n = note % 12;
     snprintf(buf, 8, "%s%d", names[n], octave);
@@ -309,39 +309,16 @@ void TrackerWidget::deleteCurrentField() {
 
 void TrackerWidget::insertNoteFromAction(int key, int mods) {
     auto action = m_engine.m_key_bindings.get_action(key, mods);
-    
-    auto action_to_note = [](Action a) -> int {
-        switch(a) {
-            case Action::NoteC: return 0;  case Action::NoteCs: return 1;
-            case Action::NoteD: return 2;  case Action::NoteDs: return 3;
-            case Action::NoteE: return 4;  case Action::NoteF: return 5;
-            case Action::NoteFs: return 6; case Action::NoteG: return 7;
-            case Action::NoteGs: return 8; case Action::NoteA: return 9;
-            case Action::NoteAs: return 10; case Action::NoteB: return 11;
-            case Action::NoteC2: return 12; case Action::NoteCs2: return 13;
-            case Action::NoteD2: return 14; case Action::NoteDs2: return 15;
-            case Action::NoteE2: return 16; case Action::NoteF2: return 17;
-            case Action::NoteFs2: return 18; case Action::NoteG2: return 19;
-            case Action::NoteGs2: return 20; case Action::NoteA2: return 21;
-            case Action::NoteAs2: return 22; case Action::NoteB2: return 23;
-            case Action::NoteC3: return 24;
-            case Action::NoteOff: return 254;
-            default: return -1;
-        }
-    };
-    
-    auto is_note_action = [](Action a) -> bool {
-        return ((int)a >= (int)Action::NoteC && (int)a <= (int)Action::NoteB) ||
-               ((int)a >= (int)Action::NoteC2 && (int)a <= (int)Action::NoteB2) ||
-               (a == Action::NoteC3) || (a == Action::NoteOff);
-    };
 
-    if (is_note_action(action)) {
-        int note = action_to_note(action);
-        if (note != -1) {
-            insertNote((uint8_t)note);
-        }
+    // Shared action -> semitone table, so this view cannot drift from the
+    // tracker and instrument keyboard when the range changes.
+    if (action == Action::NoteOff) {
+        insertNote(NOTE_OFF_VALUE);
+        return;
     }
+    const int note = KeyBindings::note_semitone(action);
+    if (note < 0) return;
+    insertNote((uint8_t)note);
 }
 
 void TrackerWidget::insertNote(uint8_t note) {
@@ -352,10 +329,10 @@ void TrackerWidget::insertNote(uint8_t note) {
     auto& event = pat.event(m_cursorTrack, m_cursorRow, m_cursorCol);
     
     uint8_t finalNote = note;
-    if (note != 254) {
-        int octaveNote = note + m_engine.base_octave() * 12;
-        if (octaveNote > 119) octaveNote = 119;
-        finalNote = (uint8_t)octaveNote;
+    if (note != NOTE_OFF_VALUE) {
+        // Tracker octave convention: C of the lower row is the base octave
+        // label + 1 in raw MIDI note numbers (Oct 4 -> C-4 = 60).
+        finalNote = note_clamp(note + (m_engine.base_octave() + 1) * 12);
     }
     
     event.note = finalNote;

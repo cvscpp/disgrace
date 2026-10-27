@@ -29,7 +29,7 @@ namespace disgrace_ns {
 
 // Maps a MIDI note number to LilyPond's absolute pitch notation.
 std::string LilyPondExporter::midi_to_lily(uint8_t note) {
-    if (note >= 128) return "r"; // Return a rest for invalid notes
+    if (note > NOTE_MAX) return "r"; // Return a rest for invalid notes
     
     static const char* names[] = {"c", "cis", "d", "dis", "e", "f", "fis", "g", "gis", "a", "ais", "b"};
     int pitch = note % 12;

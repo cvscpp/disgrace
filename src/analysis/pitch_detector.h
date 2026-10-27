@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include "../sequencer/note.h"
 
 namespace disgrace_ns {
 
@@ -99,7 +100,7 @@ public:
 
         float frequency = (float)sample_rate / (float)best_lag;
         int midi = (int)std::lround(69.0 + 12.0 * std::log2(frequency / 440.0f));
-        if (midi < 0 || midi > 119)
+        if (midi < NOTE_MIN || midi > NOTE_MAX)
             return result;
 
         result.valid = true;

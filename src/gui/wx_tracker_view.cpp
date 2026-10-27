@@ -45,37 +45,7 @@ wxEND_EVENT_TABLE()
 
 namespace {
     bool is_note_action(Action action) {
-        switch (action) {
-            case Action::NoteOff:
-            case Action::NoteC:
-            case Action::NoteCs:
-            case Action::NoteD:
-            case Action::NoteDs:
-            case Action::NoteE:
-            case Action::NoteF:
-            case Action::NoteFs:
-            case Action::NoteG:
-            case Action::NoteGs:
-            case Action::NoteA:
-            case Action::NoteAs:
-            case Action::NoteB:
-            case Action::NoteC2:
-            case Action::NoteCs2:
-            case Action::NoteD2:
-            case Action::NoteDs2:
-            case Action::NoteE2:
-            case Action::NoteF2:
-            case Action::NoteFs2:
-            case Action::NoteG2:
-            case Action::NoteGs2:
-            case Action::NoteA2:
-            case Action::NoteAs2:
-            case Action::NoteB2:
-            case Action::NoteC3:
-                return true;
-            default:
-                return false;
-        }
+        return action == Action::NoteOff || KeyBindings::note_semitone(action) >= 0;
     }
 
     enum {
@@ -208,16 +178,16 @@ void TrackerView::OnPaint(wxPaintEvent& event) {
 static const wxString& tracker_note_text(uint8_t note) {
     static wxString empty("---");
     static wxString off("OFF");
-    static wxString labels[128];
+    static wxString labels[NOTE_MAX + 1];
     static bool ready = false;
     if (!ready) {
-        for (int n = 0; n < 128; ++n)
+        for (int n = 0; n <= NOTE_MAX; ++n)
             labels[n].Printf("%s%d", note_names[n % 12], note_display_octave((uint8_t)n));
         ready = true;
     }
-    if (note == 255) return empty;
-    if (note == 254) return off;
-    if (note < 128) return labels[note];
+    if (note == NOTE_EMPTY_VALUE) return empty;
+    if (note == NOTE_OFF_VALUE) return off;
+    if (note <= NOTE_MAX) return labels[note];
     return empty;
 }
 
@@ -535,7 +505,7 @@ void TrackerView::draw(wxDC& dc) {
 }
 
 void TrackerView::OnKeyDown(wxKeyEvent& event) {
-    int key = event.GetKeyCode();
+    int key = normalize_key_for_binding(event.GetKeyCode(), event.GetUnicodeKey());
     int wx_mods = event.GetModifiers();
     int modifiers = 0;
     if (wx_mods & wxMOD_CONTROL) modifiers |= 0x1000;
@@ -892,14 +862,15 @@ void TrackerView::insert_note(uint8_t note) {
     }
 
     uint8_t final_note = note;
-    if (note != 254) {
+    if (note != NOTE_OFF_VALUE) {
         // Octave numbering follows Renoise/MIDI convention (Oct 4 + C =
         // C-4 = value 60 = 261.6 Hz): the key semitone sits one octave
         // above the raw base multiple, matching the documented keyboard
-        // layout (lower row C4-B4) and the tracker labels.
+        // layout (lower row C4-B4) and the tracker labels.  The keys cover
+        // C-0..B-9 over Oct 0..9; at the very top the upper row clamps to
+        // B-9 instead of collapsing several keys onto one note.
         int octave_note = note + (m_engine.base_octave() + 1) * 12;
-        if (octave_note > 119) octave_note = 119;
-        final_note = (uint8_t)octave_note;
+        final_note = note_clamp(octave_note);
     }
 
     if (m_engine.m_record_enabled.load()) {
@@ -929,7 +900,21 @@ void TrackerView::insert_note(uint8_t note) {
 }
 
 bool TrackerView::handle_action(Action action) {
-    int note = -1;
+    // Notes go through the shared action -> semitone table, so the tracker
+    // and the instrument-tab keyboard can never drift apart.
+    if (action == Action::NoteOff) {
+        insert_note(NOTE_OFF_VALUE);
+        ensure_cursor_visible();
+        Refresh();
+        return true;
+    }
+    if (const int semitone = KeyBindings::note_semitone(action); semitone >= 0) {
+        insert_note((uint8_t)semitone);
+        ensure_cursor_visible();
+        Refresh();
+        return true;
+    }
+
     switch (action) {
         case Action::Undo: m_engine.undo_stack().undo(); Refresh(); return true;
         case Action::Redo: m_engine.undo_stack().redo(); Refresh(); return true;
@@ -989,34 +974,6 @@ bool TrackerView::handle_action(Action action) {
             return true;
         }
 
-        case Action::NoteOff: note = 254; break;
-        // ... (Note actions remain same)
-        case Action::NoteC: note = 0; break;
-        case Action::NoteCs: note = 1; break;
-        case Action::NoteD: note = 2; break;
-        case Action::NoteDs: note = 3; break;
-        case Action::NoteE: note = 4; break;
-        case Action::NoteF: note = 5; break;
-        case Action::NoteFs: note = 6; break;
-        case Action::NoteG: note = 7; break;
-        case Action::NoteGs: note = 8; break;
-        case Action::NoteA: note = 9; break;
-        case Action::NoteAs: note = 10; break;
-        case Action::NoteB: note = 11; break;
-        case Action::NoteC2: note = 12; break;
-        case Action::NoteCs2: note = 13; break;
-        case Action::NoteD2: note = 14; break;
-        case Action::NoteDs2: note = 15; break;
-        case Action::NoteE2: note = 16; break;
-        case Action::NoteF2: note = 17; break;
-        case Action::NoteFs2: note = 18; break;
-        case Action::NoteG2: note = 19; break;
-        case Action::NoteGs2: note = 20; break;
-        case Action::NoteA2: note = 21; break;
-        case Action::NoteAs2: note = 22; break;
-        case Action::NoteB2: note = 23; break;
-        case Action::NoteC3: note = 24; break;
-        
         case Action::JumpToRow0:  m_cursor_row = 0; Refresh(); return true;
         case Action::JumpToRow16: m_cursor_row = 16; clamp_cursor(); Refresh(); return true;
         case Action::JumpToRow32: m_cursor_row = 32; clamp_cursor(); Refresh(); return true;
@@ -1156,17 +1113,11 @@ bool TrackerView::handle_action(Action action) {
         default: return false;
     }
 
-    if (note != -1) {
-        insert_note((uint8_t)note);
-        ensure_cursor_visible();
-        Refresh();
-        return true;
-    }
     return false;
 }
 
 void TrackerView::OnKeyUp(wxKeyEvent& event) {
-    int key = event.GetKeyCode();
+    int key = normalize_key_for_binding(event.GetKeyCode(), event.GetUnicodeKey());
     int wx_mods = event.GetModifiers();
     int modifiers = 0;
     if (wx_mods & wxMOD_CONTROL) modifiers |= 0x1000;
@@ -1453,10 +1404,10 @@ void TrackerView::do_transpose(int semitones) {
             for (int c = 0; c < num_cols; ++c) {
                 int abs_f = c * 3 + 0; // note field
                 uint8_t note = m_pattern->get_field(t, r, abs_f);
-                if (note == 255 || note == 254) continue; // empty or note-off
+                if (note == NOTE_EMPTY_VALUE || note == NOTE_OFF_VALUE) continue; // empty or note-off
 
                 int new_note = (int)note + semitones;
-                new_note = std::max(0, std::min(119, new_note));
+                new_note = note_clamp(new_note);
                 if ((uint8_t)new_note != note)
                     edits.push_back({(size_t)t, (size_t)r, (size_t)abs_f, note, (uint8_t)new_note});
             }
@@ -1480,8 +1431,8 @@ void TrackerView::do_transpose_pattern(int semitones) {
         for (int c = 0; c < num_cols; ++c) {
             int abs_f = c * 3;
             uint8_t note = m_pattern->get_field(track, r, abs_f);
-            if (note == 255 || note == 254) continue;
-            int new_note = std::max(0, std::min(119, (int)note + semitones));
+            if (note == NOTE_EMPTY_VALUE || note == NOTE_OFF_VALUE) continue;
+            int new_note = note_clamp((int)note + semitones);
             if ((uint8_t)new_note != note)
                 edits.push_back({(size_t)track, (size_t)r, (size_t)abs_f, note, (uint8_t)new_note});
         }
@@ -1510,8 +1461,8 @@ void TrackerView::do_transpose_song(int semitones) {
             for (int c = 0; c < num_cols; ++c) {
                 int abs_f = c * 3;
                 uint8_t note = pat.get_field(track, r, abs_f);
-                if (note == 255 || note == 254) continue;
-                int new_note = std::max(0, std::min(119, (int)note + semitones));
+                if (note == NOTE_EMPTY_VALUE || note == NOTE_OFF_VALUE) continue;
+                int new_note = note_clamp((int)note + semitones);
                 if ((uint8_t)new_note != note)
                     edits.push_back({(size_t)track, (size_t)r, (size_t)abs_f, note, (uint8_t)new_note});
             }

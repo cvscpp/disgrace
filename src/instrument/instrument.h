@@ -24,6 +24,7 @@
 #include <array>
 #include <atomic>
 #include "../audio/voice.h"
+#include "../sequencer/note.h"
 
 namespace disgrace_ns
 {

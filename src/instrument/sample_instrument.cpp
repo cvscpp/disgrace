@@ -103,7 +103,7 @@ namespace disgrace_ns
     void disgrace_ns::SampleInstrument::add_sample(const std::string& name, std::shared_ptr<disgrace_ns::SampleData> data,
                                                      uint8_t root_note, int transpose_cents)
     {
-        if (root_note > 119) root_note = 119;
+        if (root_note > NOTE_MAX) root_note = NOTE_MAX;
         m_samples.push_back({name, data, root_note, transpose_cents});
         
         // Ensure voices are allocated in the GUI thread during setup, not in the audio thread.
@@ -232,7 +232,7 @@ namespace disgrace_ns
     void disgrace_ns::SampleInstrument::set_sample_root(size_t index, uint8_t root_note)
     {
         if (index < m_samples.size()) {
-            m_samples[index].root_note = (root_note > 119) ? 119 : root_note;
+            m_samples[index].root_note = (root_note > NOTE_MAX) ? NOTE_MAX : root_note;
         }
     }
 

@@ -49,11 +49,14 @@ namespace disgrace_ns
     void SoundFontInstrument::note_on(uint8_t note, uint8_t velocity, size_t column_index, size_t, uint8_t)
     {
         int chan = (int)column_index % 16;
+        // FluidSynth only accepts MIDI notes 0..127; the tracker's top
+        // octave goes past that, so play the highest note it can.
+        const uint8_t midi_note = note_midi_clamp(note);
         if (m_last_note[chan] != -1) {
             fluid_synth_noteoff(m_fluid_synth, chan, m_last_note[chan]);
         }
-        fluid_synth_noteon(m_fluid_synth, chan, note, velocity);
-        m_last_note[chan] = note;
+        fluid_synth_noteon(m_fluid_synth, chan, midi_note, velocity);
+        m_last_note[chan] = midi_note;
     }
 
     void SoundFontInstrument::note_off(size_t column_index)

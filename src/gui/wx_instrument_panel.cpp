@@ -1640,14 +1640,14 @@ void InstrumentPanel::update_editor() {
                                                           wxDefaultPosition, wxSize(32, -1));
                 root_lbl->SetForegroundColour(ThemeManager::toWxColour(m_engine.m_tracker_text));
                 auto refresh_root_lbl = [root_lbl, root_names](int v) {
-                    if (v < 0) v = 0; if (v > 119) v = 119;
+                    if (v < NOTE_MIN) v = NOTE_MIN; if (v > NOTE_MAX) v = NOTE_MAX;
                     root_lbl->SetLabel(wxString::Format("%s%d", root_names[v % 12],
                                                         note_display_octave((uint8_t)v)));
                 };
                 refresh_root_lbl(entry.root_note);
                 wxSpinCtrl* root = new wxSpinCtrl(row, wxID_ANY, wxEmptyString,
                                                   wxDefaultPosition, wxSize(50, -1),
-                                                  wxSP_ARROW_KEYS, 0, 119, entry.root_note);
+                                                  wxSP_ARROW_KEYS, NOTE_MIN, NOTE_MAX, entry.root_note);
                 root->SetToolTip("Root note: original speed/pitch plays here");
                 root->Bind(wxEVT_SET_FOCUS, [this, select_sample_row](wxFocusEvent& ev){
                     ev.Skip();
@@ -1655,7 +1655,7 @@ void InstrumentPanel::update_editor() {
                 });
                 auto commit_root = [this, i, root, refresh_root_lbl]() {
                     int v = root->GetValue();
-                    if (v < 0) v = 0; if (v > 119) v = 119;
+                    if (v < NOTE_MIN) v = NOTE_MIN; if (v > NOTE_MAX) v = NOTE_MAX;
                     if (m_selected_instrument >= 0) {
                         static_cast<SampleInstrument*>(&m_engine.instrument(m_selected_instrument))
                             ->set_sample_root((size_t)i, (uint8_t)v);
@@ -2709,12 +2709,10 @@ void InstrumentPanel::OnKeyDown(wxKeyEvent& event) {
 
     Action action = m_engine.m_key_bindings.get_action(key, modifiers);
 
-    auto is_note_action = [](Action a) -> bool {
-        return ((int)a >= (int)Action::NoteC && (int)a <= (int)Action::NoteB) ||
-               ((int)a >= (int)Action::NoteC2 && (int)a <= (int)Action::NoteB2) ||
-               (a == Action::NoteC3) || (a == Action::NoteOff);
-    };
-
+    // Note keys are handled globally in WxMainWindow::OnCharHook so the
+    // tracker and this panel share one mapping; nothing to do here but let
+    // the event travel on.
+    (void)action;
     event.Skip();
 }
 

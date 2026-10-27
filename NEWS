@@ -1,6 +1,42 @@
 Disgrace news
 =============
 
+0.1.9
+-----
+- DSSI plugins now run at the project sample rate. The rate was handed to
+  the sandbox once at startup and never updated, because the instrument
+  never overrode set_sample_rate(), so a 48 kHz project could drive a
+  plugin at 44.1 kHz with wrong pitch and wrong filter/oscillator rates.
+  A rate change now re-instantiates the plugin, keeping its control values
+  and bank/program selection.
+- Fix DSSI plugin audio distorting during playback but sounding correct in
+  the instrument view. The sandbox renders one block behind and the reply
+  was copied with min(previous_size, nframes), which truncated it when the
+  block was shorter and left a gap when it was longer. A JACK callback
+  always asks for exactly one period, so the instrument view matched, but
+  the sequencer splits periods at tick boundaries, so tracker playback
+  dropped and gap-filled samples on every block. The two are now decoupled
+  by an output FIFO fed with whole backend periods.
+- DSSI sandbox: give every audio port its own buffer (a multi-output
+  plugin could read its own output), choose the stereo pair by port name
+  (karplong has its outputs at 0 and 5), connect outputs before activate(),
+  and reject a plugin without audio outputs instead of loading it silently.
+- JACK auto-connect now stays on a single physical device, so a mix cannot
+  be spread across two sound cards when the graph carries several; the OSS
+  backend honours $AUDIODEV instead of hardcoding /dev/dsp.
+- The keyboard spans two-and-a-bit octaves, tracker style: the lower row
+  continues ", L . ; /" into the next octave and the upper row continues
+  "9 O 0 P" (plus U-umlaut on German layouts), so octave 4 covers C-4..F-6
+  instead of C-4..B-5. Notes above B-8 were unreachable and octave 9 was a
+  dead setting; the trackable range is now C-0..B-9 and the tracker,
+  transpose, notation view, sample root and every importer/exporter follow
+  it. The instrument view also played an octave below the tracker and now
+  matches it.
+- Fix Tab being stolen as a note key: the Ctrl+letter normalisation
+  rewrote every key code 1-26, and Tab is 9. Fix the key-capture dialog
+  storing modifier bits the lookup never matched, so an assigned shortcut
+  with a modifier did not work.
+
 0.1.8
 -----
 - Fix playback going silent for the rest of the session after a few

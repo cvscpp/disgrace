@@ -1,3 +1,22 @@
+disgrace (0.1.9-1) unstable; urgency=medium
+
+  * DSSI plugins now follow the project sample rate (previously fixed at
+    the rate used when the plugin started) and no longer distort during
+    tracker playback, where the sequencer's tick-split blocks did not
+    match the sandbox's block size. The sandbox also picks the correct
+    stereo port pair, and a plugin without audio outputs is rejected.
+  * JACK auto-connect stays on one physical sound card; the OSS backend
+    honours $AUDIODEV.
+  * The computer keyboard spans two-and-a-bit octaves like Renoise (the
+    lower row continues , L . ; / and the upper row 9 O 0 P), the note
+    range is now C-0..B-9 with editors, importers and exporters following
+    it, and the instrument view no longer plays an octave below the
+    tracker.
+  * Fix Tab being stolen as a note key and the key-capture dialog storing
+    modifier bits the lookup never matched.
+
+ -- Miroslav Shaltev <miroslav.shaltev@shaltev.de>  Tue, 27 Oct 2026 21:40:00 +0000
+
 disgrace (0.1.8-1) unstable; urgency=medium
 
   * Fix playback going silent mid-session when the sequencer tick phase

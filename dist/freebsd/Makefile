@@ -1,5 +1,5 @@
 PORTNAME=	disgrace
-DISTVERSION=	0.1.8
+DISTVERSION=	0.1.9
 CATEGORIES=	audio
 
 MAINTAINER=	miroslav.shaltev@shaltev.de

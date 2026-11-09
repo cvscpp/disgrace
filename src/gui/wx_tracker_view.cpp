@@ -44,6 +44,10 @@ wxBEGIN_EVENT_TABLE(TrackerView, wxScrolledWindow)
 wxEND_EVENT_TABLE()
 
 namespace {
+    // Width of the fixed row-number gutter on the left of the grid. It is
+    // drawn in client coordinates so it stays put while the tracks scroll.
+    constexpr int kRowGutterW = 40;
+
     bool is_note_action(Action action) {
         return action == Action::NoteOff || KeyBindings::note_semitone(action) >= 0;
     }
@@ -98,7 +102,7 @@ void TrackerView::recalculate_size() {
     int row_count = (int)m_pattern->row_count();
     int char_w = 8;
     int row_h = 18;
-    int header_w = 40;
+    int header_w = kRowGutterW;
 
     m_track_ui.clear();
     int cur_x = header_w;
@@ -423,7 +427,7 @@ void TrackerView::draw(wxDC& dc) {
     uint32_t lpb = m_engine.lpb();
     uint32_t style = compute_style_stamp(col, lpb);
 
-    int content_w = 40;
+    int content_w = kRowGutterW;
     if (!m_track_ui.empty()) {
         const auto& last = m_track_ui.back();
         content_w = last.x + last.w + 8;
@@ -484,7 +488,7 @@ void TrackerView::draw(wxDC& dc) {
             const wxColour& cur_row_col = HasFocus() ? row_hl : cursor_row_dim;
             dc.SetBrush(wxBrush(cur_row_col));
             dc.SetPen(wxPen(cur_row_col));
-            dc.DrawRectangle(40, ry, span_w, row_h);
+            dc.DrawRectangle(kRowGutterW, ry, span_w, row_h);
         }
         if (lpb > 0 && r % (int)lpb == 0) {
             dc.SetPen(wxPen(col.lpb));
@@ -497,6 +501,56 @@ void TrackerView::draw(wxDC& dc) {
             draw_track_cells(dc, t, r, ry, true, col);
         }
     }
+
+    // ── Fixed row-number gutter ──────────────────────────────────────────
+    // Row numbers live at the left edge of the (scrollable) virtual grid and
+    // used to scroll out of view with the tracks. Repaint them last, in
+    // client coordinates, so the gutter stays pinned while the tracks scroll
+    // underneath it.
+    const wxPoint origin = dc.GetDeviceOrigin();
+    dc.SetDeviceOrigin(0, 0);
+
+    // Cover whatever scrolled in beneath the gutter.
+    dc.SetBrush(wxBrush(header_bg));
+    dc.SetPen(wxPen(header_bg));
+    dc.DrawRectangle(0, 0, kRowGutterW, std::min(20, client_size.y));
+    if (client_size.y > 20) {
+        dc.SetBrush(wxBrush(col.bg));
+        dc.SetPen(wxPen(col.bg));
+        dc.DrawRectangle(0, 20, kRowGutterW, client_size.y - 20);
+    }
+
+    if (row_h > 0) {
+        for (int r = first; r < last; ++r) {
+            int ry = center_y + (r - center_row) * row_h;
+            if (ry + row_h <= 20) continue;
+            if (ry > client_size.y) break;
+            int cy = ry + origin.y; // virtual -> client (origin.y == -scroll_y)
+            if (is_playing && r == playing_row) {
+                dc.SetBrush(wxBrush(row_hl));
+                dc.SetPen(wxPen(row_hl));
+                dc.DrawRectangle(0, cy, kRowGutterW, row_h);
+            }
+            if (r == m_cursor_row) {
+                const wxColour& cur_row_col = HasFocus() ? row_hl : cursor_row_dim;
+                dc.SetBrush(wxBrush(cur_row_col));
+                dc.SetPen(wxPen(cur_row_col));
+                dc.DrawRectangle(0, cy, kRowGutterW, row_h);
+            }
+            if (lpb > 0 && r % (int)lpb == 0) {
+                dc.SetPen(wxPen(col.lpb));
+                dc.DrawLine(0, cy, kRowGutterW, cy);
+            }
+            dc.SetTextForeground(col.text);
+            dc.DrawText(tracker_row3(r), 2, cy + 2);
+        }
+    }
+
+    // Separator between the pinned gutter and the scrolling tracks.
+    dc.SetPen(wxPen(col.lpb));
+    dc.DrawLine(kRowGutterW, 0, kRowGutterW, client_size.y);
+
+    dc.SetDeviceOrigin(origin.x, origin.y);
 
     for (int r = 0; r < (int)m_row_cache.size(); ++r) {
         if (std::abs(r - center_row) > 80 && m_row_cache[(size_t)r].bmp.IsOk())
@@ -698,9 +752,12 @@ void TrackerView::OnMouseDown(wxMouseEvent& event) {
     SetFocus();
     int mx, my;
     CalcUnscrolledPosition(event.GetX(), event.GetY(), &mx, &my);
+    // Clicks on the pinned row-number gutter must not select a track that is
+    // currently scrolled underneath it.
+    const bool over_gutter = event.GetX() < kRowGutterW;
 
     if (my >= 0 && my < 20) { // Header
-        for (size_t t = 0; t < m_track_ui.size(); ++t) {
+        for (size_t t = 0; t < m_track_ui.size() && !over_gutter; ++t) {
             const auto& ui = m_track_ui[t];
             if (mx >= ui.btn_plus_x && mx < ui.btn_plus_x + 18) {
                 m_engine.set_track_columns(t, m_engine.track_columns(t) + 1);
@@ -723,12 +780,14 @@ void TrackerView::OnMouseDown(wxMouseEvent& event) {
         m_cursor_row = row;
 
         int track = -1;
-        for (size_t t = 0; t < m_track_ui.size(); ++t) {
-            if (mx >= m_track_ui[t].x && mx < m_track_ui[t].x + m_track_ui[t].w) { track = (int)t; break; }
+        if (!over_gutter) {
+            for (size_t t = 0; t < m_track_ui.size(); ++t) {
+                if (mx >= m_track_ui[t].x && mx < m_track_ui[t].x + m_track_ui[t].w) { track = (int)t; break; }
+            }
         }
         if (track != -1) m_cursor_track = track;
         
-        int field = get_field_at(m_cursor_track, mx);
+        int field = over_gutter ? 0 : get_field_at(m_cursor_track, mx);
         int num_cols = (int)m_pattern->column_count(m_cursor_track);
         if (field < num_cols * 3) {
             m_cursor_col = field / 3;
@@ -771,11 +830,13 @@ void TrackerView::OnMouseDrag(wxMouseEvent& event) {
         row = std::max(0, std::min((int)m_pattern->row_count() - 1, row));
         
         int track = 0;
-        for (size_t t = 0; t < m_track_ui.size(); ++t) {
-            if (mx >= m_track_ui[t].x && mx < m_track_ui[t].x + m_track_ui[t].w) { track = (int)t; break; }
+        if (event.GetX() >= kRowGutterW) {
+            for (size_t t = 0; t < m_track_ui.size(); ++t) {
+                if (mx >= m_track_ui[t].x && mx < m_track_ui[t].x + m_track_ui[t].w) { track = (int)t; break; }
+            }
         }
 
-        int field = get_field_at(track, mx);
+        int field = (event.GetX() < kRowGutterW) ? 0 : get_field_at(track, mx);
 
         if (!m_sel_active) { m_sel_active = true; }
         m_sel_end = {track, row, field};
@@ -815,7 +876,11 @@ void TrackerView::ensure_cursor_visible() {
         int vx = x * xu;
         int vw = GetClientSize().x;
 
-        if (tx < vx) Scroll(tx / xu, y);
+        // Keep the cursor track clear of the fixed row-number gutter: the
+        // track's left edge must sit at least kRowGutterW pixels in from the
+        // viewport's left edge.
+        int left_limit = vx + kRowGutterW;
+        if (tx < left_limit) Scroll(std::max(0, tx - kRowGutterW) / xu, y);
         else if (tx + tw > vx + vw) Scroll((tx + tw - vw + 20) / xu, y);
     }
 }
@@ -1217,6 +1282,7 @@ void TrackerView::OnRightClick(wxMouseEvent& event) {
     // Translate mouse to pattern cell
     int mx, my;
     CalcUnscrolledPosition(event.GetX(), event.GetY(), &mx, &my);
+    const bool over_gutter = event.GetX() < kRowGutterW;
 
     if (my >= 20) {
         int row_h = 18;
@@ -1227,12 +1293,14 @@ void TrackerView::OnRightClick(wxMouseEvent& event) {
         row = std::max(0, std::min((int)m_pattern->row_count() - 1, row));
         m_cursor_row = row;
 
-        for (size_t t = 0; t < m_track_ui.size(); ++t) {
-            if (mx >= m_track_ui[t].x && mx < m_track_ui[t].x + m_track_ui[t].w) {
-                m_cursor_track = (int)t; break;
+        if (!over_gutter) {
+            for (size_t t = 0; t < m_track_ui.size(); ++t) {
+                if (mx >= m_track_ui[t].x && mx < m_track_ui[t].x + m_track_ui[t].w) {
+                    m_cursor_track = (int)t; break;
+                }
             }
         }
-        int field = get_field_at(m_cursor_track, mx);
+        int field = over_gutter ? 0 : get_field_at(m_cursor_track, mx);
         int num_cols = (int)m_pattern->column_count(m_cursor_track);
         if (field < num_cols * 3) {
             m_cursor_col = field / 3;
